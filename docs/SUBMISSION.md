@@ -4,6 +4,8 @@
 **Robin-Town** is a Web3 negotiation and DeFi property board game built for Robinhood Chain, inspired by the tabletop classic Chinatown and `saigon-town`. Up to 4 players (human wallets or autonomous AI bot traders `Sherwood`, `Apex`, and `Luna`) compete across 6 Epochs to acquire 72 city parcels across 6 Robinhood Chain financial districts, draft 120 DeFi protocol tiles across 6 categories (including the `Stock Token Bridge`), negotiate free-form bilateral deals on the OTC Liquidity Desk, and harvest exponential `$wif` yields.
 
 * **GitHub Repository**: https://github.com/harrymove-ctrl/robin-town
+* **Full Goal Checklist for `@tung-lee`**: [`docs/TUNG_LEE_CHECKLIST.md`](./TUNG_LEE_CHECKLIST.md)
+* **Diorama Playbook & Code Kit (`sloemo01/diorama`)**: [`docs/diorama-kit/`](./diorama-kit/)
 * **Hackathon**: Robinhood Chain Hackathon: Build with `$wif` (`10,000 USDG` Winner Takes All)
 * **Submissions Close**: 2 Nov 2026, 17:30 UTC
 * **Round One Voting Closes**: 4 Nov 2026, 17:30 UTC

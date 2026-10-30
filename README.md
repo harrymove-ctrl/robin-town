@@ -19,7 +19,7 @@ Up to 4 players (human wallets or autonomous AI bot traders `Sherwood`, `Apex`, 
 * [`src/network/`](./src/network): Authoritative 4-seat multiplayer room synchronization ([`room.ts`](./src/network/room.ts)) with 6-character room codes, AI bot seat autofill, and automatic host failover.
 * [`src/ui/`](./src/ui): Interactive HTML5 Canvas board renderer, pan/zoom camera controller, two-sided OTC Trade Desk modal, HUD view models, and procedural Web Audio synthesizer.
 * [`scripts/`](./scripts): Programmatic pixel art asset generator ([`generate-assets.ts`](./scripts/generate-assets.ts)) and zero-404 asset integrity verifier ([`verify-assets.ts`](./scripts/verify-assets.ts)).
-* [`docs/`](./docs): Detailed [Execution Plan](./docs/EXECUTION_PLAN.md), [Thematic Mapping](./docs/THEMATIC_MAPPING.md), [Competition Brief](./docs/COMPETITION.md), and [Submission Guide](./docs/SUBMISSION.md).
+* [`docs/`](./docs): Detailed [Execution Plan](./docs/EXECUTION_PLAN.md), [Thematic Mapping](./docs/THEMATIC_MAPPING.md), [Competition Brief](./docs/COMPETITION.md), [Submission Guide](./docs/SUBMISSION.md), [Full Goal Checklist for @tung-lee](./docs/TUNG_LEE_CHECKLIST.md), and the vendored [`sloemo01/diorama` Playbook & Templates](./docs/diorama-kit/).
 
 ## Quick Start
 
