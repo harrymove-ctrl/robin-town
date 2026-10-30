@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#0b0f19"/>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#00c805" stroke-width="3"/>
+  <!-- Pixelated Robinhood Cap & Feather Icon -->
+  <path d="M12 40 L52 40 L46 48 L18 48 Z" fill="#00c805"/>
+  <path d="M18 26 L46 26 L52 40 L12 40 Z" fill="#00e806"/>
+  <path d="M26 14 L38 14 L46 26 L18 26 Z" fill="#00c805"/>
+  <!-- Golden Quill / Feather -->
+  <path d="M38 10 L44 10 L48 22 L42 22 Z" fill="#eec353"/>
+  <circle cx="32" cy="33" r="3" fill="#0b0f19"/>
+</svg>

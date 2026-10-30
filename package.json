@@ -1,0 +1,30 @@
+{
+  "name": "robin-town",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chinatown negotiation board game adaptation for Robinhood Chain with $wif tokenomics flywheel and original pixel art assets.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run typecheck && npm run verify:assets && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:unit": "node --import tsx --test tests/unit/**/*.test.ts",
+    "test:e2e": "node --import tsx --test tests/e2e/**/*.test.ts",
+    "test:e2e:tier1": "node --import tsx --test tests/e2e/tier1-features.test.ts",
+    "test:e2e:tier2": "node --import tsx --test tests/e2e/tier2-boundaries.test.ts",
+    "test:e2e:tier3": "node --import tsx --test tests/e2e/tier3-pairwise.test.ts",
+    "test:e2e:tier4": "node --import tsx --test tests/e2e/tier4-scenarios.test.ts",
+    "test:e2e:tier5": "node --import tsx --test tests/e2e/tier5-adversarial.test.ts",
+    "test:adversarial": "node --import tsx scripts/adversarial-stress.ts",
+    "generate:assets": "node --import tsx scripts/generate-assets.ts",
+    "verify:assets": "node --import tsx scripts/verify-assets.ts",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
