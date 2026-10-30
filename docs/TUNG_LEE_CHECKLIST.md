@@ -6,6 +6,17 @@
 * **Hackathon**: Robinhood Chain Hackathon: Build with `$wif` (`10,000 USDG` Winner Takes All)
 * **Submission Deadline**: 2 Nov 2026, 17:30 UTC
 
+## Active GitHub Issues Tagged for `@tung-lee`
+
+| Issue | Track | Title |
+|---|---|---|
+| [#6 (Pinned)](https://github.com/harrymove-ctrl/robin-town/issues/6) | **Master `/goal` Checklist** | `[Master Goal Checklist] Full Robin-Town Support Plan for @tung-lee (Diorama, Gameplay, Rules, UI/UX & $wif Flywheel)` |
+| [#1](https://github.com/harrymove-ctrl/robin-town/issues/1) | **Diorama (`sloemo01/diorama`)** | `[Diorama] Integrate sloemo01/diorama Look Contract, 64-Color Palette, Inked Contours & 3-Pass Storefront Detail (@tung-lee)` |
+| [#2](https://github.com/harrymove-ctrl/robin-town/issues/2) | **Gameplay Loop & AI Bots** | `[Gameplay] 6-Epoch Turn Pacing, Proactive AI Bot Trade Proposals, Rules Overlay & Multiplayer Lobby UX (@tung-lee)` |
+| [#3](https://github.com/harrymove-ctrl/robin-town/issues/3) | **Rules & Math Audit** | `[Rules] Chinatown & saigon-town Rule Invariants, Adjacency Graph, Non-Linear Payouts & OTC Trade Audit (@tung-lee)` |
+| [#4](https://github.com/harrymove-ctrl/robin-town/issues/4) | **UI/UX & Responsive QA** | `[UI/UX] HUD Ribbon, Two-Sided OTC Liquidity Desk, Deed & Module Drawer, and Viewport QA Overhaul (@tung-lee)` |
+| [#5](https://github.com/harrymove-ctrl/robin-town/issues/5) | **Tokenomics, Wallet & Ship** | `[Tokenomics & Ship] $wif Deflationary Flywheel, Robinhood Chain Testnet Wallet, Live Deployment & Demo Video (@tung-lee)` |
+
 ---
 
 ## 0. Immediate Onboarding for `@tung-lee`
