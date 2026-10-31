@@ -470,12 +470,22 @@ export interface Board3DOptions {
 }
 
 /**
+ * Optional per-frame highlight overlay supplied by the app (draft candidates,
+ * claimed draft picks, valid build targets).
+ */
+export interface Board3DOverlay {
+  pendingLots?: readonly number[];
+  draftLots?: readonly number[];
+  validBuildLots?: readonly number[];
+}
+
+/**
  * Public Board3DRenderer interface contract as defined in SCOPE.md.
  */
 export interface Board3DRenderer {
   mount(): void;
   unmount(): void;
-  render(state: GameState, selectedLotId: number | null): void;
+  render(state: GameState, selectedLotId: number | null, overlay?: Board3DOverlay): void;
   focusLot(lotId: number): void;
   resetCamera(): void;
   resize(width: number, height: number): void;
@@ -889,8 +899,15 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   /**
    * Synchronize 3D board scene with incoming GameState and selected lot ID.
    */
-  public render(state: GameState, selectedLotId: number | null): void {
+  public render(
+    state: GameState,
+    selectedLotId: number | null,
+    overlay: Board3DOverlay = {}
+  ): void {
     this.selectedLotId = selectedLotId;
+    const pending = new Set(overlay.pendingLots ?? []);
+    const drafted = new Set(overlay.draftLots ?? []);
+    const buildable = new Set(overlay.validBuildLots ?? []);
 
     // Detect completed clusters
     const allClusters = findAllClusters(state.lots);
@@ -977,6 +994,18 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       } else if (isHovered) {
         mat.color.setHex(0x00f0ff); // Cyber cyan
         mat.emissive.setHex(0x00f0ff);
+        mat.emissiveIntensity = 0.6;
+      } else if (drafted.has(lotId)) {
+        mat.color.setHex(0x00c805); // Picked deed
+        mat.emissive.setHex(0x00c805);
+        mat.emissiveIntensity = 0.7;
+      } else if (pending.has(lotId)) {
+        mat.color.setHex(0xeec353); // Candidate deed
+        mat.emissive.setHex(0xeec353);
+        mat.emissiveIntensity = 0.55;
+      } else if (buildable.has(lotId)) {
+        mat.color.setHex(0x39a883); // Valid build target
+        mat.emissive.setHex(0x39a883);
         mat.emissiveIntensity = 0.6;
       } else if (lot.owner !== null && lot.shop !== null) {
         // Built shop parcel: protocol category color

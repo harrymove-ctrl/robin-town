@@ -66,6 +66,7 @@ import {
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
 import { BoardRenderer, FLOATER_MS, PLAYER_COLORS, type BoardRenderState } from './ui/board';
 import { CameraController } from './ui/camera';
+import { ThreeBoardRenderer } from './ui/board-3d';
 import {
   HudManager,
   type DrawerViewModel,
@@ -100,6 +101,9 @@ export class RobinTownApp {
   private state: GameState;
   private camera: CameraController;
   private boardRenderer: BoardRenderer;
+  private board3d: ThreeBoardRenderer | null = null;
+  private board3dKey = '';
+  private board3dResizeObserver: ResizeObserver | null = null;
   private tradeDeskController: TradeDeskController;
   private tradeDeskModal: TradeDeskModal | null = null;
   private hudManager: HudManager | null = null;
@@ -248,6 +252,9 @@ export class RobinTownApp {
 
     this.bindCanvasInteraction();
     this.bindKeyboardShortcuts();
+    if (new URLSearchParams(window.location.search).get('view') === '3d') {
+      this.setBoard3dEnabled(true);
+    }
     this.preloadAssets();
     this.startRenderLoop();
     this.renderAll();
@@ -260,6 +267,49 @@ export class RobinTownApp {
     const h = boardBox ? boardBox.clientHeight : window.innerHeight;
     this.camera.setViewport(w, h);
     this.boardRenderer.resizeCanvas(this.canvas, { width: w, height: h });
+    this.board3d?.resize(w, h);
+  }
+
+  /**
+   * Switches between the default 2D canvas board and the Three.js diorama board.
+   * Falls back to 2D when WebGL is unavailable.
+   */
+  public setBoard3dEnabled(enabled: boolean): void {
+    const boardBox = this.container?.querySelector('#board-container') as HTMLElement | null;
+    if (!boardBox || !this.canvas) return;
+
+    if (!enabled) {
+      this.board3dResizeObserver?.disconnect();
+      this.board3dResizeObserver = null;
+      this.board3d?.unmount();
+      this.board3d = null;
+      this.canvas.style.visibility = '';
+      return;
+    }
+    if (this.board3d) return;
+
+    const renderer = new ThreeBoardRenderer({
+      container: boardBox,
+      width: boardBox.clientWidth || window.innerWidth,
+      height: boardBox.clientHeight || window.innerHeight,
+      onSelectLot: (lotId) => this.handleLotClick(lotId),
+      onHoverLot: (lotId) => {
+        this.hoveredLotId = lotId;
+        this.board3dKey = '';
+      },
+    });
+    renderer.mount();
+    if (!renderer.getActiveCamera() || !boardBox.querySelector('canvas:not(#game-board-canvas)')) {
+      return; // WebGL unavailable: keep the 2D board
+    }
+    this.board3d = renderer;
+    this.board3dKey = '';
+    // The HUD changes height per phase, so track the board container, not just the window.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.board3dResizeObserver = new ResizeObserver(() => this.handleResize());
+      this.board3dResizeObserver.observe(boardBox);
+    }
+    this.canvas.style.visibility = 'hidden';
   }
 
   private preloadAssets(): void {
@@ -340,6 +390,28 @@ export class RobinTownApp {
       claimFlashes: this.claimFlashes,
     };
 
+    if (this.board3d) {
+      const lots = this.state.lots;
+      const key = [
+        this.state.phase,
+        this.selectedLotId,
+        this.hoveredLotId,
+        this.selectedDraftLots.join(','),
+        validLots.join(','),
+        lots.map((l) => `${l.owner ?? '-'}${l.shop ?? '-'}`).join(''),
+        (this.state.pending ?? []).join(','),
+      ].join('|');
+      if (key !== this.board3dKey) {
+        this.board3dKey = key;
+        this.board3d.render(this.state, this.selectedLotId, {
+          pendingLots: this.state.phase === 'receive' ? this.state.pending ?? [] : [],
+          draftLots: this.selectedDraftLots,
+          validBuildLots: validLots,
+        });
+      }
+      return;
+    }
+
     this.boardRenderer.render(this.ctx, vp, renderState);
   }
 
@@ -386,6 +458,7 @@ export class RobinTownApp {
     if (!this.canvas) return;
 
     this.canvas.addEventListener('mousemove', (e) => {
+      if (this.board3d) return;
       const rect = this.canvas!.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -440,7 +513,9 @@ export class RobinTownApp {
         return;
       }
 
-      if (e.key === 't' || e.key === 'T') {
+      if (e.key === 'v' || e.key === 'V') {
+        this.setBoard3dEnabled(!this.board3d);
+      } else if (e.key === 't' || e.key === 'T') {
         if (this.state.phase === 'trade') {
           this.openTradeDesk();
         }
