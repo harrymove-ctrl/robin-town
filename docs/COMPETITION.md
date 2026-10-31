@@ -19,7 +19,7 @@ Build a product on Robinhood Chain that people keep coming back to. It can be a 
 * **Hooks and DeFi**: Vaults, pools, and OTC trading desks that move value.
 * **Agents and AI**: Autonomous AI trading agents (`Sherwood`, `Apex`, `Luna`) negotiating with `$wif`.
 * **Stock Tokens**: Featured `Stock Token Bridge` (`SB`, Size 6) protocol storefront connecting Robinhood Chain Stock Tokens into city monopolies.
-* **Onboarding**: Dual-mode wallet with instant `10,000 $wif` simulation mode so non-crypto players can play immediately before connecting an EIP-1193 wallet on Robinhood Chain Testnet (`Chain ID 46630`).
+* **Onboarding**: Dual-mode wallet with instant `10,000 $wif` simulation mode so non-crypto players can play immediately before connecting an EIP-1193 wallet on Robinhood Chain Testnet (`Chain ID 46631`).
 
 ## How Judging Works
 1. Every submission is reviewed by the organizers, and approved submissions advance to the vote.

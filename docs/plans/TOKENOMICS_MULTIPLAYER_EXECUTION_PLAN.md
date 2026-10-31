@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary and Economic Objectives
 
-This execution plan details the architecture and implementation roadmap for the $wif Tokenomics Flywheel, Dual-Mode Wallet Connectivity, Multiplayer State Synchronization, and Automated Verification Suites of robin-town. Built for the Robinhood Chain Hackathon ($10,000 USDG prize to single winner), the system turns Chinatown negotiation mechanics into a recurring token-sink flywheel where every match, trade, casual point swap, and prediction wager contributes to deflationary token burns on Robinhood Chain Testnet (Chain ID 46630).
+This execution plan details the architecture and implementation roadmap for the $wif Tokenomics Flywheel, Dual-Mode Wallet Connectivity, Multiplayer State Synchronization, and Automated Verification Suites of robin-town. Built for the Robinhood Chain Hackathon ($10,000 USDG prize to single winner), the system turns Chinatown negotiation mechanics into a recurring token-sink flywheel where every match, trade, casual point swap, and prediction wager contributes to deflationary token burns on Robinhood Chain Testnet (Chain ID 46631).
 
 Key system pillars include:
 1. Mathematical Tokenomics Flywheel: Pure calculation functions managing competitive match buy-in pools (5% burn, 5% staking vault, 90% podium purse), casual point-to-$wif swaps (3% burn tax), OTC trade micro-taxes (1% fee split 50% to burn and 50% to staking vault), and continuous staking yield curves up to 50,000 $wif.
@@ -38,7 +38,7 @@ Key system pillars include:
 |                                                                                                   |
 |  +---------------------------------------------------------------------------------------------+  |
 |  |                                Dual-Mode Wallet Adapter Layer                               |  |
-|  |  Mode 1: Simulation (10,000 $wif, LocalStorage) | Mode 2: Web3 ERC-20 (Chain ID 46630)       |  |
+|  |  Mode 1: Simulation (10,000 $wif, LocalStorage) | Mode 2: Web3 ERC-20 (Chain ID 46631)       |  |
 |  |  Mode 3: Resilient Fallback on Missing Provider or User Rejection (Zero Match Interruption) |  |
 |  +---------------------------------------------------------------------------------------------+  |
 |                                                                                                   |
@@ -181,12 +181,12 @@ Create `src/tokenomics/wagering.ts` implementing side-prediction markets:
 
 Robinhood Chain Testnet Constants:
 * Network Name: Robinhood Chain Testnet
-* Chain ID (Decimal): 46630
-* Chain ID (Hex): `0xb626`
+* Chain ID (Decimal): 46631
+* Chain ID (Hex): `0xb627`
 * Currency Symbol: $wif
 * Decimals: 18
-* RPC URL: `https://rpc.testnet.chain.robinhood.com`
-* Block Explorer URL: `https://explorer.testnet.chain.robinhood.com`
+* RPC URL: `https://rpc.testnet.robinhood.com`
+* Block Explorer URL: `https://explorer.testnet.robinhood.com`
 
 ### 3.2 Mode 1: Instant Off-Chain Simulation with Storage Persistence
 
@@ -203,7 +203,7 @@ Upgrade `src/tokenomics/wallet.ts` to support standard ERC-20 contract calls on 
    * `transfer(address,uint256)`: `0xa9059cbb`
    * `approve(address,uint256)`: `0x095ea7b3`
    * `burn(uint256)`: `0x42966c68`
-2. Auto Chain Switching: Call `wallet_switchEthereumChain` with `0xb626`. If error code 4902 is returned, automatically invoke `wallet_addEthereumChain` with Robinhood Chain parameters.
+2. Auto Chain Switching: Call `wallet_switchEthereumChain` with `0xb627`. If error code 4902 is returned, automatically invoke `wallet_addEthereumChain` with Robinhood Chain parameters.
 3. EIP-6963 Multi-Wallet Discovery: Listen for `eip6963:announceProvider` events to detect Robinhood Wallet alongside MetaMask.
 
 ### 3.4 Mode 3: Resilient Auto-Fallback
@@ -365,7 +365,7 @@ All action items from `docs/TUNG_LEE_CHECKLIST.md` pertaining to tokenomics, wal
 |---|---|---|---|---|
 | Item 83 to 86 | Multiplayer Room Lobby & Sync UX | Milestone M4-C | `src/network/room.ts`, `src/app.ts` | Multi-seat room test |
 | Item 127 to 133 | Final Settlement Modal & Flywheel Sinks | Milestone M4-A | `src/tokenomics/flywheel.ts`, `src/app.ts` | Final settlement test |
-| Item 134 to 136 | Dual-Mode Wallet on Robinhood Chain 46630 | Milestone M4-B | `src/tokenomics/wallet.ts` | Wallet unit and switch test |
+| Item 134 to 136 | Dual-Mode Wallet on Robinhood Chain 46631 | Milestone M4-B | `src/tokenomics/wallet.ts` | Wallet unit and switch test |
 | Item 137 to 144 | Quality Gate Before Every PR / Merge | Milestone M6 | `package.json`, `tests/` | Full build and test suite |
 
 ---
@@ -384,7 +384,7 @@ Confirms 5% buy-in burn, 3% swap burn, 50/50 trade tax split, and continuous sta
 ```bash
 node --import tsx --test tests/unit/wallet.test.ts
 ```
-Verifies pre-funded simulation accounts, ERC-20 method encoding, chain ID switching (46630), and resilient fallback.
+Verifies pre-funded simulation accounts, ERC-20 method encoding, chain ID switching (46631), and resilient fallback.
 
 3. Multiplayer Synchronization Verification:
 ```bash

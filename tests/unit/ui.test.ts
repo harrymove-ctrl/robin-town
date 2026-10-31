@@ -680,7 +680,7 @@ describe('Dual-Mode Wallet and Multiplayer Room Integration', () => {
     const mockProvider = {
       request: async ({ method }: { method: string }) => {
         if (method === 'eth_requestAccounts') return ['0x9999999999999999999999999999999999999999'];
-        if (method === 'eth_chainId') return '0xb626';
+        if (method === 'eth_chainId') return '0xb627';
         if (method === 'eth_getBalance') return '0x0';
         return null;
       },

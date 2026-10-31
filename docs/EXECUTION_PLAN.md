@@ -79,7 +79,7 @@ The system comprises six modular, decoupled subsystems with clean architectural 
 |  +---------------------------------------------------------------------------------------------+  |
 |  |                            Dual-Mode Wallet Connectivity Layer                              |  |
 |  |  Mode 1: Simulation (4 Pre-Funded Wallets, 10,000 $wif Each, LocalStorage Persistence)      |  |
-|  |  Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet 46630, ERC-20 Call Selectors)      |  |
+|  |  Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet 46631, ERC-20 Call Selectors)      |  |
 |  |  Mode 3: Resilient Auto-Fallback on Provider Absence or User Rejection                      |  |
 |  +---------------------------------------------------------------------------------------------+  |
 |                                               |                                                   |
@@ -178,7 +178,7 @@ Delivery is organized across 4 coordinated milestone tracks:
 * Detailed Specification: [`docs/plans/TOKENOMICS_MULTIPLAYER_EXECUTION_PLAN.md`](./plans/TOKENOMICS_MULTIPLAYER_EXECUTION_PLAN.md)
 * Milestones:
   1. Milestone M4-A: Tokenomics Math Polish, Continuous Staking, and Wagering. Update `calculateTradeTax` to split 50% to burn and 50% to staking vault, implement continuous staking curve up to 50,000 $wif, and introduce round prediction markets (`src/tokenomics/wagering.ts`) with 5% burn sinks.
-  2. Milestone M4-B: Dual-Mode Wallet ERC-20 Encoding and Persistence Upgrade. Add ERC-20 ABI method encoders (`balanceOf`, `transfer`, `approve`, `burn`), add browser local storage persistence for simulation mode, and support EIP-6963 multi-wallet discovery on Robinhood Chain Testnet (Chain ID 46630).
+  2. Milestone M4-B: Dual-Mode Wallet ERC-20 Encoding and Persistence Upgrade. Add ERC-20 ABI method encoders (`balanceOf`, `transfer`, `approve`, `burn`), add browser local storage persistence for simulation mode, and support EIP-6963 multi-wallet discovery on Robinhood Chain Testnet (Chain ID 46631).
   3. Milestone M4-C: Multiplayer Room SYNC_REQUEST Handler and WebSocket Relay. Implement `case 'SYNC_REQUEST':` in `src/network/room.ts`, add optimistic action queuing with visual rollback toast feedback in `src/app.ts`, and create pluggable `WebSocketTransport`.
 
 ### 2.4 Track D: Comprehensive Verification and Hardening
@@ -233,7 +233,7 @@ Every action item in `docs/TUNG_LEE_CHECKLIST.md` is mapped to an execution mile
 | Section 4: UI/UX | Bottom Dock: Deed Drawer & Module Rack | D4 | `src/ui/apple-carousel.ts` | Carousel unit test |
 | Section 4: UI/UX | Viewport Responsiveness & Keyboard Shortcuts | D6 | `src/styles/index.css` | Viewport stress harness |
 | Section 5: Tokenomics | Final Settlement Modal & 4 Flywheel Sinks | M4-A | `src/tokenomics/flywheel.ts` | Tier 1 test F7-1, Tier 5 accumulation |
-| Section 5: Tokenomics | Dual-Mode Wallet on Robinhood Chain 46630 | M4-B | `src/tokenomics/wallet.ts` | `node --import tsx --test tests/unit/wallet.test.ts` |
+| Section 5: Tokenomics | Dual-Mode Wallet on Robinhood Chain 46631 | M4-B | `src/tokenomics/wallet.ts` | `node --import tsx --test tests/unit/wallet.test.ts` |
 | Section 5: Tokenomics | Quality Gate Before Every Merge | M6 | `package.json` | `npm run typecheck && npm test && npm run build` |
 
 ---

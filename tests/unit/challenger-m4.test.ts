@@ -660,10 +660,10 @@ describe('Challenger M4.7: Precision, BigInt Conversions, and Edge Inputs', () =
   });
 
   it('parses diverse valid and invalid chain ID inputs', () => {
-    assert.strictEqual(parseChainId('0xb626'), ROBINHOOD_CHAIN_ID);
-    assert.strictEqual(parseChainId('0xB626'), ROBINHOOD_CHAIN_ID);
-    assert.strictEqual(parseChainId('46630'), ROBINHOOD_CHAIN_ID);
-    assert.strictEqual(parseChainId(46630), ROBINHOOD_CHAIN_ID);
+    assert.strictEqual(parseChainId('0xb627'), ROBINHOOD_CHAIN_ID);
+    assert.strictEqual(parseChainId('0xB627'), ROBINHOOD_CHAIN_ID);
+    assert.strictEqual(parseChainId('46631'), ROBINHOOD_CHAIN_ID);
+    assert.strictEqual(parseChainId(46631), ROBINHOOD_CHAIN_ID);
     assert.strictEqual(parseChainId(null), null);
     assert.strictEqual(parseChainId(undefined), null);
     assert.strictEqual(parseChainId('unknown'), null);

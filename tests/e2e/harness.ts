@@ -336,7 +336,7 @@ export class MockEip1193Provider {
 
   constructor(options: MockEip1193Options = {}) {
     this.accounts = options.accounts ?? ['0x1111111111111111111111111111111111111111'];
-    this.chainId = options.chainId ?? '0xb626';
+    this.chainId = options.chainId ?? '0xb627';
     this.balanceWei = options.balanceWei ?? '0x56bc75e2d63100000';
     this.failOnMethod = options.failOnMethod ?? null;
     this.errorMessage = options.errorMessage ?? 'Simulated RPC failure';
