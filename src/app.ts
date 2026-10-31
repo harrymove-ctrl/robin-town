@@ -279,6 +279,7 @@ export class RobinTownApp {
     if (!boardBox || !this.canvas) return;
 
     if (!enabled) {
+      this.removeDioramaHook();
       this.board3dResizeObserver?.disconnect();
       this.board3dResizeObserver = null;
       this.board3d?.unmount();
@@ -310,6 +311,48 @@ export class RobinTownApp {
       this.board3dResizeObserver.observe(boardBox);
     }
     this.canvas.style.visibility = 'hidden';
+    this.installDioramaHook(renderer);
+  }
+
+  /**
+   * Exposes the deterministic QA handle the diorama kit scripts (shoot, audit,
+   * frames) expect: window.__diorama = { freeze(t), getState(), renderAt(t) }
+   * and window.__dioramaReady once the first frame is up.
+   */
+  private installDioramaHook(renderer: ThreeBoardRenderer): void {
+    if (typeof window === 'undefined') return;
+    const target = window as unknown as {
+      __diorama?: {
+        freeze(t: number): void;
+        renderAt(t: number): void;
+        getState(): unknown;
+        projectLot(lotId: number): { x: number; y: number } | null;
+      };
+      __dioramaReady?: boolean;
+    };
+    target.__diorama = {
+      freeze: (t: number) => renderer.freeze(t),
+      renderAt: (t: number) => renderer.renderAt(t),
+      getState: () => renderer.getDioramaState(),
+      projectLot: (lotId: number) => renderer.projectLotToNdc(lotId),
+    };
+    // The first board.render() runs on the next render-loop frame; mark ready after it.
+    target.__dioramaReady = false;
+    const markReady = () => {
+      if (this.board3d === renderer) target.__dioramaReady = true;
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(markReady));
+    } else {
+      markReady();
+    }
+  }
+
+  private removeDioramaHook(): void {
+    if (typeof window === 'undefined') return;
+    const target = window as unknown as { __diorama?: unknown; __dioramaReady?: boolean };
+    delete target.__diorama;
+    target.__dioramaReady = false;
   }
 
   private preloadAssets(): void {
