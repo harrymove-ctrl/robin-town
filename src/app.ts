@@ -14,7 +14,6 @@ import {
   TOTAL_LOTS,
   canBuildShop,
   findAllClusters,
-  findAllPlayerClusters,
 } from './engine/board-layout';
 import {
   BOT_PERSONALITIES,
@@ -65,7 +64,8 @@ import {
   type RoomState,
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
-import { BoardRenderer, FLOATER_MS, PLAYER_COLORS, type BoardRenderState } from './ui/board';
+import { BoardRenderer, FLOATER_MS, type BoardRenderState, type ClaimFlash, type HarvestGlow } from './ui/board';
+import { buildClaimFlashes, buildHarvestEffects, epochContinueLabel } from './ui/phase-fx';
 import { CameraController } from './ui/camera';
 import { ThreeBoardRenderer } from './ui/board-3d';
 import {
@@ -124,8 +124,9 @@ export class RobinTownApp {
   private isEpochSummaryOpen = false;
   private isProposalsOpen = false;
   private incomingOffers: TradeOffer[] = [];
-  private claimFlashes: { lotId: number; color: string; start: number }[] = [];
-  private floaters: { lotId: number; text: string; start: number }[] = [];
+  private claimFlashes: ClaimFlash[] = [];
+  private floaters: { lotId: number; text: string; start: number; color?: string }[] = [];
+  private harvestGlows: HarvestGlow[] = [];
   private epochSummary: { year: number; payouts: number[] } | null = null;
   private isRoomModalOpen = false;
   private roomCodeInput = '';
@@ -437,6 +438,7 @@ export class RobinTownApp {
       buildPreview: this.computeBuildPreview(validLots),
       floaters: this.floaters,
       claimFlashes: this.claimFlashes,
+      harvestGlows: this.harvestGlows,
     };
 
     if (this.board3d) {
@@ -659,16 +661,9 @@ export class RobinTownApp {
     }
 
     try {
-      const dealt = [...(this.state.pending ?? [])];
+      const ownersBefore = this.state.lots.map((l) => l.owner);
       draftPlots(this.state, 0, lotIds);
-      const start = performance.now();
-      this.claimFlashes = dealt
-        .filter((id) => this.state.lots[id].owner !== null)
-        .map((id) => ({
-          lotId: id,
-          color: PLAYER_COLORS[this.state.lots[id].owner as number] ?? '#FFFFFF',
-          start,
-        }));
+      this.claimFlashes = buildClaimFlashes(ownersBefore, this.state, performance.now());
       this.selectedDraftLots = [];
       this.incomingOffers = this.collectBotProposals();
       this.isProposalsOpen = this.incomingOffers.length > 0;
@@ -776,8 +771,14 @@ export class RobinTownApp {
 
     const currentPhase = this.state.phase as GamePhase;
     if (currentPhase === 'ended') {
+      // Epoch 6 is over: let the harvest badges play, then open the settlement automatically.
       this.audio.playGameOverFanfare();
-      this.openSettlementModal();
+      setTimeout(() => {
+        if ((this.state.phase as GamePhase) === 'ended' && !this.isSettlementModalOpen) {
+          this.isEpochSummaryOpen = false;
+          this.openSettlementModal();
+        }
+      }, FLOATER_MS + 300);
     }
 
     return {
@@ -786,14 +787,14 @@ export class RobinTownApp {
     };
   }
 
-  /** Floats a +XX $wif badge above each of the player's clusters, noting the staking boost. */
+  /**
+   * Lights up every scoring cluster on the board (all four players) and floats
+   * a +XX $wif badge above each one. Only the human's badges carry the 1.20x boost.
+   */
   private raiseYieldFloaters(): void {
-    const start = performance.now();
-    this.floaters = findAllPlayerClusters(this.state.lots, 0).map((cluster, i) => {
-      const boosted = this.isStaked ? calculateStakingBoost(cluster.annualIncome, true) : cluster.annualIncome;
-      const suffix = this.isStaked && boosted !== cluster.annualIncome ? ` (${cluster.annualIncome} x1.20)` : '';
-      return { lotId: cluster.lots[0], text: `+${boosted} $wif${suffix}`, start: start + i * 250 };
-    });
+    const fx = buildHarvestEffects(this.state, this.isStaked, performance.now());
+    this.floaters = fx.floaters;
+    this.harvestGlows = fx.glows;
   }
 
   /** Picks up to two valid, bot-initiated offers for the player's parcels. */
@@ -1212,7 +1213,7 @@ export class RobinTownApp {
     const summary = this.epochSummary;
     const rows = this.state.players.map((p) => `
       <tr><td>${p.name}</td><td class="text-green">+${summary?.payouts[p.id] ?? 0}</td><td>${p.cash.toLocaleString()}</td></tr>`).join('');
-    const nextEpoch = (summary?.year ?? this.state.year) + 1;
+    const continueLabel = epochContinueLabel(summary?.year ?? this.state.year);
     return `
       <div class="modal-backdrop" data-modal-close="true"></div>
       <div class="modal-dialog epoch-summary-modal">
@@ -1225,7 +1226,7 @@ export class RobinTownApp {
             <thead><tr><th>Trader</th><th>Yield</th><th>Balance ($wif)</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
-          <button class="btn-primary" data-action="epoch-continue">Continue to Epoch ${nextEpoch}</button>
+          <button class="btn-primary" data-action="epoch-continue">${continueLabel}</button>
         </div>
       </div>
     `;

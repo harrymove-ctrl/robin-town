@@ -65,14 +65,73 @@ export interface BoardRenderState {
   draftLots?: number[];
   /** Projected cluster result shown next to the hovered valid build lot. */
   buildPreview?: { lotId: number; text: string; complete: boolean } | null;
-  /** Floating yield badges raised during the Yield Harvest phase. */
-  floaters?: { lotId: number; text: string; start: number }[];
-  /** Rings that expand from freshly claimed parcels. */
-  claimFlashes?: { lotId: number; color: string; start: number }[];
+  /** Floating yield badges raised during the Yield Harvest phase (tinted per owner when `color` is set). */
+  floaters?: { lotId: number; text: string; start: number; color?: string }[];
+  /**
+   * Freshly claimed parcels. A token in the owner's colour flies from that
+   * player's side of the board onto the parcel, then rings out on landing.
+   */
+  claimFlashes?: ClaimFlash[];
+  /** Scoring clusters lit up during the Yield Harvest, for every player. */
+  harvestGlows?: HarvestGlow[];
+}
+
+export interface ClaimFlash {
+  lotId: number;
+  color: string;
+  start: number;
+  /** Owner of the claimed parcel; picks where the flying token launches from. */
+  ownerId?: number;
+}
+
+export interface HarvestGlow {
+  lots: number[];
+  color: string;
+  complete: boolean;
+  start: number;
 }
 
 export const FLOATER_MS = 1800;
 export const CLAIM_FLASH_MS = 900;
+/** Flight time of the claim token before it lands and rings out. */
+export const CLAIM_FLY_MS = 650;
+export const HARVEST_GLOW_MS = 2400;
+
+/** World-space launch point of a claim token: the human's tray (bottom) or a bot's ribbon card (top). */
+export function claimOrigin(ownerId: number | undefined): { x: number; y: number } {
+  if (ownerId === undefined || ownerId === 0) return { x: BOARD_WIDTH / 2, y: BOARD_HEIGHT + 60 };
+  return { x: (BOARD_WIDTH * (ownerId + 0.5)) / 4, y: -60 };
+}
+
+/**
+ * Position of a claim token at time `now`. Returns null before launch and
+ * after the whole flight + landing ring has played. `landed` flips once the
+ * token reaches the parcel centre.
+ */
+export function claimFlightState(
+  flash: ClaimFlash,
+  now: number
+): { x: number; y: number; progress: number; landed: boolean; ringT: number } | null {
+  const elapsed = now - flash.start;
+  if (elapsed < 0 || elapsed > CLAIM_FLY_MS + CLAIM_FLASH_MS) return null;
+  const def = LOT_DEFINITIONS[flash.lotId];
+  const target = { x: def.x + CELL_SIZE / 2, y: def.y + CELL_SIZE / 2 };
+  if (elapsed >= CLAIM_FLY_MS) {
+    return { ...target, progress: 1, landed: true, ringT: (elapsed - CLAIM_FLY_MS) / CLAIM_FLASH_MS };
+  }
+  const origin = claimOrigin(flash.ownerId);
+  const t = elapsed / CLAIM_FLY_MS;
+  const ease = 1 - Math.pow(1 - t, 3);
+  // Arc the token sideways so several flights read as separate paths.
+  const lift = Math.sin(Math.PI * ease) * 80;
+  return {
+    x: origin.x + (target.x - origin.x) * ease + lift * 0.35,
+    y: origin.y + (target.y - origin.y) * ease - lift,
+    progress: ease,
+    landed: false,
+    ringT: 0,
+  };
+}
 
 export const PLAYER_COLORS: readonly string[] = Object.freeze([
   '#00C805', // Player 0: Robin Emerald
@@ -452,17 +511,50 @@ export class BoardRenderer {
       }
     }
 
-    // Expanding rings on freshly claimed parcels
-    for (const flash of state.claimFlashes ?? []) {
-      const t = (now - flash.start) / CLAIM_FLASH_MS;
+    // Harvest: light up every scoring cluster in its owner's colour (gold frame when complete)
+    for (const glow of state.harvestGlows ?? []) {
+      const t = (now - glow.start) / HARVEST_GLOW_MS;
       if (t < 0 || t > 1) continue;
+      const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 6);
+      const fade = t < 0.8 ? 1 : (1 - t) / 0.2;
+      for (const lotId of glow.lots) {
+        const def = LOT_DEFINITIONS[lotId];
+        ctx.globalAlpha = (0.18 + 0.22 * pulse) * fade;
+        ctx.fillStyle = glow.color;
+        ctx.fillRect(def.x, def.y, CELL_SIZE, CELL_SIZE);
+        ctx.globalAlpha = fade;
+        ctx.strokeStyle = glow.complete ? '#FFD700' : glow.color;
+        ctx.lineWidth = glow.complete ? 3 + pulse : 2 + pulse;
+        ctx.strokeRect(def.x - 2, def.y - 2, CELL_SIZE + 4, CELL_SIZE + 4);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Claimed parcels: a token in the owner's colour flies in, the cell tints, then a ring pops
+    for (const flash of state.claimFlashes ?? []) {
+      const flight = claimFlightState(flash, now);
+      if (!flight) continue;
       const def = LOT_DEFINITIONS[flash.lotId];
-      ctx.globalAlpha = 1 - t;
-      ctx.strokeStyle = flash.color;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(def.x + CELL_SIZE / 2, def.y + CELL_SIZE / 2, CELL_SIZE * (0.4 + t), 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.globalAlpha = flight.landed ? 0.5 * (1 - flight.ringT) : 0.15 + 0.35 * flight.progress;
+      ctx.fillStyle = flash.color;
+      ctx.fillRect(def.x, def.y, CELL_SIZE, CELL_SIZE);
+      if (flight.landed) {
+        ctx.globalAlpha = 1 - flight.ringT;
+        ctx.strokeStyle = flash.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(flight.x, flight.y, CELL_SIZE * (0.4 + flight.ringT), 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(flight.x, flight.y, 11, 0, Math.PI * 2);
+        ctx.fillStyle = flash.color;
+        ctx.fill();
+        ctx.strokeStyle = '#0B0F19';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -490,7 +582,7 @@ export class BoardRenderer {
       ctx.textBaseline = 'bottom';
       ctx.fillStyle = '#0B0F19';
       ctx.fillText(f.text, def.x + CELL_SIZE / 2 + 1, def.y - 8 - t * 36 + 1);
-      ctx.fillStyle = '#00C805';
+      ctx.fillStyle = f.color ?? '#00C805';
       ctx.fillText(f.text, def.x + CELL_SIZE / 2, def.y - 8 - t * 36);
       ctx.globalAlpha = 1;
     }

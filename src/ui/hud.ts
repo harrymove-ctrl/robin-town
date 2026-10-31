@@ -581,7 +581,7 @@ export class HudManager {
         <div class="inventory-drawer ${drawer.isOpen ? 'open' : ''}">
           ${drawer.mode === 'draft' ? `
             <div class="drawer-tray draft-tray">
-              <div class="tray-title">Available Deeds (${drawer.selectedCount}/${drawer.requiredCount} selected):</div>
+              <div class="tray-title">Selected ${drawer.selectedCount} / ${drawer.requiredCount} deeds</div>
               <div class="draft-cards-row">
                 ${drawer.draftDeeds.map((d) => `
                   <button
