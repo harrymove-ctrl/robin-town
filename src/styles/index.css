@@ -221,8 +221,8 @@ body {
 }
 
 .player-avatar {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -274,11 +274,11 @@ body {
   color: var(--text-muted);
 }
 
-/* Activity Log Terminal Feed */
+/* Activity Log Terminal Feed: docked bottom-right so it never covers the HUD */
 .activity-feed-panel {
-  position: absolute;
-  top: 95px;
-  right: 16px;
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
   width: 280px;
   max-height: 190px;
   background-color: rgba(11, 15, 25, 0.88);
@@ -291,7 +291,32 @@ body {
   backdrop-filter: blur(6px);
 }
 
+.activity-feed-panel.collapsed {
+  max-height: none;
+  width: auto;
+  padding: 4px 8px;
+}
+
+.activity-feed-panel.collapsed .feed-content {
+  display: none;
+}
+
+.activity-feed-panel.collapsed .feed-header {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
 .feed-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-muted);
+  cursor: pointer;
+  text-align: left;
   font-family: var(--font-retro);
   font-size: 10px;
   font-weight: bold;
@@ -439,7 +464,7 @@ body {
   min-width: 68px;
 }
 
-.module-slot:hover:not(:disabled) {
+.module-slot:hover {
   border-color: var(--accent-cyan);
   background-color: var(--bg-card-hover);
 }
@@ -451,8 +476,8 @@ body {
 }
 
 .module-slot.empty {
-  opacity: 0.4;
-  cursor: not-allowed;
+  opacity: 0.45;
+  cursor: help;
 }
 
 .module-icon {
@@ -632,10 +657,11 @@ body {
 /* Two-Column Escrow Grid */
 .escrow-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   padding: 16px;
   overflow-y: auto;
+  overflow-x: hidden;
   max-height: 50vh;
 }
 
@@ -1170,4 +1196,256 @@ body {
   padding: 6px 12px;
   text-align: left;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Phase progress stepper */
+.phase-steps {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.phase-step {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-muted);
+  font-family: var(--font-retro);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.phase-step.done {
+  color: var(--accent-gold);
+  border-color: var(--accent-gold);
+}
+
+.phase-step.current {
+  color: #0b0f19;
+  background-color: var(--robin-green);
+  border-color: var(--robin-green);
+  font-weight: bold;
+  box-shadow: 0 0 8px var(--robin-green-glow);
+}
+
+.lbl-short {
+  display: none;
+}
+
+/* Player ribbon cards */
+.player-ribbon {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.player-card.is-bot {
+  cursor: pointer;
+}
+
+.player-card.is-bot:hover {
+  background-color: rgba(31, 41, 55, 0.95);
+  border-color: var(--player-accent);
+  transform: translateY(-1px);
+}
+
+.player-header-row {
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.player-header-row .staked-badge {
+  margin-left: auto;
+}
+
+.wallet-badge {
+  font-family: var(--font-retro);
+  font-size: 9px;
+  color: var(--text-muted);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.player-cash-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.player-yield {
+  font-family: var(--font-retro);
+  font-size: 10px;
+  color: var(--accent-gold);
+}
+
+/* Title-deed cards */
+.deed-card {
+  position: relative;
+  min-width: 118px;
+  gap: 2px;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+  border-top-width: 6px;
+}
+
+.deed-title {
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.deed-district {
+  font-size: 10px;
+  color: var(--district-accent, var(--text-muted));
+  font-weight: 600;
+  text-align: center;
+}
+
+.deed-adjacent {
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background-color: rgba(0, 200, 5, 0.18);
+  border: 1px solid var(--robin-green);
+  color: var(--robin-green);
+  font-size: 8px;
+  font-weight: bold;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Protocol module rack */
+.module-slot {
+  border-top: 3px solid var(--module-accent, var(--border-muted));
+  min-width: 84px;
+}
+
+.module-payout {
+  font-family: var(--font-retro);
+  font-size: 9px;
+  color: var(--accent-gold);
+}
+
+/* OTC desk: bot verdict + personality */
+.quote-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.persona-badge,
+.verdict-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-family: var(--font-retro);
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  border: 1px solid var(--border-muted);
+}
+
+.verdict-badge.accepted {
+  color: #0b0f19;
+  background-color: var(--robin-green);
+  border-color: var(--robin-green);
+}
+
+.verdict-badge.shortfall {
+  color: #0b0f19;
+  background-color: #f5a623;
+  border-color: #f5a623;
+}
+
+/* Tablet and laptop layouts */
+@media (max-width: 1100px) {
+  .lbl-long {
+    display: none;
+  }
+
+  .lbl-short {
+    display: inline;
+  }
+
+  .hud-topbar {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+
+  .phase-banner {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .wallet-pill {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .player-ribbon {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action-bar-container {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+}
+
+/* Card trays wrap instead of scrolling sideways */
+.draft-cards-row,
+.module-slots-row {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
+.cash-input-row {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .escrow-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Dark scrollbars everywhere */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+
+/* Parcel chips carry their district color */
+.parcel-card {
+  border-left: 4px solid var(--district-accent, var(--border-muted));
+}
+
+.parcel-card .parcel-district {
+  color: var(--district-accent, var(--text-muted));
+  font-weight: 600;
+}
+
+.parcel-shop {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.parcel-shop-icon {
+  width: 16px;
+  height: 16px;
 }
