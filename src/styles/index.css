@@ -1117,3 +1117,26 @@ body {
 .font-bold {
   font-weight: bold;
 }
+
+/* Top-bar shortcuts and rules reference */
+.topbar-btn {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rules-modal .payout-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.rules-modal .payout-table th,
+.rules-modal .payout-table td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}

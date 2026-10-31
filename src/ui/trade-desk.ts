@@ -621,7 +621,7 @@ export class TradeDeskModal {
             <button class="btn-secondary" data-action="clear-escrow">Reset Escrow</button>
             ${this.controller.canApplyCounteroffer() ? `
               <button class="btn-counteroffer" data-action="apply-counteroffer">
-                Apply Counteroffer (+${evalResult!.shortfall} $wif)
+                Match Bot Ask (+${evalResult!.shortfall} $wif)
               </button>
             ` : ''}
             <button class="btn-primary btn-execute" data-action="execute-trade" ${evalResult?.accepted ? '' : 'disabled'}>

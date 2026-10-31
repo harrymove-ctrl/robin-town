@@ -20,6 +20,8 @@ import {
   botDraft,
 } from './engine/bot';
 import {
+  COMPLETE,
+  INCOMPLETE,
   SHOPS,
   advancePhase,
   beginBuild,
@@ -108,6 +110,7 @@ export class RobinTownApp {
   private isStaked = true;
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
+  private isRulesModalOpen = false;
   private isRoomModalOpen = false;
   private roomCodeInput = '';
 
@@ -212,6 +215,8 @@ export class RobinTownApp {
         onTileSelect: (shopType) => this.selectShopType(shopType),
         onDraftToggle: (lotId) => this.toggleDraftLot(lotId),
         onWalletClick: () => this.openWalletModal(),
+        onRulesClick: () => this.openRulesModal(),
+        onLobbyClick: () => this.openRoomModal(),
         onAudioToggle: () => {
           this.audio.toggleMute();
           this.renderAll();
@@ -384,7 +389,7 @@ export class RobinTownApp {
 
   private bindKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e) => {
-      if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen) {
+      if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen || this.isRulesModalOpen) {
         if (e.key === 'Escape') {
           this.closeModals();
         }
@@ -664,6 +669,11 @@ export class RobinTownApp {
     this.renderAll();
   }
 
+  public openRulesModal(): void {
+    this.isRulesModalOpen = true;
+    this.renderAll();
+  }
+
   public openRoomModal(): void {
     this.isRoomModalOpen = true;
     this.renderAll();
@@ -673,6 +683,7 @@ export class RobinTownApp {
     this.isWalletModalOpen = false;
     this.isSettlementModalOpen = false;
     this.isRoomModalOpen = false;
+    this.isRulesModalOpen = false;
     this.renderAll();
   }
 
@@ -687,6 +698,9 @@ export class RobinTownApp {
     } else if (this.isSettlementModalOpen) {
       modalEl.innerHTML = this.renderSettlementModalHTML();
       this.bindSettlementModalEvents(modalEl);
+    } else if (this.isRulesModalOpen) {
+      modalEl.innerHTML = this.renderRulesModalHTML();
+      modalEl.querySelector('[data-modal-close]')?.addEventListener('click', () => this.closeModals());
     } else if (this.isRoomModalOpen) {
       modalEl.innerHTML = this.renderRoomModalHTML();
       this.bindRoomModalEvents(modalEl);
@@ -872,6 +886,43 @@ export class RobinTownApp {
         this.startNewGame();
       }
     });
+  }
+
+  private renderRulesModalHTML(): string {
+    const phases = [
+      ['Allocation', 'Pick deeds from the candidate pool to claim city parcels.'],
+      ['OTC Desk', 'Trade $wif, tiles and parcels one-to-one with the AI traders.'],
+      ['Deployment', 'Place protocol tiles on your empty parcels; touching tiles of one type form a cluster.'],
+      ['Yield Harvest', 'Each cluster pays out $wif; completed clusters pay far more.'],
+      ['Epoch Transition', 'Repeat for 6 epochs, then final settlement.'],
+    ];
+    const payoutRows = SHOPS.map((shop) => `
+      <tr>
+        <td>${shop.name}</td>
+        <td>${shop.size}</td>
+        <td>${INCOMPLETE[shop.size - 1]}</td>
+        <td class="text-green">${COMPLETE[shop.size]}</td>
+      </tr>`).join('');
+    return `
+      <div class="modal-backdrop" data-modal-close="true"></div>
+      <div class="modal-dialog rules-modal">
+        <div class="modal-header">
+          <h3>Rules &amp; Payouts</h3>
+          <button class="btn-close" data-modal-close="true">&times;</button>
+        </div>
+        <div class="modal-body">
+          <ol class="rules-phases">
+            ${phases.map(([name, text]) => `<li><strong>${name}:</strong> ${text}</li>`).join('')}
+          </ol>
+          <table class="payout-table">
+            <thead><tr><th>Protocol</th><th>Size</th><th>Incomplete (size-1)</th><th>COMPLETE</th></tr></thead>
+            <tbody>${payoutRows}</tbody>
+          </table>
+          <p>Partial clusters pay ${INCOMPLETE.slice(1).join(' / ')} $wif for 1 to 5 tiles. A completed cluster cannot be expanded.</p>
+          <p>$wif flywheel: settlement converts points to $wif and 3% is burned, so supply shrinks as more matches finish.</p>
+        </div>
+      </div>
+    `;
   }
 
   private renderRoomModalHTML(): string {

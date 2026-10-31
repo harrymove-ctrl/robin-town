@@ -397,6 +397,8 @@ export interface HudEventHandlers {
   onTileSelect?: (shopType: number) => void;
   onDraftToggle?: (lotId: number) => void;
   onWalletClick?: () => void;
+  onRulesClick?: () => void;
+  onLobbyClick?: () => void;
   onAudioToggle?: () => void;
 }
 
@@ -447,6 +449,8 @@ export class HudManager {
         </div>
 
         <div class="topbar-actions">
+          <button class="topbar-btn" data-action="rules-open" title="How to play and payout table">? Rules &amp; Payouts</button>
+          <button class="topbar-btn" data-action="lobby-open" title="Create or join a multiplayer room">Multiplayer Lobby</button>
           <button class="wallet-pill" data-action="wallet-toggle" title="Switch between Simulation and Robinhood Chain">
             <span class="status-dot"></span>
             <span class="wallet-label">${walletLabel}</span>
@@ -568,6 +572,10 @@ export class HudManager {
 
       if (target.dataset.action === 'wallet-toggle') {
         this.handlers.onWalletClick?.();
+      } else if (target.dataset.action === 'rules-open') {
+        this.handlers.onRulesClick?.();
+      } else if (target.dataset.action === 'lobby-open') {
+        this.handlers.onLobbyClick?.();
       } else if (target.dataset.action === 'audio-toggle') {
         this.handlers.onAudioToggle?.();
       } else if (target.dataset.actionId) {
