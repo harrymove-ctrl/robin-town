@@ -481,13 +481,13 @@ describe('Tier 1: Feature Coverage (F1 to F12)', () => {
       const p2 = BOT_PERSONALITIES[2];
       const p3 = BOT_PERSONALITIES[3];
 
-      assert.equal(p1.profitMargin, 1.04);
+      assert.equal(p1.profitMargin, 1.0);
       assert.equal(p1.riskTolerance, 0.5);
 
-      assert.equal(p2.profitMargin, 1.09);
+      assert.equal(p2.profitMargin, 1.15);
       assert.equal(p2.riskTolerance, 0.2);
 
-      assert.equal(p3.profitMargin, 1.01);
+      assert.equal(p3.profitMargin, 0.95);
       assert.equal(p3.riskTolerance, 0.85);
 
       assert.notEqual(p1.profitMargin, p2.profitMargin);

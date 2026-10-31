@@ -386,20 +386,20 @@ describe('Empirical Challenge 2: Chinatown Building Restrictions', () => {
 
 describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () => {
   const personas = {
-    sherwood: { name: 'Sherwood', margin: 1.04 },
-    apex: { name: 'Apex', margin: 1.09 },
-    luna: { name: 'Luna', margin: 1.01 },
+    sherwood: { name: 'Sherwood', margin: 1.0 },
+    apex: { name: 'Apex', margin: 1.15 },
+    luna: { name: 'Luna', margin: 0.95 },
   };
 
   it('tests trade perspective: rejects when valueReceived < valueSurrendered * margin, accepts when >=', () => {
     const emptyState: BotState = { tiles: {}, lots: {} };
 
-    // Sherwood (margin 1.04). Proposer asks for 100 cash (valueSurrendered = 100).
-    // Required value is 100 * 1.04 = 104.
+    // Sherwood (margin 1.0, fair value). Proposer asks for 100 cash (valueSurrendered = 100).
+    // Required value is 100 * 1.0 = 100.
     const offerSherwoodShort = {
       fromPlayer: 0,
       toPlayer: 1,
-      give: { cash: 103, tiles: [], lots: [] },
+      give: { cash: 99, tiles: [], lots: [] },
       take: { cash: 100, tiles: [], lots: [] },
     };
     const evalSherwoodShort = evaluateTradeOffer(offerSherwoodShort, personas.sherwood, emptyState, 200, 1);
@@ -409,7 +409,7 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
     const offerSherwoodExact = {
       fromPlayer: 0,
       toPlayer: 1,
-      give: { cash: 104, tiles: [], lots: [] },
+      give: { cash: 100, tiles: [], lots: [] },
       take: { cash: 100, tiles: [], lots: [] },
     };
     const evalSherwoodExact = evaluateTradeOffer(offerSherwoodExact, personas.sherwood, emptyState, 200, 1);
@@ -419,18 +419,18 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
     const offerSherwoodOver = {
       fromPlayer: 0,
       toPlayer: 1,
-      give: { cash: 105, tiles: [], lots: [] },
+      give: { cash: 101, tiles: [], lots: [] },
       take: { cash: 100, tiles: [], lots: [] },
     };
     const evalSherwoodOver = evaluateTradeOffer(offerSherwoodOver, personas.sherwood, emptyState, 200, 1);
     assert.strictEqual(evalSherwoodOver.accepted, true);
     assert.strictEqual(evalSherwoodOver.shortfall, 0);
 
-    // Apex (margin 1.09). At valueSurrendered = 300, 300 * 1.09 = 327 (exact integer).
+    // Apex (margin 1.15). At valueSurrendered = 300, 300 * 1.15 = 345 (exact integer).
     const apexUnder = {
       fromPlayer: 0,
       toPlayer: 2,
-      give: { cash: 326, tiles: [], lots: [] },
+      give: { cash: 344, tiles: [], lots: [] },
       take: { cash: 300, tiles: [], lots: [] },
     };
     const evalApexUnder = evaluateTradeOffer(apexUnder, personas.apex, emptyState, 500, 1);
@@ -440,7 +440,7 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
     const apexMatch = {
       fromPlayer: 0,
       toPlayer: 2,
-      give: { cash: 327, tiles: [], lots: [] },
+      give: { cash: 345, tiles: [], lots: [] },
       take: { cash: 300, tiles: [], lots: [] },
     };
     const evalApexMatch = evaluateTradeOffer(apexMatch, personas.apex, emptyState, 500, 1);
@@ -450,18 +450,18 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
     const apexOver = {
       fromPlayer: 0,
       toPlayer: 2,
-      give: { cash: 328, tiles: [], lots: [] },
+      give: { cash: 346, tiles: [], lots: [] },
       take: { cash: 300, tiles: [], lots: [] },
     };
     const evalApexOver = evaluateTradeOffer(apexOver, personas.apex, emptyState, 500, 1);
     assert.strictEqual(evalApexOver.accepted, true);
     assert.strictEqual(evalApexOver.shortfall, 0);
 
-    // Luna (margin 1.01). At valueSurrendered = 100, 100 * 1.01 = 101.
+    // Luna (margin 0.95, discounts to keep capital moving). At valueSurrendered = 100, 100 * 0.95 = 95.
     const lunaUnder = {
       fromPlayer: 0,
       toPlayer: 3,
-      give: { cash: 100, tiles: [], lots: [] },
+      give: { cash: 94, tiles: [], lots: [] },
       take: { cash: 100, tiles: [], lots: [] },
     };
     const evalLunaUnder = evaluateTradeOffer(lunaUnder, personas.luna, emptyState, 200, 1);
@@ -471,7 +471,7 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
     const lunaMatch = {
       fromPlayer: 0,
       toPlayer: 3,
-      give: { cash: 101, tiles: [], lots: [] },
+      give: { cash: 95, tiles: [], lots: [] },
       take: { cash: 100, tiles: [], lots: [] },
     };
     const evalLunaMatch = evaluateTradeOffer(lunaMatch, personas.luna, emptyState, 200, 1);
@@ -488,16 +488,16 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
       take: { cash: 100, tiles: [], lots: [] },
     };
 
-    // valueSurrendered = 100, required = 104
+    // valueSurrendered = 100, required = 100
     // valueReceived = 20 + 18 (default lot value) = 38
-    // shortfall: 104 minus 38 equals 66
+    // shortfall: 100 minus 38 equals 62
     const evaluation = evaluateTradeOffer(offer, personas.sherwood, emptyState, 200, 1);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 66);
+    assert.strictEqual(evaluation.shortfall, 62);
     assert.ok(evaluation.counterOffer);
 
-    // Counteroffer must top up give.cash by shortfall: 20 + 66 = 86
-    assert.strictEqual(evaluation.counterOffer.cash, 86);
+    // Counteroffer must top up give.cash by shortfall: 20 + 62 = 82
+    assert.strictEqual(evaluation.counterOffer.cash, 82);
     // Preserves non-cash give assets
     assert.deepStrictEqual(evaluation.counterOffer.lots, [5]);
     // Bot must NEVER add its own cash to take.cash or reduce requested assets
@@ -513,23 +513,23 @@ describe('Empirical Challenge 3: AI Bot Negotiation Engine and Edge Cases', () =
       take: { cash: 50, tiles: [], lots: [] },
     };
 
-    // required = 50 * 1.04 = 52. shortfall = 42. total cash required = 10 + 42 = 52.
-    // Case A: Human has 51 cash (1 short of 52)
-    const evalInsolvent = evaluateTradeOffer(offer, personas.sherwood, emptyState, 51, 1);
+    // required = 50 * 1.0 = 50. shortfall = 40. total cash required = 10 + 40 = 50.
+    // Case A: Human has 49 cash (1 short of 50)
+    const evalInsolvent = evaluateTradeOffer(offer, personas.sherwood, emptyState, 49, 1);
     assert.strictEqual(evalInsolvent.accepted, false);
-    assert.strictEqual(evalInsolvent.shortfall, 42);
+    assert.strictEqual(evalInsolvent.shortfall, 40);
     assert.strictEqual(evalInsolvent.counterOffer, undefined);
     assert.ok(
       typeof evalInsolvent.quoteMessage === 'string' &&
         evalInsolvent.quoteMessage.includes('exceeding available reserves')
     );
 
-    // Case B: Human has exactly 52 cash (boundary threshold)
-    const evalExactCash = evaluateTradeOffer(offer, personas.sherwood, emptyState, 52, 1);
+    // Case B: Human has exactly 50 cash (boundary threshold)
+    const evalExactCash = evaluateTradeOffer(offer, personas.sherwood, emptyState, 50, 1);
     assert.strictEqual(evalExactCash.accepted, false);
-    assert.strictEqual(evalExactCash.shortfall, 42);
+    assert.strictEqual(evalExactCash.shortfall, 40);
     assert.ok(evalExactCash.counterOffer);
-    assert.strictEqual(evalExactCash.counterOffer.cash, 52);
+    assert.strictEqual(evalExactCash.counterOffer.cash, 50);
 
     // Case C: Human has zero additional cash
     const evalZeroCash = evaluateTradeOffer(offer, personas.sherwood, emptyState, 10, 1);

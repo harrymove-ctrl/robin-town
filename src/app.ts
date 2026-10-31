@@ -14,7 +14,6 @@ import {
   TOTAL_LOTS,
   canBuildShop,
   findAllClusters,
-  findAllPlayerClusters,
 } from './engine/board-layout';
 import {
   BOT_PERSONALITIES,
@@ -39,7 +38,8 @@ import {
   validateOffer,
   startYear,
 } from './engine/engine';
-import type { GameConfig, GamePhase, GameState, Player, TradeOffer } from './engine/types';
+import type { GameConfig, GamePhase, GameState, Player, RandomSource, TradeOffer } from './engine/types';
+import { createSeededRandom } from './engine/rng';
 import {
   BURN_ADDRESS,
   calculateMatchPayouts,
@@ -65,7 +65,8 @@ import {
   type RoomState,
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
-import { BoardRenderer, FLOATER_MS, PLAYER_COLORS, type BoardRenderState } from './ui/board';
+import { BoardRenderer, FLOATER_MS, type BoardRenderState, type ClaimFlash, type HarvestGlow } from './ui/board';
+import { buildClaimFlashes, buildHarvestEffects, describeProposal, epochContinueLabel } from './ui/phase-fx';
 import { CameraController } from './ui/camera';
 import { ThreeBoardRenderer } from './ui/board-3d';
 import {
@@ -88,6 +89,8 @@ export interface RobinTownAppConfig {
   gameConfig?: GameConfig;
   audio?: AudioSynthesizer;
   isStaked?: boolean;
+  /** Seed for a reproducible match (deals, bot drafts, tile draws). Omit for Math.random. */
+  seed?: number;
 }
 
 /**
@@ -118,14 +121,17 @@ export class RobinTownApp {
   private selectedLotId: number | null = null;
   private hoveredLotId: number | null = null;
   private isStaked = true;
+  private seed: number | undefined;
+  private rng: RandomSource = Math.random;
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
   private isRulesModalOpen = false;
   private isEpochSummaryOpen = false;
   private isProposalsOpen = false;
   private incomingOffers: TradeOffer[] = [];
-  private claimFlashes: { lotId: number; color: string; start: number }[] = [];
-  private floaters: { lotId: number; text: string; start: number }[] = [];
+  private claimFlashes: ClaimFlash[] = [];
+  private floaters: { lotId: number; text: string; start: number; color?: string }[] = [];
+  private harvestGlows: HarvestGlow[] = [];
   private epochSummary: { year: number; payouts: number[] } | null = null;
   private isRoomModalOpen = false;
   private roomCodeInput = '';
@@ -138,6 +144,8 @@ export class RobinTownApp {
     this.isStaked = config.isStaked ?? true;
     this.audio = config.audio ?? getAudioSynthesizer();
     this.walletAdapter = new WalletAdapter({ mode: 'simulation' });
+    this.seed = config.seed;
+    if (this.seed !== undefined) this.rng = createSeededRandom(this.seed);
 
     // Initialize core game state
     this.state = createGame(config.gameConfig || {
@@ -148,7 +156,7 @@ export class RobinTownApp {
         { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_2.png' },
       ],
       startingCash: 50,
-    });
+    }, this.rng);
 
     // createGame already opens Epoch 1 (deeds and tiles)
 
@@ -437,6 +445,7 @@ export class RobinTownApp {
       buildPreview: this.computeBuildPreview(validLots),
       floaters: this.floaters,
       claimFlashes: this.claimFlashes,
+      harvestGlows: this.harvestGlows,
     };
 
     if (this.board3d) {
@@ -546,7 +555,7 @@ export class RobinTownApp {
     } else if (this.state.phase === 'trade') {
       const lot = this.state.lots[lotId];
       if (lot && lot.owner !== null && lot.owner !== 0) {
-        this.openTradeDesk(lot.owner);
+        this.openTradeDesk(lot.owner, lotId);
       }
     }
 
@@ -659,16 +668,9 @@ export class RobinTownApp {
     }
 
     try {
-      const dealt = [...(this.state.pending ?? [])];
-      draftPlots(this.state, 0, lotIds);
-      const start = performance.now();
-      this.claimFlashes = dealt
-        .filter((id) => this.state.lots[id].owner !== null)
-        .map((id) => ({
-          lotId: id,
-          color: PLAYER_COLORS[this.state.lots[id].owner as number] ?? '#FFFFFF',
-          start,
-        }));
+      const ownersBefore = this.state.lots.map((l) => l.owner);
+      draftPlots(this.state, 0, lotIds, this.rng);
+      this.claimFlashes = buildClaimFlashes(ownersBefore, this.state, performance.now());
       this.selectedDraftLots = [];
       this.incomingOffers = this.collectBotProposals();
       this.isProposalsOpen = this.incomingOffers.length > 0;
@@ -696,9 +698,10 @@ export class RobinTownApp {
   }
 
   // Phase 2: OTC Liquidity Desk
-  public openTradeDesk(partnerId?: number): void {
+  /** Opens the OTC desk aimed at `partnerId`, preloading `lotId` (one of their parcels) into the take side. */
+  public openTradeDesk(partnerId?: number, lotId?: number): void {
     if (this.state.phase !== 'trade') return;
-    this.tradeDeskController.open(partnerId);
+    this.tradeDeskController.open(partnerId, lotId);
     this.tradeDeskModal?.render();
   }
 
@@ -776,8 +779,14 @@ export class RobinTownApp {
 
     const currentPhase = this.state.phase as GamePhase;
     if (currentPhase === 'ended') {
+      // Epoch 6 is over: let the harvest badges play, then open the settlement automatically.
       this.audio.playGameOverFanfare();
-      this.openSettlementModal();
+      setTimeout(() => {
+        if ((this.state.phase as GamePhase) === 'ended' && !this.isSettlementModalOpen) {
+          this.isEpochSummaryOpen = false;
+          this.openSettlementModal();
+        }
+      }, FLOATER_MS + 300);
     }
 
     return {
@@ -786,14 +795,14 @@ export class RobinTownApp {
     };
   }
 
-  /** Floats a +XX $wif badge above each of the player's clusters, noting the staking boost. */
+  /**
+   * Lights up every scoring cluster on the board (all four players) and floats
+   * a +XX $wif badge above each one. Only the human's badges carry the 1.20x boost.
+   */
   private raiseYieldFloaters(): void {
-    const start = performance.now();
-    this.floaters = findAllPlayerClusters(this.state.lots, 0).map((cluster, i) => {
-      const boosted = this.isStaked ? calculateStakingBoost(cluster.annualIncome, true) : cluster.annualIncome;
-      const suffix = this.isStaked && boosted !== cluster.annualIncome ? ` (${cluster.annualIncome} x1.20)` : '';
-      return { lotId: cluster.lots[0], text: `+${boosted} $wif${suffix}`, start: start + i * 250 };
-    });
+    const fx = buildHarvestEffects(this.state, this.isStaked, performance.now());
+    this.floaters = fx.floaters;
+    this.harvestGlows = fx.glows;
   }
 
   /** Picks up to two valid, bot-initiated offers for the player's parcels. */
@@ -845,7 +854,10 @@ export class RobinTownApp {
     if (!offer) return;
     this.incomingOffers.splice(index, 1);
     this.isProposalsOpen = false;
-    this.openTradeDesk(offer.toPlayer);
+    // Start the negotiation from the bot's terms rather than an empty desk.
+    if (this.state.phase === 'trade') {
+      this.tradeDeskController.openWithOffer(offer.toPlayer ?? offer.partner ?? 1, offer.give, offer.take);
+    }
     this.renderAll();
   }
 
@@ -868,7 +880,7 @@ export class RobinTownApp {
       this.audio.playGameOverFanfare();
       this.openSettlementModal();
     } else {
-      nextYear(this.state);
+      nextYear(this.state, this.rng);
       this.audio.playYearFanfare();
       this.tradeDeskController.updateGameState(this.state);
     }
@@ -909,6 +921,8 @@ export class RobinTownApp {
   }
 
   public startNewGame(config?: GameConfig): void {
+    // A seeded session replays the same deal on every fresh match.
+    if (this.seed !== undefined) this.rng = createSeededRandom(this.seed);
     this.state = createGame(config || {
       players: [
         { name: 'You (Trader)', address: '0x1000000000000000000000000000000000000000', avatar: 'avatar_0.png' },
@@ -917,7 +931,7 @@ export class RobinTownApp {
         { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_2.png' },
       ],
       startingCash: 50,
-    });
+    }, this.rng);
     this.selectedDraftLots = [];
     this.selectedShopType = null;
     this.selectedLotId = null;
@@ -1187,10 +1201,9 @@ export class RobinTownApp {
   private renderProposalsModalHTML(): string {
     const rows = this.incomingOffers.map((offer, i) => {
       const bot = this.state.players[offer.toPlayer ?? 1];
-      const lots = offer.give.lots.map((id) => `Parcel ${id + 1}`).join(', ') || 'no parcels';
       return `
         <div class="proposal-row">
-          <p><strong>${bot.name}</strong> offers <strong>${offer.take.cash} $wif</strong> for your ${lots}.</p>
+          <p>${describeProposal(bot.name, offer)}</p>
           <button class="btn-primary" data-proposal-action="accept" data-proposal-index="${i}">Accept</button>
           <button class="btn-secondary" data-proposal-action="counter" data-proposal-index="${i}">Counter</button>
           <button class="btn-secondary" data-proposal-action="dismiss" data-proposal-index="${i}">Dismiss</button>
@@ -1212,7 +1225,7 @@ export class RobinTownApp {
     const summary = this.epochSummary;
     const rows = this.state.players.map((p) => `
       <tr><td>${p.name}</td><td class="text-green">+${summary?.payouts[p.id] ?? 0}</td><td>${p.cash.toLocaleString()}</td></tr>`).join('');
-    const nextEpoch = (summary?.year ?? this.state.year) + 1;
+    const continueLabel = epochContinueLabel(summary?.year ?? this.state.year);
     return `
       <div class="modal-backdrop" data-modal-close="true"></div>
       <div class="modal-dialog epoch-summary-modal">
@@ -1225,7 +1238,7 @@ export class RobinTownApp {
             <thead><tr><th>Trader</th><th>Yield</th><th>Balance ($wif)</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
-          <button class="btn-primary" data-action="epoch-continue">Continue to Epoch ${nextEpoch}</button>
+          <button class="btn-primary" data-action="epoch-continue">${continueLabel}</button>
         </div>
       </div>
     `;
@@ -1309,9 +1322,13 @@ export class RobinTownApp {
               <div class="lobby-seats-grid">
                 ${[0, 1, 2, 3].map((seatIdx) => {
                   const occupant = roomState?.players.find((p) => p.seat === seatIdx && p.connected);
+                  const isMine = !!occupant && occupant.clientId === this.networkRoom?.localClientId;
+                  const takenByOther = !!occupant && !isMine;
                   return `
-                    <div class="seat-card ${occupant ? 'occupied' : 'empty'}">
-                      <span class="seat-label">Seat ${seatIdx + 1}</span>
+                    <button type="button" class="seat-card ${occupant ? 'occupied' : 'empty'} ${isMine ? 'mine' : ''}"
+                      data-seat="${seatIdx}" ${takenByOther ? 'disabled' : ''}
+                      title="${takenByOther ? `Seat ${seatIdx} is taken` : isMine ? 'Your seat' : `Take seat ${seatIdx}`}">
+                      <span class="seat-label">Seat ${seatIdx}${isMine ? ' (You)' : ''}</span>
                       ${occupant ? `
                         <span class="occupant-name">${occupant.name}</span>
                         <span class="ready-badge ${occupant.isReady ? 'ready' : ''}">
@@ -1319,8 +1336,9 @@ export class RobinTownApp {
                         </span>
                       ` : `
                         <span class="ai-autofill-badge">AI Bot Autofill</span>
+                        <span class="seat-cta">Click to sit here</span>
                       `}
-                    </div>
+                    </button>
                   `;
                 }).join('')}
               </div>
@@ -1339,54 +1357,76 @@ export class RobinTownApp {
   }
 
   private bindRoomModalEvents(modalEl: HTMLElement): void {
-    modalEl.addEventListener('click', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-modal-close], [data-action]') as HTMLElement | null;
-      if (!target) return;
+    // renderAll() re-binds on every render; keep a single listener so clicks fire once.
+    modalEl.removeEventListener('click', this.handleRoomModalClick);
+    modalEl.addEventListener('click', this.handleRoomModalClick);
+  }
 
-      if (target.dataset.modalClose) {
-        this.closeModals();
-      } else if (target.dataset.action === 'create-room') {
-        const code = generateRoomCode();
+  /** Follows the room's state so seat / ready changes from other tabs re-render the lobby. */
+  private watchRoom(room: NetworkRoom): void {
+    room.onStateChange(() => {
+      if (this.isRoomModalOpen && this.networkRoom === room) this.renderAll();
+    });
+  }
+
+  private handleRoomModalClick = (e: Event): void => {
+    const target = (e.target as HTMLElement).closest('[data-modal-close], [data-action], [data-seat]') as HTMLElement | null;
+    if (!target) return;
+    const modalEl = (e.currentTarget as HTMLElement | null) ?? (this.container?.querySelector('#modal-overlay-container') as HTMLElement | null);
+
+    if (target.dataset.seat !== undefined) {
+      try {
+        this.networkRoom?.setSeat(parseInt(target.dataset.seat, 10));
+        this.audio.playClick();
+      } catch {
+        this.audio.playErrorBuzzer();
+      }
+      this.renderAll();
+    } else if (target.dataset.modalClose) {
+      this.closeModals();
+    } else if (target.dataset.action === 'create-room') {
+      const code = generateRoomCode();
+      this.networkRoom = new NetworkRoom({
+        roomCode: code,
+        localPlayer: {
+          name: 'You (Host)',
+          address: '0x1000000000000000000000000000000000000000',
+          avatar: 'avatar_0.png',
+        },
+        isHost: true,
+      });
+      this.watchRoom(this.networkRoom);
+      void this.networkRoom.start();
+      this.renderAll();
+    } else if (target.dataset.action === 'join-room') {
+      const input = modalEl?.querySelector('#room-code-field') as HTMLInputElement | null;
+      const code = normalizeRoomCode(input?.value || '');
+      if (isValidRoomCode(code)) {
         this.networkRoom = new NetworkRoom({
           roomCode: code,
           localPlayer: {
-            name: 'You (Host)',
+            name: 'Player Peer',
             address: '0x1000000000000000000000000000000000000000',
             avatar: 'avatar_0.png',
           },
-          isHost: true,
+          isHost: false,
         });
+        this.watchRoom(this.networkRoom);
         void this.networkRoom.start();
         this.renderAll();
-      } else if (target.dataset.action === 'join-room') {
-        const input = modalEl.querySelector('#room-code-field') as HTMLInputElement;
-        const code = normalizeRoomCode(input?.value || '');
-        if (isValidRoomCode(code)) {
-          this.networkRoom = new NetworkRoom({
-            roomCode: code,
-            localPlayer: {
-              name: 'Player Peer',
-              address: '0x1000000000000000000000000000000000000000',
-              avatar: 'avatar_0.png',
-            },
-            isHost: false,
-          });
-          void this.networkRoom.start();
-          this.renderAll();
-        } else {
-          this.audio.playErrorBuzzer();
-        }
-      } else if (target.dataset.action === 'toggle-ready') {
-        this.networkRoom?.toggleReady();
-        this.renderAll();
-      } else if (target.dataset.action === 'leave-room') {
-        this.networkRoom?.stop();
-        this.networkRoom = null;
-        this.renderAll();
-      } else if (target.dataset.action === 'start-room-match') {
-        this.networkRoom?.startMatch();
-        this.closeModals();
+      } else {
+        this.audio.playErrorBuzzer();
       }
-    });
-  }
+    } else if (target.dataset.action === 'toggle-ready') {
+      this.networkRoom?.toggleReady();
+      this.renderAll();
+    } else if (target.dataset.action === 'leave-room') {
+      this.networkRoom?.stop();
+      this.networkRoom = null;
+      this.renderAll();
+    } else if (target.dataset.action === 'start-room-match') {
+      this.networkRoom?.startMatch();
+      this.closeModals();
+    }
+  };
 }

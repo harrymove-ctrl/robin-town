@@ -29,8 +29,14 @@ export interface BotPersonality {
   name: string;
   title: string;
   avatar: string;
+  /** Acceptance threshold: the bot wants `profitMargin` x the value it gives up. */
   profitMargin: number;
   riskTolerance: number;
+  /**
+   * Appetite for swapping loose (unclustered) shop tiles. 1 = neutral. Above 1 the
+   * bot values tiles it receives higher and loose tiles it gives up lower.
+   */
+  looseTileBias?: number;
   preferredShops: number[];
   preferredDistricts: number[];
   dialogue: {
@@ -66,9 +72,10 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Sherwood',
     title: 'The Conservative Yield Seeker',
     avatar: 'avatar_1.png',
-    profitMargin: 1.04,
+    // Retail / balanced: fair value, likes the Size 3 and Size 4 shops.
+    profitMargin: 1.0,
     riskTolerance: 0.5,
-    preferredShops: [0, 2],
+    preferredShops: [0, 1, 2],
     preferredDistricts: [0, 2],
     dialogue: {
       greeting: 'Welcome to Sherwood. Let us construct sustainable liquidity together.',
@@ -83,7 +90,8 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Apex',
     title: 'The High-Frequency Arbitrage Shark',
     avatar: 'avatar_3.png',
-    profitMargin: 1.09,
+    // Wall Street monopoly hunter: aggressive valuation, hoards Size 5 / Size 6 keystones.
+    profitMargin: 1.15,
     riskTolerance: 0.2,
     preferredShops: [4, 5],
     preferredDistricts: [1, 5],
@@ -100,8 +108,10 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Luna',
     title: 'The Liquid Market Maker',
     avatar: 'avatar_2.png',
-    profitMargin: 1.01,
+    // DeFi high-tempo speculator: discounts to keep capital moving, eager to swap loose tiles.
+    profitMargin: 0.95,
     riskTolerance: 0.85,
+    looseTileBias: 1.25,
     preferredShops: [1, 0, 3],
     preferredDistricts: [4, 3],
     dialogue: {
@@ -562,6 +572,35 @@ export function evaluateOfferSide(
   return value;
 }
 
+/** Normalises an OfferSide's tiles (count array or `{ type }` list) to six counts. */
+export function tileCounts(side: OfferSide): number[] {
+  const counts = [0, 0, 0, 0, 0, 0];
+  if (!Array.isArray(side.tiles)) return counts;
+  for (let i = 0; i < side.tiles.length; i++) {
+    const t = side.tiles[i] as unknown;
+    if (typeof t === 'number') {
+      if (i < 6) counts[i] += t;
+    } else if (t && typeof t === 'object' && 'type' in t) {
+      const type = (t as { type: number }).type;
+      if (type >= 0 && type < 6) counts[type]++;
+    }
+  }
+  return counts;
+}
+
+/**
+ * A tile is "loose" for a bot when it has no open (incomplete) cluster of
+ * that shop on the board to grow, so the tile is just sitting in hand.
+ */
+export function isLooseTileFor(shop: number, botId: number, state: GameState | BotState): boolean {
+  if (Array.isArray((state as GameState).lots)) {
+    const game = state as GameState;
+    return !game.lots.some((l) => l.owner === botId && l.shop === shop && !l.isComplete);
+  }
+  const ctx = (state as BotState).tiles?.[shop];
+  return !ctx || !ctx.canCompleteThisTurn;
+}
+
 export const evaluateSideValue = evaluateOfferSide;
 export const evaluateSide = evaluateOfferSide;
 
@@ -614,16 +653,24 @@ export function evaluateTradeOffer(
   if (proposerCash === undefined) proposerCash = 1000;
   if (epoch === undefined) epoch = 1;
 
-  const valueReceived = evaluateOfferSide(
-    offer.give,
-    stateOrBotState,
-    typeof botIdOrPersona === 'number' ? botId : epoch
-  );
-  const valueSurrendered = evaluateOfferSide(
-    offer.take,
-    stateOrBotState,
-    typeof botIdOrPersona === 'number' ? botId : epoch
-  );
+  const sideArg = typeof botIdOrPersona === 'number' ? botId : epoch;
+  let valueReceived = evaluateOfferSide(offer.give, stateOrBotState, sideArg);
+  let valueSurrendered = evaluateOfferSide(offer.take, stateOrBotState, sideArg);
+
+  // Loose-tile appetite (Luna): tiles coming in are worth more, loose tiles going out less.
+  const tileBias = 'looseTileBias' in personality ? (personality as BotPersonality).looseTileBias ?? 1 : 1;
+  if (tileBias !== 1) {
+    const tilesOnly = (side: OfferSide, filter?: (shop: number) => boolean): OfferSide => ({
+      cash: 0,
+      lots: [],
+      tiles: tileCounts(side).map((n, s) => (!filter || filter(s) ? n : 0)) as OfferSide['tiles'],
+    });
+    const isLoose = (shop: number) => isLooseTileFor(shop, botId, stateOrBotState);
+    const tilesIn = evaluateOfferSide(tilesOnly(offer.give), stateOrBotState, sideArg);
+    const looseOut = evaluateOfferSide(tilesOnly(offer.take, isLoose), stateOrBotState, sideArg);
+    valueReceived += tilesIn * (tileBias - 1);
+    valueSurrendered -= looseOut * (1 - 1 / tileBias);
+  }
 
   const requiredValue = valueSurrendered * botMargin;
   const accepted = valueReceived >= requiredValue;
@@ -668,15 +715,145 @@ export function evaluateTradeOffer(
 export const remediatedEvaluation = evaluateTradeOffer;
 
 /**
+ * How much receiving vacant parcel `lotId` grows `playerId`'s holdings on the
+ * board `owners` (post-swap ownership): friendly neighbours count, neighbours
+ * carrying an open shop cluster count extra, and more again when the receiver
+ * holds a tile of that shop to extend it with.
+ */
+function parcelGrowth(state: GameState, owners: (number | null)[], lotId: number, playerId: number): number {
+  let gain = 0;
+  for (const nid of plotNeighbors(lotId)) {
+    if (owners[nid] !== playerId) continue;
+    gain += 1;
+    const n = state.lots[nid];
+    if (n.shop !== null && !n.isComplete) {
+      gain += 2;
+      if ((state.players[playerId]?.tiles[n.shop] ?? 0) > 0) gain += 2;
+    }
+  }
+  return gain;
+}
+
+/** Whether `playerId` has an open cluster of `shop` with a vacant owned parcel beside it. */
+function canExtendCluster(state: GameState, playerId: number, shop: number): boolean {
+  return state.lots.some(
+    (l) =>
+      l.owner === playerId &&
+      l.shop === shop &&
+      !l.isComplete &&
+      plotNeighbors(l.id).some((nid) => state.lots[nid].owner === playerId && state.lots[nid].shop === null)
+  );
+}
+
+export interface SwapProposal {
+  kind: 'parcel-swap' | 'tile-swap';
+  offer: TradeOffer;
+  /** Cluster growth for the bot and for the counterparty; both are > 0. */
+  botGain: number;
+  targetGain: number;
+}
+
+/**
+ * Finds a mutually beneficial 1-for-1 swap between a bot and another player:
+ * either two vacant parcels where each side's new parcel touches its own
+ * holdings, or two shop tiles where each side receives a tile it can use to
+ * extend an open cluster and gives away one it cannot. Offers are expressed
+ * from the bot's side (`give` = bot assets, `take` = target assets).
+ */
+export function findMutualSwap(botId: number, targetPlayerId: number, state: GameState): SwapProposal | null {
+  const persona = getBotPersonality(botId);
+  const parcel = findParcelSwap(botId, targetPlayerId, state);
+  const tile = findTileSwap(botId, targetPlayerId, state);
+  // Luna would rather move loose tiles; everyone else leads with parcels.
+  const order = (persona.looseTileBias ?? 1) > 1 ? [tile, parcel] : [parcel, tile];
+  return order.find((p): p is SwapProposal => p !== null) ?? null;
+}
+
+function findParcelSwap(botId: number, targetPlayerId: number, state: GameState): SwapProposal | null {
+  const vacant = (owner: number) => state.lots.filter((l) => l.owner === owner && l.shop === null).map((l) => l.id);
+  const botVacant = vacant(botId);
+  const targetVacant = vacant(targetPlayerId);
+  let best: { botLot: number; targetLot: number; botGain: number; targetGain: number } | null = null;
+
+  for (const targetLot of targetVacant) {
+    // Only parcels the bot actually borders are worth asking for.
+    if (!plotNeighbors(targetLot).some((n) => state.lots[n].owner === botId)) continue;
+    for (const botLot of botVacant) {
+      const owners = state.lots.map((l) => l.owner);
+      owners[targetLot] = botId;
+      owners[botLot] = targetPlayerId;
+      const botGain = parcelGrowth(state, owners, targetLot, botId);
+      const targetGain = parcelGrowth(state, owners, botLot, targetPlayerId);
+      if (botGain <= 0 || targetGain <= 0) continue;
+      const better =
+        !best ||
+        Math.min(botGain, targetGain) > Math.min(best.botGain, best.targetGain) ||
+        (Math.min(botGain, targetGain) === Math.min(best.botGain, best.targetGain) &&
+          botGain + targetGain > best.botGain + best.targetGain);
+      if (better) best = { botLot, targetLot, botGain, targetGain };
+    }
+  }
+  if (!best) return null;
+  return {
+    kind: 'parcel-swap',
+    botGain: best.botGain,
+    targetGain: best.targetGain,
+    offer: {
+      fromPlayer: botId,
+      toPlayer: targetPlayerId,
+      partner: targetPlayerId,
+      give: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [best.botLot] },
+      take: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [best.targetLot] },
+    },
+  };
+}
+
+function findTileSwap(botId: number, targetPlayerId: number, state: GameState): SwapProposal | null {
+  const bot = state.players[botId];
+  const target = state.players[targetPlayerId];
+  if (!bot || !target) return null;
+  for (let want = 0; want < 6; want++) {
+    if ((target.tiles[want] ?? 0) <= 0 || !canExtendCluster(state, botId, want)) continue;
+    // The target should keep the tile if it could use it itself.
+    if (canExtendCluster(state, targetPlayerId, want)) continue;
+    for (let give = 0; give < 6; give++) {
+      if (give === want || (bot.tiles[give] ?? 0) <= 0) continue;
+      if (!isLooseTileFor(give, botId, state) || !canExtendCluster(state, targetPlayerId, give)) continue;
+      const giveTiles = [0, 0, 0, 0, 0, 0];
+      const takeTiles = [0, 0, 0, 0, 0, 0];
+      giveTiles[give] = 1;
+      takeTiles[want] = 1;
+      return {
+        kind: 'tile-swap',
+        botGain: 1,
+        targetGain: 1,
+        offer: {
+          fromPlayer: botId,
+          toPlayer: targetPlayerId,
+          partner: targetPlayerId,
+          give: { cash: 0, tiles: giveTiles, lots: [] },
+          take: { cash: 0, tiles: takeTiles, lots: [] },
+        },
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Generate bot-initiated trade offer when bot detects a high synergy asset.
+ * Mutually beneficial cluster swaps (parcel-for-parcel or tile-for-tile) come
+ * first; otherwise the bot bids cash for a parcel next to one of its open shops.
  */
 export function generateBotTradeOffer(
   botId: number,
   targetPlayerId: number,
   state: GameState
 ): TradeOffer | null {
+  const swap = findMutualSwap(botId, targetPlayerId, state);
+  if (swap) return swap.offer;
+
   const botLots = state.lots.filter((l) => l.owner === botId);
-  const targetLots = state.lots.filter((l) => l.owner === targetPlayerId);
 
   // Search for an opponent parcel adjacent to an incomplete bot shop
   for (const botLot of botLots) {
