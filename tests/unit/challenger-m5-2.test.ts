@@ -279,15 +279,15 @@ describe('Adversarial Challenge 2: Counterparty Switching and Invariants', () =>
     const controller = new TradeDeskController(game);
     controller.open(1);
     assert.equal(controller.getActivePartnerProfile().name, 'Sherwood');
-    assert.equal(controller.getActivePartnerProfile().profitMargin, 1.04);
+    assert.equal(controller.getActivePartnerProfile().profitMargin, 1.0);
 
     controller.setPartner(2);
     assert.equal(controller.getActivePartnerProfile().name, 'Apex');
-    assert.equal(controller.getActivePartnerProfile().profitMargin, 1.09);
+    assert.equal(controller.getActivePartnerProfile().profitMargin, 1.15);
 
     controller.setPartner(3);
     assert.equal(controller.getActivePartnerProfile().name, 'Luna');
-    assert.equal(controller.getActivePartnerProfile().profitMargin, 1.01);
+    assert.equal(controller.getActivePartnerProfile().profitMargin, 0.95);
   });
 });
 
@@ -440,7 +440,7 @@ describe('Adversarial Challenge 4: One-Click Counteroffer Fulfillment', () => {
     game.phase = 'trade';
 
     game.players[0].cash = 100;
-    game.players[3].cash = 100; // Luna (profitMargin 1.05)
+    game.players[3].cash = 100; // Luna (profitMargin 0.95)
 
     const controller = new TradeDeskController(game);
     controller.open(3);
@@ -482,7 +482,7 @@ describe('Adversarial Challenge 4: One-Click Counteroffer Fulfillment', () => {
     game.phase = 'trade';
 
     game.players[0].cash = 15; // Poor human trader
-    game.players[1].cash = 100; // Sherwood (margin 1.15)
+    game.players[1].cash = 100; // Sherwood (margin 1.0)
 
     const controller = new TradeDeskController(game);
     controller.open(1);

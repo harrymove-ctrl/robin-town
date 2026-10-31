@@ -20,26 +20,28 @@ import {
   evaluateTradeOffer,
 } from '../../src/engine/bot';
 import type { BotState } from '../../src/engine/bot';
+import { createGame } from '../../src/engine/engine';
 import type { GameState } from '../../src/engine/types';
 
 describe('AI Bot Profiles and Archetype Contracts', () => {
-  it('instantiates Sherwood with conservative yield profile and 1.04 margin', () => {
+  it('instantiates Sherwood (retail / balanced) with a fair 1.0 margin and Size 3-4 shop focus', () => {
     const sherwood = getBotPersonality(1);
     assert.strictEqual(sherwood.id, 1);
     assert.strictEqual(sherwood.name, 'Sherwood');
-    assert.strictEqual(sherwood.profitMargin, 1.04);
+    assert.strictEqual(sherwood.profitMargin, 1.0);
     assert.strictEqual(sherwood.riskTolerance, 0.5);
-    assert.deepStrictEqual(sherwood.preferredShops, [0, 2]);
+    // DEX Swap, Memecoin Lounge, Staking Vault
+    assert.deepStrictEqual(sherwood.preferredShops, [0, 1, 2]);
     assert.deepStrictEqual(sherwood.preferredDistricts, [0, 2]);
     assert.ok(sherwood.dialogue.greeting.length > 0);
     assert.ok(sherwood.dialogue.counteroffer.length > 0);
   });
 
-  it('instantiates Apex with aggressive arbitrage profile and 1.09 margin', () => {
+  it('instantiates Apex (monopoly hunter) with an aggressive 1.15 margin', () => {
     const apex = getBotPersonality(2);
     assert.strictEqual(apex.id, 2);
     assert.strictEqual(apex.name, 'Apex');
-    assert.strictEqual(apex.profitMargin, 1.09);
+    assert.strictEqual(apex.profitMargin, 1.15);
     assert.strictEqual(apex.riskTolerance, 0.2);
     assert.deepStrictEqual(apex.preferredShops, [4, 5]);
     assert.deepStrictEqual(apex.preferredDistricts, [1, 5]);
@@ -47,11 +49,12 @@ describe('AI Bot Profiles and Archetype Contracts', () => {
     assert.ok(apex.dialogue.rejected.length > 0);
   });
 
-  it('instantiates Luna with liquid market maker profile and 1.01 margin', () => {
+  it('instantiates Luna (high-tempo speculator) with a fluid 0.95 margin and loose-tile bias', () => {
     const luna = getBotPersonality(3);
     assert.strictEqual(luna.id, 3);
     assert.strictEqual(luna.name, 'Luna');
-    assert.strictEqual(luna.profitMargin, 1.01);
+    assert.strictEqual(luna.profitMargin, 0.95);
+    assert.ok((luna.looseTileBias ?? 1) > 1, 'Luna is eager to swap loose tiles');
     assert.strictEqual(luna.riskTolerance, 0.85);
     assert.deepStrictEqual(luna.preferredShops, [1, 0, 3]);
     assert.deepStrictEqual(luna.preferredDistricts, [4, 3]);
@@ -74,9 +77,9 @@ describe('AI Bot Profiles and Archetype Contracts', () => {
 
 describe('The 10 Verified Trade Valuation Scenarios', () => {
   const personas = {
-    sherwood: { name: 'Sherwood', margin: 1.04 },
-    apex: { name: 'Apex', margin: 1.09 },
-    luna: { name: 'Luna', margin: 1.01 },
+    sherwood: { name: 'Sherwood', margin: 1.0 },
+    apex: { name: 'Apex', margin: 1.15 },
+    luna: { name: 'Luna', margin: 0.95 },
   };
 
   it('Scenario 1: Free Cash Donation to Sherwood is accepted without counteroffer', () => {
@@ -108,9 +111,10 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.sherwood, botState, 100, 1);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 30);
+    // tile value 28 (10 + 6 epochs x 3) at Sherwood's fair 1.0x
+    assert.strictEqual(evaluation.shortfall, 28);
     assert.ok(evaluation.counterOffer);
-    assert.strictEqual(evaluation.counterOffer.cash, 30);
+    assert.strictEqual(evaluation.counterOffer.cash, 28);
   });
 
   it('Scenario 3: Severe Underbid with Feasible Cash Counteroffer', () => {
@@ -127,9 +131,10 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.sherwood, botState, 50, 2);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 24);
+    // lot value 32 (18 + 14 friendly) x 1.0 - 10 offered
+    assert.strictEqual(evaluation.shortfall, 22);
     assert.ok(evaluation.counterOffer);
-    assert.strictEqual(evaluation.counterOffer.cash, 34);
+    assert.strictEqual(evaluation.counterOffer.cash, 32);
   });
 
   it('Scenario 4: Severe Underbid with Insolvent Proposer suppresses counteroffer', () => {
@@ -146,7 +151,7 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.sherwood, botState, 25, 2);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 24);
+    assert.strictEqual(evaluation.shortfall, 22);
     assert.strictEqual(evaluation.counterOffer, undefined);
   });
 
@@ -188,9 +193,10 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.apex, botState, 50, 3);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 2);
+    // received 25 vs required 24 x 1.15 = 27.6
+    assert.strictEqual(evaluation.shortfall, 3);
     assert.ok(evaluation.counterOffer);
-    assert.strictEqual(evaluation.counterOffer.cash, 5);
+    assert.strictEqual(evaluation.counterOffer.cash, 6);
   });
 
   it('Scenario 7: Generous Premium Cash Offer to Sherwood is accepted cleanly', () => {
@@ -251,9 +257,10 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.apex, botState, 100, 5);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 28);
+    // set-completion tile worth 57 x 1.15 = 65.55 against 35 offered
+    assert.strictEqual(evaluation.shortfall, 31);
     assert.ok(evaluation.counterOffer);
-    assert.strictEqual(evaluation.counterOffer.cash, 63);
+    assert.strictEqual(evaluation.counterOffer.cash, 66);
   });
 
   it('Scenario 10: Non-Cash Asset Underbid with Cash Top-Up preserves original assets', () => {
@@ -274,9 +281,10 @@ describe('The 10 Verified Trade Valuation Scenarios', () => {
 
     const evaluation = evaluateTradeOffer(offer, personas.sherwood, botState, 50, 4);
     assert.strictEqual(evaluation.accepted, false);
-    assert.strictEqual(evaluation.shortfall, 14);
+    // received 20 (1 cash + tile 19) vs lot 32 x 1.0
+    assert.strictEqual(evaluation.shortfall, 12);
     assert.ok(evaluation.counterOffer);
-    assert.strictEqual(evaluation.counterOffer.cash, 15);
+    assert.strictEqual(evaluation.counterOffer.cash, 13);
     assert.strictEqual(evaluation.counterOffer.tiles.length, 1);
   });
 });
@@ -426,5 +434,51 @@ describe('Building Heuristics (botBuild)', () => {
 
     const moves = botBuild(1, state) as { lotId: number; shopType: number }[];
     assert.strictEqual(moves.length, 0);
+  });
+});
+
+describe('Luna loose-tile swap bias', () => {
+  function tileSwapState(): GameState {
+    const state = createGame();
+    for (const p of state.players) p.tiles = [0, 0, 0, 0, 0, 0];
+    state.players[0].tiles[1] = 1; // human holds a Memecoin tile
+    for (const id of [1, 2, 3]) state.players[id].tiles[2] = 1; // each bot holds a loose Vault tile
+    state.phase = 'trade';
+    return state;
+  }
+  const offerTo = (botId: number) => ({
+    fromPlayer: 0,
+    toPlayer: botId,
+    give: { cash: 0, tiles: [0, 1, 0, 0, 0, 0], lots: [] },
+    take: { cash: 0, tiles: [0, 0, 1, 0, 0, 0], lots: [] },
+  });
+
+  it('values incoming tiles up and loose outgoing tiles down for Luna only', () => {
+    const state = tileSwapState();
+    const luna = evaluateTradeOffer(offerTo(3), 3, state);
+    const rawIn = evaluateOfferSide(offerTo(3).give, state, 3);
+    const rawOut = evaluateOfferSide(offerTo(3).take, state, 3);
+    assert.ok((luna.valueReceived ?? 0) > rawIn);
+    assert.ok((luna.valueSurrendered ?? Infinity) < rawOut);
+
+    const sherwood = evaluateTradeOffer(offerTo(1), 1, state);
+    assert.strictEqual(sherwood.valueReceived, evaluateOfferSide(offerTo(1).give, state, 1));
+    assert.strictEqual(sherwood.valueSurrendered, evaluateOfferSide(offerTo(1).take, state, 1));
+  });
+
+  it('does not discount a tile Luna can still grow a cluster with', () => {
+    const state = tileSwapState();
+    const lot = state.lots.find((l) => l.owner === null)!;
+    lot.owner = 3;
+    lot.shop = 2; // open Vault cluster: Luna's Vault tile is no longer loose
+    const luna = evaluateTradeOffer(offerTo(3), 3, state);
+    assert.strictEqual(luna.valueSurrendered, evaluateOfferSide(offerTo(3).take, state, 3));
+  });
+
+  it('makes Luna the easiest bot to close a one-for-one loose tile swap with', () => {
+    const state = tileSwapState();
+    const required = [1, 2, 3].map((id) => evaluateTradeOffer(offerTo(id), id, state).shortfall);
+    assert.strictEqual(required[2], 0, 'Luna accepts the swap');
+    assert.ok(required[1] > 0, 'Apex wants a premium');
   });
 });

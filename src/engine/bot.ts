@@ -29,8 +29,14 @@ export interface BotPersonality {
   name: string;
   title: string;
   avatar: string;
+  /** Acceptance threshold: the bot wants `profitMargin` x the value it gives up. */
   profitMargin: number;
   riskTolerance: number;
+  /**
+   * Appetite for swapping loose (unclustered) shop tiles. 1 = neutral. Above 1 the
+   * bot values tiles it receives higher and loose tiles it gives up lower.
+   */
+  looseTileBias?: number;
   preferredShops: number[];
   preferredDistricts: number[];
   dialogue: {
@@ -66,9 +72,10 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Sherwood',
     title: 'The Conservative Yield Seeker',
     avatar: 'avatar_1.png',
-    profitMargin: 1.04,
+    // Retail / balanced: fair value, likes the Size 3 and Size 4 shops.
+    profitMargin: 1.0,
     riskTolerance: 0.5,
-    preferredShops: [0, 2],
+    preferredShops: [0, 1, 2],
     preferredDistricts: [0, 2],
     dialogue: {
       greeting: 'Welcome to Sherwood. Let us construct sustainable liquidity together.',
@@ -83,7 +90,8 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Apex',
     title: 'The High-Frequency Arbitrage Shark',
     avatar: 'avatar_3.png',
-    profitMargin: 1.09,
+    // Wall Street monopoly hunter: aggressive valuation, hoards Size 5 / Size 6 keystones.
+    profitMargin: 1.15,
     riskTolerance: 0.2,
     preferredShops: [4, 5],
     preferredDistricts: [1, 5],
@@ -100,8 +108,10 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
     name: 'Luna',
     title: 'The Liquid Market Maker',
     avatar: 'avatar_2.png',
-    profitMargin: 1.01,
+    // DeFi high-tempo speculator: discounts to keep capital moving, eager to swap loose tiles.
+    profitMargin: 0.95,
     riskTolerance: 0.85,
+    looseTileBias: 1.25,
     preferredShops: [1, 0, 3],
     preferredDistricts: [4, 3],
     dialogue: {
@@ -562,6 +572,35 @@ export function evaluateOfferSide(
   return value;
 }
 
+/** Normalises an OfferSide's tiles (count array or `{ type }` list) to six counts. */
+export function tileCounts(side: OfferSide): number[] {
+  const counts = [0, 0, 0, 0, 0, 0];
+  if (!Array.isArray(side.tiles)) return counts;
+  for (let i = 0; i < side.tiles.length; i++) {
+    const t = side.tiles[i] as unknown;
+    if (typeof t === 'number') {
+      if (i < 6) counts[i] += t;
+    } else if (t && typeof t === 'object' && 'type' in t) {
+      const type = (t as { type: number }).type;
+      if (type >= 0 && type < 6) counts[type]++;
+    }
+  }
+  return counts;
+}
+
+/**
+ * A tile is "loose" for a bot when it has no open (incomplete) cluster of
+ * that shop on the board to grow, so the tile is just sitting in hand.
+ */
+export function isLooseTileFor(shop: number, botId: number, state: GameState | BotState): boolean {
+  if (Array.isArray((state as GameState).lots)) {
+    const game = state as GameState;
+    return !game.lots.some((l) => l.owner === botId && l.shop === shop && !l.isComplete);
+  }
+  const ctx = (state as BotState).tiles?.[shop];
+  return !ctx || !ctx.canCompleteThisTurn;
+}
+
 export const evaluateSideValue = evaluateOfferSide;
 export const evaluateSide = evaluateOfferSide;
 
@@ -614,16 +653,24 @@ export function evaluateTradeOffer(
   if (proposerCash === undefined) proposerCash = 1000;
   if (epoch === undefined) epoch = 1;
 
-  const valueReceived = evaluateOfferSide(
-    offer.give,
-    stateOrBotState,
-    typeof botIdOrPersona === 'number' ? botId : epoch
-  );
-  const valueSurrendered = evaluateOfferSide(
-    offer.take,
-    stateOrBotState,
-    typeof botIdOrPersona === 'number' ? botId : epoch
-  );
+  const sideArg = typeof botIdOrPersona === 'number' ? botId : epoch;
+  let valueReceived = evaluateOfferSide(offer.give, stateOrBotState, sideArg);
+  let valueSurrendered = evaluateOfferSide(offer.take, stateOrBotState, sideArg);
+
+  // Loose-tile appetite (Luna): tiles coming in are worth more, loose tiles going out less.
+  const tileBias = 'looseTileBias' in personality ? (personality as BotPersonality).looseTileBias ?? 1 : 1;
+  if (tileBias !== 1) {
+    const tilesOnly = (side: OfferSide, filter?: (shop: number) => boolean): OfferSide => ({
+      cash: 0,
+      lots: [],
+      tiles: tileCounts(side).map((n, s) => (!filter || filter(s) ? n : 0)) as OfferSide['tiles'],
+    });
+    const isLoose = (shop: number) => isLooseTileFor(shop, botId, stateOrBotState);
+    const tilesIn = evaluateOfferSide(tilesOnly(offer.give), stateOrBotState, sideArg);
+    const looseOut = evaluateOfferSide(tilesOnly(offer.take, isLoose), stateOrBotState, sideArg);
+    valueReceived += tilesIn * (tileBias - 1);
+    valueSurrendered -= looseOut * (1 - 1 / tileBias);
+  }
 
   const requiredValue = valueSurrendered * botMargin;
   const accepted = valueReceived >= requiredValue;
