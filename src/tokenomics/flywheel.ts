@@ -171,6 +171,22 @@ export function calculateMatchPayouts(
   };
 }
 
+/** Treasury Points awarded per deployed shop tile and per completed cluster. */
+export const POINTS_PER_SHOP = 50;
+export const POINTS_PER_COMPLETE_CLUSTER = 100;
+
+/**
+ * Casual Treasury Points earned against AI bots:
+ * cash + placedShops * 50 + completeClusters * 100.
+ */
+export function calculateTreasuryPoints(
+  cash: number,
+  placedShops: number,
+  completeClusters: number
+): number {
+  return cash + placedShops * POINTS_PER_SHOP + completeClusters * POINTS_PER_COMPLETE_CLUSTER;
+}
+
 /**
  * Calculates token swap for converting casual in-game points to $wif tokens.
  *

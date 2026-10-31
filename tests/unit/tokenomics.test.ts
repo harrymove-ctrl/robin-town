@@ -20,6 +20,9 @@ import {
   applyMatchPayouts,
   applyPointSwap,
   applyTradeTax,
+  calculateTreasuryPoints,
+  POINTS_PER_SHOP,
+  POINTS_PER_COMPLETE_CLUSTER,
 } from '../../src/tokenomics/flywheel';
 
 describe('Suite 1: Tokenomics Constants and Default Configuration', () => {
@@ -379,5 +382,24 @@ describe('Suite 7: FlywheelState Accumulator and Lifecycle Invariants', () => {
     assert.strictEqual(state.totalMatches, 5);
     assert.strictEqual(state.totalSwaps, 10);
     assert.strictEqual(state.totalTradesTaxed, 8);
+  });
+});
+
+describe('Suite: Casual Treasury Points formula', () => {
+  it('scores cash + placedShops * 50 + completeClusters * 100', () => {
+    assert.strictEqual(POINTS_PER_SHOP, 50);
+    assert.strictEqual(POINTS_PER_COMPLETE_CLUSTER, 100);
+    assert.strictEqual(calculateTreasuryPoints(0, 0, 0), 0);
+    assert.strictEqual(calculateTreasuryPoints(120, 0, 0), 120);
+    assert.strictEqual(calculateTreasuryPoints(120, 7, 0), 120 + 350);
+    assert.strictEqual(calculateTreasuryPoints(120, 7, 2), 120 + 350 + 200);
+  });
+
+  it('feeds the 3% swap burn at 10 points = 1 $wif', () => {
+    const points = calculateTreasuryPoints(500, 10, 3); // 500 + 500 + 300 = 1300
+    const swap = calculatePointSwap(points, 0.1, 0.03);
+    assert.strictEqual(points, 1300);
+    assert.strictEqual(swap.grossWif, 130);
+    assert.strictEqual(swap.burnedWif + swap.netWif, 130);
   });
 });

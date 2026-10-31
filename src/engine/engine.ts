@@ -8,6 +8,7 @@
 
 import {
   BOARD_REVISION,
+  canBuildShop,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   CELL_PITCH,
@@ -141,18 +142,15 @@ export function holdings(state: GameState, player: number): Lot[] {
 }
 
 /**
- * Placement validation.
+ * Placement validation. Shares canBuildShop's cluster rules with the UI and bots,
+ * so a completed cluster can never be grown or merged past its target size.
  */
 export function canPlace(state: GameState, player: number, id: number, shop: number): boolean {
   if (!Number.isInteger(id) || !state.lots[id] || !Number.isInteger(shop) || !SHOPS[shop]) {
     return false;
   }
-  const lot = state.lots[id];
-  return (
-    lot.owner === player &&
-    lot.shop === null &&
-    (state.players[player]?.tiles[shop] ?? 0) >= 1
-  );
+  const tilesHeld = state.players[player]?.tiles[shop] ?? 0;
+  return canBuildShop(state.lots, id, player, shop, tilesHeld).valid;
 }
 
 /**
