@@ -45,6 +45,7 @@ import {
   calculateMatchPayouts,
   calculatePointSwap,
   calculateStakingBoost,
+  calculateTreasuryPoints,
   type MatchPoolResult,
   type PointSwapResult,
 } from './tokenomics/flywheel';
@@ -870,7 +871,7 @@ export class RobinTownApp {
     const completeClusters = findAllClusters(this.state.lots).filter(
       (c) => c.playerId === playerId && c.isComplete
     ).length;
-    return p.cash + placedShops * 50 + completeClusters * 100;
+    return calculateTreasuryPoints(p.cash, placedShops, completeClusters);
   }
 
   public getFinalSettlement(): FinalSettlementResult {

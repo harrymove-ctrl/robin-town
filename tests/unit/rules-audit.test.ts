@@ -13,6 +13,10 @@ import {
   startYear,
   draftPlots,
   beginBuild,
+  buildTile,
+  canPlace,
+  validateOffer,
+  applyTrade,
   collectIncome,
   nextYear,
   groupIncome,
@@ -86,6 +90,45 @@ describe('rules audit: parcels and tiles', () => {
     assert.deepStrictEqual(state.pending, []);
   });
 
+  it('returns discarded deeds to the pool and re-deals them in later epochs', () => {
+    const state = newGame();
+    const dealt = [...state.pending];
+    const kept = dealt.slice(0, state.draftCount);
+    draftPlots(state, 0, kept);
+    const unkept = dealt.filter((id) => !kept.includes(id) && state.lots[id].owner === null);
+    assert.ok(unkept.length > 0, 'at least one discarded deed stays unowned');
+    for (const id of unkept) assert.strictEqual(state.lots[id].owner, null, `deed ${id}`);
+
+    beginBuild(state);
+    collectIncome(state);
+    // An order-preserving rng deals the lowest unowned ids first, so a discarded
+    // deed with a low id must come back in the next epoch's candidates.
+    let tick = 0;
+    nextYear(state, () => (tick++) / 1e6);
+    const unowned = state.lots.filter((l) => l.owner === null).map((l) => l.id);
+    assert.deepStrictEqual(state.pending, unowned.slice(0, state.pending.length));
+    for (const id of state.pending) assert.strictEqual(state.lots[id].owner, null);
+    const lowestUnkept = Math.min(...unkept);
+    if (unowned.indexOf(lowestUnkept) < state.pending.length) {
+      assert.ok(state.pending.includes(lowestUnkept), 'discarded deed re-dealt');
+    }
+  });
+
+  it('defines the 6 shop categories with exact names, codes, target sizes and quotas', () => {
+    assert.deepStrictEqual(
+      SHOPS.map((s) => [s.name, s.code, s.size, s.quota]),
+      [
+        ['DEX Swap', 'DX', 3, 20],
+        ['Memecoin Lounge', 'ML', 3, 20],
+        ['Staking Vault', 'SV', 4, 20],
+        ['Lending Protocol', 'LP', 4, 20],
+        ['Derivatives Exchange', 'DE', 5, 20],
+        ['Validator Citadel', 'VC', 6, 20],
+      ]
+    );
+    assert.strictEqual(SHOPS.reduce((n, s) => n + s.quota, 0), 120);
+  });
+
   it('keeps the 120-tile bag conserved: 20 per category, 100 drawn, 20 left', () => {
     assert.strictEqual(SHOPS.length, 6);
     const fresh = newGame();
@@ -143,6 +186,97 @@ describe('rules audit: adjacency and payouts', () => {
     lots[extra].owner = 0;
     const result = canBuildShop(lots, extra, 0, type);
     assert.strictEqual(result.valid, false);
+  });
+
+  it('engine buildTile agrees with canBuildShop on completed clusters', () => {
+    const state = newGame();
+    draftPlots(state, 0, state.pending.slice(0, state.draftCount));
+    beginBuild(state);
+    const block = LOT_DEFINITIONS.filter((l) => l.block === LOT_DEFINITIONS[0].block);
+    const type = 0; // size 3
+    const path: number[] = [block[0].id];
+    while (path.length < 3) {
+      path.push(ADJACENCY_GRAPH[path[path.length - 1]].find((n) => !path.includes(n))!);
+    }
+    const extra = ADJACENCY_GRAPH[path[2]].find((n) => !path.includes(n))!;
+    for (const id of [...path, extra]) {
+      state.lots[id].owner = 0;
+      state.lots[id].shop = null;
+    }
+    state.players[0].tiles[type] = 4;
+    for (const id of path) buildTile(state, 0, id, type);
+
+    assert.strictEqual(canBuildShop(state.lots, extra, 0, type, 1).valid, false);
+    assert.strictEqual(canPlace(state, 0, extra, type), false);
+    assert.throws(() => buildTile(state, 0, extra, type));
+    assert.strictEqual(state.lots[extra].shop, null);
+    assert.strictEqual(state.players[0].tiles[type], 1);
+  });
+});
+
+describe('rules audit: OTC trade assets', () => {
+  function tradeState() {
+    const state = newGame();
+    draftPlots(state, 0, state.pending.slice(0, state.draftCount));
+    assert.strictEqual(state.phase, 'trade');
+    return state;
+  }
+
+  it('accepts and moves cash, rack tiles and parcels together in one bilateral deal', () => {
+    const state = tradeState();
+    const me = state.players[0];
+    const bot = state.players[1];
+    const myTile = me.tiles.findIndex((n) => n > 0);
+    const botTile = bot.tiles.findIndex((n) => n > 0);
+    const myLot = state.lots.find((l) => l.owner === 0)!.id;
+    const botLot = state.lots.find((l) => l.owner === 1)!.id;
+    const give = { cash: 5, tiles: [0, 0, 0, 0, 0, 0], lots: [myLot] };
+    const take = { cash: 3, tiles: [0, 0, 0, 0, 0, 0], lots: [botLot] };
+    give.tiles[myTile] = 1;
+    take.tiles[botTile] = 1;
+    const offer = { partner: 1, fromPlayer: 0, toPlayer: 1, give, take };
+    const before = { meCash: me.cash, botCash: bot.cash, meTiles: [...me.tiles], botTiles: [...bot.tiles] };
+
+    assert.strictEqual(validateOffer(state, offer), true);
+    applyTrade(state, offer);
+
+    assert.strictEqual(me.cash, before.meCash - 5 + 3);
+    assert.strictEqual(bot.cash, before.botCash + 5 - 3);
+    assert.strictEqual(state.lots[myLot].owner, 1);
+    assert.strictEqual(state.lots[botLot].owner, 0);
+    assert.deepStrictEqual(me.tiles, before.meTiles.map((n, s) => n - give.tiles[s] + take.tiles[s]));
+    assert.deepStrictEqual(bot.tiles, before.botTiles.map((n, s) => n + give.tiles[s] - take.tiles[s]));
+  });
+
+  it('allows offering a built parcel and keeps its placed shop', () => {
+    const state = tradeState();
+    const myLot = state.lots.find((l) => l.owner === 0)!;
+    myLot.shop = 2;
+    const offer = {
+      partner: 1, fromPlayer: 0, toPlayer: 1,
+      give: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [myLot.id] },
+      take: { cash: 1, tiles: [0, 0, 0, 0, 0, 0], lots: [] },
+    };
+    assert.strictEqual(validateOffer(state, offer), true);
+    applyTrade(state, offer);
+    assert.strictEqual(myLot.owner, 1);
+    assert.strictEqual(myLot.shop, 2);
+  });
+
+  it('rejects trading more tiles than held, and any deal outside the trade phase', () => {
+    const state = tradeState();
+    const empty = state.players[0].tiles.findIndex((n) => n === 0);
+    const tooMany = [0, 0, 0, 0, 0, 0];
+    tooMany[empty === -1 ? 0 : empty] = (state.players[0].tiles[empty === -1 ? 0 : empty] ?? 0) + 1;
+    const base = { partner: 1, fromPlayer: 0, toPlayer: 1, take: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [] } };
+    assert.throws(() => validateOffer(state, { ...base, give: { cash: 0, tiles: tooMany, lots: [] } }));
+
+    const ok = { ...base, give: { cash: 1, tiles: [0, 0, 0, 0, 0, 0], lots: [] } };
+    assert.strictEqual(validateOffer(state, ok), true);
+    for (const phase of ['receive', 'build', 'income', 'ended'] as const) {
+      state.phase = phase;
+      assert.throws(() => validateOffer(state, ok), /Trade phase/, phase);
+    }
   });
 });
 
