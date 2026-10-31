@@ -1157,11 +1157,22 @@ body {
 /* Top-bar shortcuts and rules reference */
 .topbar-btn {
   background: transparent;
-  border: 1px solid currentColor;
-  color: inherit;
-  padding: 4px 10px;
-  font: inherit;
+  border: 1px solid var(--border-muted);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 6px 12px;
+  font-family: var(--font-retro);
+  font-size: 13px;
+  font-weight: bold;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.topbar-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
 }
 
 .rules-modal .payout-table {
