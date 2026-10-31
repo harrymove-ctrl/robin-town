@@ -354,6 +354,8 @@ body {
 
 .log-tag {
   font-weight: bold;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .log-msg {
