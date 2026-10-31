@@ -77,6 +77,12 @@ body {
   cursor: grab;
 }
 
+/* Three.js diorama board overlays the 2D canvas when enabled (?view=3d or V) */
+.board-container > canvas:not(.board-canvas) {
+  position: absolute;
+  inset: 0;
+}
+
 .board-canvas:active {
   cursor: grabbing;
 }
@@ -276,11 +282,11 @@ body {
 
 /* Activity Log Terminal Feed */
 .activity-feed-panel {
-  position: absolute;
-  top: 95px;
+  position: fixed;
+  bottom: 16px;
   right: 16px;
   width: 280px;
-  max-height: 190px;
+  max-height: 160px;
   background-color: rgba(11, 15, 25, 0.88);
   border: 1px solid var(--border-muted);
   border-radius: 6px;
@@ -300,6 +306,22 @@ body {
   padding-bottom: 4px;
   margin-bottom: 6px;
   text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  background: none;
+  border-width: 0 0 1px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.activity-feed-panel.collapsed .feed-content {
+  display: none;
+}
+
+.activity-feed-panel.collapsed .feed-header {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .feed-content {
@@ -321,6 +343,8 @@ body {
 
 .log-tag {
   font-weight: bold;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .log-msg {

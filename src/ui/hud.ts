@@ -356,7 +356,7 @@ export function projectDrawerViewModel(
  * Pure projection: Event log feed parsing.
  */
 export function projectLogFeedViewModel(logs: string[]): LogItemViewModel[] {
-  return logs.slice(-25).map((line, idx) => {
+  return logs.slice(0, 25).map((line, idx) => {
     let tag = 'SYS';
     let tagColor = '#9CA3AF';
     const upper = line.toUpperCase();
@@ -398,6 +398,7 @@ export interface HudEventHandlers {
   onDraftToggle?: (lotId: number) => void;
   onWalletClick?: () => void;
   onAudioToggle?: () => void;
+  onDraftHover?: (lotId: number | null) => void;
 }
 
 /**
@@ -406,6 +407,7 @@ export interface HudEventHandlers {
 export class HudManager {
   private container: HTMLElement;
   private handlers: HudEventHandlers;
+  private feedCollapsed = false;
 
   constructor(container: HTMLElement, handlers: HudEventHandlers = {}) {
     this.container = container;
@@ -478,8 +480,10 @@ export class HudManager {
       </section>
 
       <!-- Real-Time Activity Log Feed -->
-      <aside class="activity-feed-panel" aria-label="Market Feed">
-        <div class="feed-header">Terminal Feed</div>
+      <aside class="activity-feed-panel ${this.feedCollapsed ? 'collapsed' : ''}" aria-label="Market Feed">
+        <button class="feed-header" data-action="feed-toggle" title="Collapse or expand the feed">
+          <span>Terminal Feed</span><span>${this.feedCollapsed ? '▴' : '▾'}</span>
+        </button>
         <div class="feed-content" id="activity-feed-scroll">
           ${logs.map((item) => `
             <div class="log-entry">
@@ -566,7 +570,13 @@ export class HudManager {
       ) as HTMLElement | null;
       if (!target) return;
 
-      if (target.dataset.action === 'wallet-toggle') {
+      if (target.dataset.action === 'feed-toggle') {
+        this.feedCollapsed = !this.feedCollapsed;
+        const panel = this.container.querySelector('.activity-feed-panel');
+        panel?.classList.toggle('collapsed', this.feedCollapsed);
+        const arrow = target.querySelector('span:last-child');
+        if (arrow) arrow.textContent = this.feedCollapsed ? '▴' : '▾';
+      } else if (target.dataset.action === 'wallet-toggle') {
         this.handlers.onWalletClick?.();
       } else if (target.dataset.action === 'audio-toggle') {
         this.handlers.onAudioToggle?.();
@@ -578,5 +588,14 @@ export class HudManager {
         this.handlers.onDraftToggle?.(parseInt(target.dataset.draftLot, 10));
       }
     });
+
+    // Hovering a deed card highlights its parcel on the board
+    const hoverLot = (e: Event, entering: boolean): void => {
+      const card = (e.target as HTMLElement).closest('[data-draft-lot]') as HTMLElement | null;
+      if (!card || card.dataset.draftLot === undefined) return;
+      this.handlers.onDraftHover?.(entering ? parseInt(card.dataset.draftLot, 10) : null);
+    };
+    this.container.addEventListener('mouseover', (e) => hoverLot(e, true));
+    this.container.addEventListener('mouseout', (e) => hoverLot(e, false));
   }
 }
