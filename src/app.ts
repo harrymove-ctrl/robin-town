@@ -125,6 +125,9 @@ export class RobinTownApp {
   private rng: RandomSource = Math.random;
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
+  // renderAll() re-binds the wallet / settlement modals on every render; aborting the
+  // previous listeners keeps one click from firing (and prompting the wallet) several times.
+  private modalListeners: AbortController | null = null;
   private isRulesModalOpen = false;
   private isEpochSummaryOpen = false;
   private isProposalsOpen = false;
@@ -498,7 +501,7 @@ export class RobinTownApp {
     const walletLabel =
       walletState.mode === 'simulation'
         ? `Sim: ${balance.toLocaleString()} $wif`
-        : `Chain: ${balance.toLocaleString()} $wif`;
+        : `Chain: ${balance.toLocaleString()} ETH`;
 
     this.hudManager?.render(
       this.state,
@@ -976,6 +979,9 @@ export class RobinTownApp {
     if (!this.container) return;
     const modalEl = this.container.querySelector('#modal-overlay-container') as HTMLElement;
     if (!modalEl) return;
+    // Drop the previous wallet / settlement listeners, even when another modal (or none) shows now.
+    this.modalListeners?.abort();
+    this.modalListeners = null;
 
     if (this.isWalletModalOpen) {
       modalEl.innerHTML = this.renderWalletModalHTML();
@@ -1056,7 +1062,7 @@ export class RobinTownApp {
               </div>
               <div class="detail-row">
                 <span class="label">Balance:</span>
-                <span class="value">${balance.toLocaleString()} $wif</span>
+                <span class="value">${balance.toLocaleString()} ETH</span>
               </div>
             </div>
             <button class="btn-primary btn-connect-web3" data-action="connect-web3">Connect Web3 Wallet</button>
@@ -1066,7 +1072,14 @@ export class RobinTownApp {
     `;
   }
 
+  private resetModalListeners(): AbortSignal {
+    this.modalListeners?.abort();
+    this.modalListeners = new AbortController();
+    return this.modalListeners.signal;
+  }
+
   private bindWalletModalEvents(modalEl: HTMLElement): void {
+    const signal = this.resetModalListeners();
     modalEl.addEventListener('click', (e) => {
       const target = (e.target as HTMLElement).closest('[data-modal-close], [data-wallet-mode], [data-action]') as HTMLElement | null;
       if (!target) return;
@@ -1082,7 +1095,7 @@ export class RobinTownApp {
       } else if (target.dataset.action === 'connect-web3') {
         this.walletAdapter.connect().then(() => this.renderAll());
       }
-    });
+    }, { signal });
 
     modalEl.addEventListener('change', (e) => {
       const radio = e.target as HTMLInputElement;
@@ -1090,7 +1103,7 @@ export class RobinTownApp {
         this.walletAdapter.switchAccount(radio.value);
         this.renderAll();
       }
-    });
+    }, { signal });
   }
 
   private renderSettlementModalHTML(): string {
@@ -1180,7 +1193,7 @@ export class RobinTownApp {
       } else if (target.dataset.action === 'new-match') {
         this.startNewGame();
       }
-    });
+    }, { signal: this.resetModalListeners() });
   }
 
   private handleProposalClick = (e: Event): void => {
