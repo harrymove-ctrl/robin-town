@@ -8,11 +8,14 @@
  */
 
 import {
+  COMPLETE_PAYOUTS,
   DISTRICT_BLOCKS,
+  INCOMPLETE_PAYOUTS,
   SHOP_CATEGORIES,
   TOTAL_LOTS,
+  plotNeighbors,
 } from '../engine/board-layout';
-import { SHOPS } from '../engine/engine';
+import { SHOPS, income } from '../engine/engine';
 import type { GamePhase, GameState, Player } from '../engine/types';
 
 export interface TopBarViewModel {
@@ -22,6 +25,12 @@ export interface TopBarViewModel {
   phaseTitle: string;
   phaseSubtitle: string;
   isStaked: boolean;
+  phaseSteps: PhaseStep[];
+}
+
+export interface PhaseStep {
+  label: string;
+  status: 'done' | 'current' | 'todo';
 }
 
 export interface PlayerCardViewModel {
@@ -29,6 +38,9 @@ export interface PlayerCardViewModel {
   name: string;
   addressShort: string;
   avatar: string;
+  avatarHd: string;
+  annualYield: number;
+  parcelCapacity: number;
   cashFormatted: string;
   cash: number;
   tileCount: number;
@@ -65,6 +77,8 @@ export interface ModuleTileSlot {
   targetSize: number;
   count: number;
   isSelected: boolean;
+  completePayout: number;
+  payoutCurve: string;
 }
 
 export interface DraftDeedCard {
@@ -74,6 +88,7 @@ export interface DraftDeedCard {
   districtName: string;
   districtColor: string;
   isSelected: boolean;
+  isAdjacent: boolean;
 }
 
 export interface DrawerViewModel {
@@ -123,6 +138,14 @@ const PHASE_TITLES: Record<GamePhase, { title: string; subtitle: string }> = {
   },
 };
 
+const PHASE_STEP_LABELS: { phase: GamePhase; label: string }[] = [
+  { phase: 'receive', label: 'Allocation' },
+  { phase: 'trade', label: 'Trade' },
+  { phase: 'build', label: 'Build' },
+  { phase: 'income', label: 'Harvest' },
+  { phase: 'ended', label: 'Settlement' },
+];
+
 /**
  * Pure projection: Top bar situational view model.
  */
@@ -141,6 +164,13 @@ export function projectTopBarViewModel(
     phaseTitle: info.title,
     phaseSubtitle: info.subtitle,
     isStaked,
+    phaseSteps: PHASE_STEP_LABELS.map((step, idx) => {
+      const current = PHASE_STEP_LABELS.findIndex((s) => s.phase === state.phase);
+      return {
+        label: step.label,
+        status: idx < current ? 'done' : idx === current ? 'current' : 'todo',
+      };
+    }),
   };
 }
 
@@ -163,6 +193,9 @@ export function projectPlayerRibbonViewModel(
       name: p.name,
       addressShort: shortAddr,
       avatar: p.avatar || `avatar_${idx}.png`,
+      avatarHd: (p.avatar || `avatar_${idx}.png`).replace('.png', '_hd.png'),
+      annualYield: income(state, p.id),
+      parcelCapacity: TOTAL_LOTS / 4,
       cashFormatted: p.cash.toLocaleString() + ' $wif',
       cash: p.cash,
       tileCount: tileSum,
@@ -296,6 +329,14 @@ export function projectActionBarViewModel(
   };
 }
 
+/** Human-readable payout curve, e.g. "1: 10, 2: 20, COMPLETE (3): 50 $wif". */
+export function payoutCurveText(targetSize: number): string {
+  const steps: string[] = [];
+  for (let n = 1; n < targetSize; n++) steps.push(`${n}: ${INCOMPLETE_PAYOUTS[n]}`);
+  steps.push(`COMPLETE (${targetSize}): ${COMPLETE_PAYOUTS[targetSize]}`);
+  return `${steps.join(', ')} $wif`;
+}
+
 /**
  * Pure projection: Bottom inventory drawer.
  */
@@ -316,6 +357,8 @@ export function projectDrawerViewModel(
     targetSize: cat.targetSize,
     count: player.tiles[sIdx] || 0,
     isSelected: selectedShopType === cat.id,
+    completePayout: COMPLETE_PAYOUTS[cat.targetSize],
+    payoutCurve: payoutCurveText(cat.targetSize),
   }));
 
   const draftDeeds: DraftDeedCard[] = (state.pending || []).map((lotId) => {
@@ -339,6 +382,7 @@ export function projectDrawerViewModel(
       districtName: blockConfig.name,
       districtColor: blockConfig.accentHex,
       isSelected: selectedDraftLots.includes(lotId),
+      isAdjacent: plotNeighbors(lotId).some((nid) => state.lots[nid]?.owner === playerId),
     };
   });
 
@@ -410,6 +454,13 @@ export interface HudEventHandlers {
 export class HudManager {
   private container: HTMLElement;
   private handlers: HudEventHandlers;
+  /** null means "decide from the viewport": collapsed on narrow screens. */
+  private feedCollapsed: boolean | null = null;
+
+  private isFeedCollapsed(): boolean {
+    if (this.feedCollapsed !== null) return this.feedCollapsed;
+    return typeof window !== 'undefined' && window.innerWidth < 1100;
+  }
 
   constructor(container: HTMLElement, handlers: HudEventHandlers = {}) {
     this.container = container;
@@ -448,11 +499,16 @@ export class HudManager {
         <div class="phase-banner">
           <h2 class="phase-title">${topBar.phaseTitle}</h2>
           <span class="phase-subtitle">${topBar.phaseSubtitle}</span>
+          <ol class="phase-steps" aria-label="Phase progress">
+            ${topBar.phaseSteps.map((step) => `
+              <li class="phase-step ${step.status}" ${step.status === 'current' ? 'aria-current="step"' : ''}>${step.label}</li>
+            `).join('')}
+          </ol>
         </div>
 
         <div class="topbar-actions">
-          <button class="topbar-btn" data-action="rules-open" title="How to play and payout table">? Rules &amp; Payouts</button>
-          <button class="topbar-btn" data-action="lobby-open" title="Create or join a multiplayer room">Multiplayer Lobby</button>
+          <button class="topbar-btn" data-action="rules-open" title="How to play and payout table" aria-label="Rules and Payouts"><span class="lbl-long">? Rules &amp; Payouts</span><span class="lbl-short">?</span></button>
+          <button class="topbar-btn" data-action="lobby-open" title="Create or join a multiplayer room" aria-label="Multiplayer Lobby"><span class="lbl-long">Multiplayer Lobby</span><span class="lbl-short">Lobby</span></button>
           <button class="wallet-pill" data-action="wallet-toggle" title="Switch between Simulation and Robinhood Chain">
             <span class="status-dot"></span>
             <span class="wallet-label">${walletLabel}</span>
@@ -466,17 +522,21 @@ export class HudManager {
       <!-- 4-Player Status Ribbon -->
       <section class="player-ribbon" aria-label="Trader Status">
         ${ribbon.players.map((p) => `
-          <div class="player-card ${p.isActive ? 'active' : ''}" data-player-id="${p.id}" style="--player-accent: ${p.colorHex}">
-            <img src="assets/avatars/${p.avatar}" class="player-avatar pixel-art" alt="${p.name}" />
+          <div class="player-card ${p.isActive ? 'active' : ''} ${p.id !== 0 ? 'is-bot' : ''}" data-player-id="${p.id}" style="--player-accent: ${p.colorHex}" ${p.id !== 0 ? `title="Open the OTC desk with ${p.name} (Trade phase)"` : ''}>
+            <img src="assets/avatars/${p.avatarHd}" class="player-avatar pixel-art" width="48" height="48" alt="${p.name}" />
             <div class="player-meta">
               <div class="player-header-row">
                 <span class="player-name">${p.name}</span>
+                <span class="wallet-badge" title="Wallet address">${p.addressShort}</span>
                 ${p.isStaked ? '<span class="staked-badge">1.20x</span>' : ''}
               </div>
-              <span class="player-cash">${p.cashFormatted}</span>
+              <div class="player-cash-row">
+                <span class="player-cash">${p.cashFormatted}</span>
+                <span class="player-yield" title="Current annual yield">+${p.annualYield} $wif/yr</span>
+              </div>
               <div class="player-stats-row">
                 <span title="Unplaced Protocol Modules">Tiles: ${p.tileCount}</span>
-                <span title="Owned District Parcels">Lots: ${p.parcelCount}</span>
+                <span title="Owned District Parcels">Lots: ${p.parcelCount}/${p.parcelCapacity}</span>
               </div>
             </div>
           </div>
@@ -484,8 +544,10 @@ export class HudManager {
       </section>
 
       <!-- Real-Time Activity Log Feed -->
-      <aside class="activity-feed-panel" aria-label="Market Feed">
-        <div class="feed-header">Terminal Feed</div>
+      <aside class="activity-feed-panel ${this.isFeedCollapsed() ? 'collapsed' : ''}" aria-label="Market Feed">
+        <button class="feed-header" data-action="feed-toggle" aria-expanded="${this.isFeedCollapsed() ? 'false' : 'true'}">
+          <span>Terminal Feed</span><span class="feed-chevron">${this.isFeedCollapsed() ? '&#9652;' : '&#9662;'}</span>
+        </button>
         <div class="feed-content" id="activity-feed-scroll">
           ${logs.map((item) => `
             <div class="log-entry">
@@ -526,9 +588,12 @@ export class HudManager {
                     class="deed-card ${d.isSelected ? 'selected' : ''}"
                     data-draft-lot="${d.lotId}"
                     style="--district-accent: ${d.districtColor}"
+                    title="Parcel ${d.lotNumber} of 72, ${d.districtName}"
                   >
+                    <span class="deed-title">Title Deed</span>
                     <span class="deed-num">#${d.lotNumber}</span>
-                    <span class="deed-district">${d.districtName.split(' ')[0]}</span>
+                    <span class="deed-district">${d.districtName}</span>
+                    ${d.isAdjacent ? '<span class="deed-adjacent">Adjacent to your lot</span>' : ''}
                   </button>
                 `).join('')}
               </div>
@@ -541,12 +606,15 @@ export class HudManager {
                   <button
                     class="module-slot ${m.isSelected ? 'selected' : ''} ${m.count === 0 ? 'empty' : ''}"
                     data-shop-type="${m.shopType}"
-                    ${m.count === 0 ? 'disabled' : ''}
+                    style="--module-accent: ${m.colorHex}"
+                    ${m.count === 0 ? 'aria-disabled="true"' : ''}
+                    title="${m.name}: ${m.payoutCurve}"
                   >
                     <img src="assets/shops/shop_${m.shopType}.png" class="module-icon pixel-art" alt="${m.name}" />
                     <span class="module-code">${m.code}</span>
                     <span class="module-count">x${m.count}</span>
                     <span class="module-size">Size ${m.targetSize}</span>
+                    <span class="module-payout">${m.completePayout} $wif</span>
                   </button>
                 `).join('')}
               </div>
@@ -588,6 +656,18 @@ export class HudManager {
         '[data-action], [data-action-id], [data-shop-type], [data-draft-lot]'
       ) as HTMLElement | null;
       if (!target) return;
+
+      if (target.dataset.action === 'feed-toggle') {
+        this.feedCollapsed = !this.isFeedCollapsed();
+        const panel = this.container.querySelector('.activity-feed-panel');
+        panel?.classList.toggle('collapsed', this.feedCollapsed);
+        target.setAttribute('aria-expanded', String(!this.feedCollapsed));
+        const chevron = target.querySelector('.feed-chevron');
+        if (chevron) chevron.innerHTML = this.feedCollapsed ? '&#9652;' : '&#9662;';
+        return;
+      }
+      // Empty module slots stay hoverable for their payout tooltip but cannot be selected.
+      if (target.dataset.shopType !== undefined && target.getAttribute('aria-disabled') === 'true') return;
 
       if (target.dataset.action === 'wallet-toggle') {
         this.handlers.onWalletClick?.();

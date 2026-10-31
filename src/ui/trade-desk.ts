@@ -7,6 +7,7 @@
  * bot quote messages, shortfall meters, one-click counteroffers, and deal execution.
  */
 
+import { DISTRICT_BLOCKS } from '../engine/board-layout';
 import {
   applyTradeTax,
   calculateTradeTax,
@@ -471,12 +472,12 @@ export class TradeDeskModal {
                     const districtName = DISTRICT_NAMES[lot.block];
                     const shopName = lot.shop !== null ? SHOPS[lot.shop].name : 'Vacant';
                     return `
-                      <label class="parcel-card ${isChecked ? 'selected' : ''}">
+                      <label class="parcel-card ${isChecked ? 'selected' : ''}" style="--district-accent: ${DISTRICT_BLOCKS[lot.block]?.accentHex ?? '#4b5563'}">
                         <input type="checkbox" data-lot-give="${lot.id}" ${isChecked ? 'checked' : ''} />
                         <div class="parcel-card-body">
                           <span class="parcel-id">Parcel ${lot.id + 1}</span>
                           <span class="parcel-district district-${lot.block}">${districtName}</span>
-                          <span class="parcel-shop">${shopName}</span>
+                          <span class="parcel-shop">${lot.shop !== null ? `<img src="assets/shops/shop_${lot.shop}.png" class="parcel-shop-icon pixel-art" alt="" />` : ''}${shopName}</span>
                         </div>
                       </label>
                     `;
@@ -539,12 +540,12 @@ export class TradeDeskModal {
                     const districtName = DISTRICT_NAMES[lot.block];
                     const shopName = lot.shop !== null ? SHOPS[lot.shop].name : 'Vacant';
                     return `
-                      <label class="parcel-card ${isChecked ? 'selected' : ''}">
+                      <label class="parcel-card ${isChecked ? 'selected' : ''}" style="--district-accent: ${DISTRICT_BLOCKS[lot.block]?.accentHex ?? '#4b5563'}">
                         <input type="checkbox" data-lot-take="${lot.id}" ${isChecked ? 'checked' : ''} />
                         <div class="parcel-card-body">
                           <span class="parcel-id">Parcel ${lot.id + 1}</span>
                           <span class="parcel-district district-${lot.block}">${districtName}</span>
-                          <span class="parcel-shop">${shopName}</span>
+                          <span class="parcel-shop">${lot.shop !== null ? `<img src="assets/shops/shop_${lot.shop}.png" class="parcel-shop-icon pixel-art" alt="" />` : ''}${shopName}</span>
                         </div>
                       </label>
                     `;
@@ -607,6 +608,14 @@ export class TradeDeskModal {
             <img src="assets/avatars/${partner.avatar}" class="avatar-sprite pixel-art" alt="${partner.name}" />
             <div class="quote-content">
               <span class="quote-author">${partner.name} (${partner.title}):</span>
+              <div class="quote-badges">
+                <span class="persona-badge" title="Bot profit margin: the bot wants ${partner.profitMargin}x the value it gives up">${partner.name} wants ${partner.profitMargin}x</span>
+                ${evalResult
+                  ? (evalResult.accepted
+                    ? '<span class="verdict-badge accepted">Accepted</span>'
+                    : `<span class="verdict-badge shortfall">Shortfall: ${evalResult.shortfall} $wif</span>`)
+                  : ''}
+              </div>
               <p class="quote-text">${evalResult ? evalResult.quoteMessage : 'Configure an offer to calculate expected value.'}</p>
               ${evalResult && !evalResult.accepted && evalResult.shortfall > 0 ? `
                 <div class="shortfall-meter">
