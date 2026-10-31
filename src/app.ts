@@ -64,7 +64,7 @@ import {
   type RoomState,
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
-import { BoardRenderer, PLAYER_COLORS, type BoardRenderState } from './ui/board';
+import { BoardRenderer, FLOATER_MS, PLAYER_COLORS, type BoardRenderState } from './ui/board';
 import { CameraController } from './ui/camera';
 import {
   HudManager,
@@ -628,8 +628,16 @@ export class RobinTownApp {
     this.audio.playCoinChime();
     this.raiseYieldFloaters();
     if ((this.state.phase as GamePhase) === 'income') {
-      this.epochSummary = { year: this.state.year, payouts: [...incomeResult.payouts] };
-      this.isEpochSummaryOpen = true;
+      const payouts = [...incomeResult.payouts];
+      payouts[0] = playerHarvest;
+      this.epochSummary = { year: this.state.year, payouts };
+      // Let the yield badges play over the board before the summary card covers it.
+      window.setTimeout(() => {
+        if ((this.state.phase as GamePhase) === 'income') {
+          this.isEpochSummaryOpen = true;
+          this.renderAll();
+        }
+      }, FLOATER_MS + 300);
     }
     this.renderAll();
 
@@ -705,6 +713,7 @@ export class RobinTownApp {
     this.incomingOffers.splice(index, 1);
     this.isProposalsOpen = false;
     this.openTradeDesk(offer.toPlayer);
+    this.renderAll();
   }
 
   public dismissProposal(index: number): void {
@@ -836,10 +845,10 @@ export class RobinTownApp {
         this.isEpochSummaryOpen = false;
         this.advanceToNextYear();
       });
-      modalEl.querySelector('[data-modal-close]')?.addEventListener('click', () => this.closeModals());
+      modalEl.querySelectorAll('[data-modal-close]').forEach((el) => el.addEventListener('click', () => this.closeModals()));
     } else if (this.isRulesModalOpen) {
       modalEl.innerHTML = this.renderRulesModalHTML();
-      modalEl.querySelector('[data-modal-close]')?.addEventListener('click', () => this.closeModals());
+      modalEl.querySelectorAll('[data-modal-close]').forEach((el) => el.addEventListener('click', () => this.closeModals()));
     } else if (this.isRoomModalOpen) {
       modalEl.innerHTML = this.renderRoomModalHTML();
       this.bindRoomModalEvents(modalEl);

@@ -1158,3 +1158,16 @@ body {
 .proposal-row button {
   margin-right: 6px;
 }
+
+.epoch-summary-modal .payout-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.epoch-summary-modal .payout-table th,
+.epoch-summary-modal .payout-table td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
