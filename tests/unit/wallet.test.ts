@@ -149,10 +149,10 @@ describe('Wallet Utility Functions', () => {
   });
 
   it('parses diverse chain ID representations safely', () => {
-    assert.strictEqual(parseChainId(46631), 46631);
-    assert.strictEqual(parseChainId('0xb627'), 46631);
-    assert.strictEqual(parseChainId('0xB627'), 46631);
-    assert.strictEqual(parseChainId('46631'), 46631);
+    assert.strictEqual(parseChainId(46630), 46630);
+    assert.strictEqual(parseChainId('0xb626'), 46630);
+    assert.strictEqual(parseChainId('0xB626'), 46630);
+    assert.strictEqual(parseChainId('46630'), 46630);
     assert.strictEqual(parseChainId(null), null);
     assert.strictEqual(parseChainId(undefined), null);
     assert.strictEqual(parseChainId('not_a_number'), null);
@@ -398,6 +398,24 @@ describe('Mode 2: Web3 EIP-1193 Provider Integration', () => {
 
     const addCalls = mock.calls.filter((c) => c.method === 'wallet_addEthereumChain');
     assert.strictEqual(addCalls.length, 1);
+  });
+
+  it('adds the real Robinhood Chain Testnet parameters (46630, ETH gas, live RPC/explorer)', async () => {
+    const mock = createMockProvider({
+      chainId: '0x1',
+      switchChainError: { code: 4902, message: 'Unrecognized chain' },
+    });
+    const adapter = new WalletAdapter({ mode: 'web3', provider: mock.provider });
+    await adapter.connect();
+
+    const [add] = mock.calls.filter((c) => c.method === 'wallet_addEthereumChain');
+    assert.deepStrictEqual((add.params as unknown[])[0], {
+      chainId: '0xb626',
+      chainName: 'Robinhood Chain Testnet',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://rpc.testnet.chain.robinhood.com'],
+      blockExplorerUrls: ['https://explorer.testnet.chain.robinhood.com'],
+    });
   });
 
   it('sends Web3 transaction via eth_sendTransaction with converted wei value', async () => {

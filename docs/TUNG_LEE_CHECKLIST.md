@@ -131,8 +131,8 @@ Follow our 6-step UI/UX QA workflow across [`src/ui/hud.ts`](../src/ui/hud.ts), 
     - `5%` Permanent Burn (`200 $wif` to `0x000000000000000000000000000000000000dEaD`)
     - `5%` Community Staking Vault contribution (`200 $wif`)
     - Casual Treasury Points earned and one-click **Swap Points to `$wif`** (`3%` burn tax).
-- [ ] **Dual-Mode Wallet & Robinhood Chain Testnet (`Chain ID 46631`)** ([`src/tokenomics/wallet.ts`](../src/tokenomics/wallet.ts)):
-  - Test switching between the 4 pre-funded `10,000 $wif` simulation wallets (`Alice`, `Bob`, `Charlie`, `Dave`) and connecting a live EIP-1193 wallet (`window.ethereum`) on Robinhood Chain Testnet (`Chain ID 46631` / `0xb627`).
+- [ ] **Dual-Mode Wallet & Robinhood Chain Testnet (`Chain ID 46630`)** ([`src/tokenomics/wallet.ts`](../src/tokenomics/wallet.ts)):
+  - Test switching between the 4 pre-funded `10,000 $wif` simulation wallets (`Alice`, `Bob`, `Charlie`, `Dave`) and connecting a live EIP-1193 wallet (`window.ethereum`) on Robinhood Chain Testnet (`Chain ID 46630` / `0xb626`).
 - [ ] **Quality Gate Before Every PR / Merge**:
   - Every PR must pass:
     ```bash
