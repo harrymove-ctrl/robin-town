@@ -77,6 +77,12 @@ body {
   cursor: grab;
 }
 
+/* Three.js diorama board overlays the 2D canvas when enabled (?view=3d or V) */
+.board-container > canvas:not(.board-canvas) {
+  position: absolute;
+  inset: 0;
+}
+
 .board-canvas:active {
   cursor: grabbing;
 }

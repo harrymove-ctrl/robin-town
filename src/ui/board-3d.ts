@@ -19,7 +19,16 @@ import {
   findAllClusters,
   type ShopCluster,
 } from '../engine/board-layout';
+import { plotNeighbors } from '../engine/board-layout';
 import type { GameState } from '../engine/types';
+import {
+  addStorefrontDetail,
+  buildBaseSlab,
+  buildDistrictCurb,
+  createContactShadow,
+} from './diorama-detail';
+import { PALETTE_SIZE } from './diorama-palette';
+import { PixelPost } from './diorama-post';
 
 // Board spatial constants
 export const BOARD_ORIGIN_X = 550;
@@ -104,6 +113,25 @@ export const SHOP_VISUAL_CATEGORIES: readonly ShopVisualCategory[] = Object.free
     texturePath: '/assets/shops/shop_5_hd.png',
   },
 ]);
+
+/**
+ * Height of the orthographic view volume that fits the whole base slab, with a
+ * small margin, at the locked 45 deg / 33 deg diorama angle. Wide windows are
+ * limited by the slab's height on screen, narrow ones by its width.
+ */
+export function orthoFrustumHeight(aspect: number): number {
+  const margin = 36;
+  const slabWidth = BOARD_WIDTH + 2 * margin;
+  const slabDepth = BOARD_HEIGHT + 2 * margin;
+  const az = Math.PI / 4;
+  const el = (33 * Math.PI) / 180;
+  // Projected extents of the slab footprint at the given azimuth / elevation.
+  const horizontal = slabWidth * Math.abs(Math.cos(az)) + slabDepth * Math.abs(Math.sin(az));
+  const vertical =
+    (slabWidth * Math.abs(Math.sin(az)) + slabDepth * Math.abs(Math.cos(az))) * Math.sin(el) + 60;
+  const fit = 1.06;
+  return Math.max(vertical * fit, (horizontal * fit) / Math.max(aspect, 0.1));
+}
 
 /**
  * Coordinate transform: 2D canvas coordinates to centered 3D world coordinates.
@@ -424,6 +452,14 @@ export function createShopBuilding(
     }
   }
 
+  // Passes 2 and 3 of the Detail Bar: construction assemblies, then story details.
+  addStorefrontDetail(group, shopType, { main: mainMat, dark: darkMat, trim: trimMat }, isComplete);
+
+  // Contact shadow anchors the building to its parcel.
+  const buildingShadow = createContactShadow(60, 0.62, 'ContactShadow');
+  buildingShadow.position.set(0, -0.85, 0);
+  group.add(buildingShadow);
+
   // Facade Decal on front surface (+Z side)
   const facadeGeom = new THREE.PlaneGeometry(24, 24);
   const facadeMat = new THREE.MeshBasicMaterial({
@@ -467,6 +503,40 @@ export interface Board3DOptions {
   height?: number;
   onSelectLot?: (lotId: number) => void;
   onHoverLot?: (lotId: number | null) => void;
+  /**
+   * Apply the diorama post pass (64-colour palette, ordered dither, inked
+   * contours). Defaults to true; `?post=off` in the page URL turns it off.
+   */
+  diorama?: boolean;
+}
+
+/** Serializable snapshot returned by `window.__diorama.getState()`. */
+export interface DioramaState {
+  frozen: boolean;
+  time: number;
+  cameraMode: 'isometric' | 'perspective';
+  postProcessing: boolean;
+  paletteSize: number;
+  pixelSize: number;
+  viewport: { width: number; height: number };
+  target: { width: number; height: number } | null;
+  parcels: number;
+  buildings: number;
+  completeClusters: number;
+  bridges: number;
+  contactShadows: number;
+  selectedLot: number | null;
+  hoveredLot: number | null;
+}
+
+/**
+ * Optional per-frame highlight overlay supplied by the app (draft candidates,
+ * claimed draft picks, valid build targets).
+ */
+export interface Board3DOverlay {
+  pendingLots?: readonly number[];
+  draftLots?: readonly number[];
+  validBuildLots?: readonly number[];
 }
 
 /**
@@ -475,7 +545,7 @@ export interface Board3DOptions {
 export interface Board3DRenderer {
   mount(): void;
   unmount(): void;
-  render(state: GameState, selectedLotId: number | null): void;
+  render(state: GameState, selectedLotId: number | null, overlay?: Board3DOverlay): void;
   focusLot(lotId: number): void;
   resetCamera(): void;
   resize(width: number, height: number): void;
@@ -519,6 +589,18 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private buildingGroup: THREE.Group;
   private goldenAuraGroup: THREE.Group;
   private lightingGroup: THREE.Group;
+  private baseGroup: THREE.Group;
+  private shadowGroup: THREE.Group;
+  private clusterGroup: THREE.Group;
+  private lotShadows: THREE.Mesh[] = [];
+
+  // Diorama post pass and deterministic QA clock
+  private post: PixelPost | null = null;
+  private useDiorama: boolean;
+  private frozenTime: number | null = null;
+  private lastTime = 0;
+  private completeClusterCount = 0;
+  private bridgeCount = 0;
 
   // Parcel and Raycast Target Registry
   private parcelHitMeshes: THREE.Mesh[] = [];
@@ -566,10 +648,20 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     this.goldenAuraGroup.name = 'GoldenAuraGroup';
     this.lightingGroup = new THREE.Group();
     this.lightingGroup.name = 'LightingGroup';
+    this.baseGroup = new THREE.Group();
+    this.baseGroup.name = 'BaseGroup';
+    this.shadowGroup = new THREE.Group();
+    this.shadowGroup.name = 'ShadowGroup';
+    this.clusterGroup = new THREE.Group();
+    this.clusterGroup.name = 'ClusterGroup';
+    this.useDiorama = options.diorama !== false;
 
     this.boardGroup.add(
+      this.baseGroup,
       this.districtGroup,
+      this.shadowGroup,
       this.parcelGroup,
+      this.clusterGroup,
       this.buildingGroup,
       this.goldenAuraGroup
     );
@@ -577,7 +669,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
     // Initialize dual cameras
     const aspect = this.width / this.height;
-    const frustumSize = 720;
+    const frustumSize = orthoFrustumHeight(aspect);
     this.orthoCamera = new THREE.OrthographicCamera(
       (-frustumSize * aspect) / 2,
       (frustumSize * aspect) / 2,
@@ -597,8 +689,12 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     // Setup 6 district slabs
     this.setupDistrictSlabs();
 
+    // Single cut-out base slab, district curbs and the harbor channel
+    this.setupBaseSlab();
+
     // Setup 72 parcel meshes
     this.setupParcelMeshes();
+    this.setupLotShadows();
 
     // Bind event handlers
     this.onPointerDownBound = this.handlePointerDown.bind(this);
@@ -689,6 +785,54 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   }
 
   /**
+   * Diorama slab: one stone base under the whole city with a recessed harbor
+   * channel on the east edge, plus a bevelled curb around every district.
+   */
+  private setupBaseSlab(): void {
+    const margin = 36;
+    const channelWidth = 60;
+    const west = -BOARD_ORIGIN_X - margin;
+    const east = BOARD_WIDTH - BOARD_ORIGIN_X + margin;
+    const north = -BOARD_ORIGIN_Z - margin;
+    const south = BOARD_HEIGHT - BOARD_ORIGIN_Z + margin;
+    const base = buildBaseSlab({
+      west,
+      east,
+      north,
+      south,
+      channelWest: east - channelWidth - 6,
+      channelEast: east,
+      landTop: ELEVATION_DISTRICT - 1.0,
+      waterY: ELEVATION_DISTRICT - 2.4,
+      bottom: ELEVATION_DISTRICT - 15,
+    });
+    this.baseGroup.add(base);
+
+    for (const district of DISTRICT_BLOCKS) {
+      const center = this.getDistrictCenter3D(district);
+      this.baseGroup.add(
+        buildDistrictCurb(center, 224, 236, district.accentHex, center[1] + 1.0)
+      );
+    }
+  }
+
+  /**
+   * One soft contact shadow per parcel so tokens, deed signs and buildings sit
+   * on the slab. Lift (hover, selection) is reflected in the shadow size.
+   */
+  private setupLotShadows(): void {
+    this.lotShadows = [];
+    for (let lotId = 0; lotId < TOTAL_LOTS; lotId++) {
+      const def = LOT_DEFINITIONS[lotId];
+      const pos = getParcelWorldPosition(def.x, def.y, ELEVATION_DISTRICT + 1.05);
+      const shadow = createContactShadow(CELL_SIZE + 14, 0.5, `LotShadow_${lotId}`);
+      shadow.position.set(pos[0], pos[1], pos[2]);
+      this.lotShadows[lotId] = shadow;
+      this.shadowGroup.add(shadow);
+    }
+  }
+
+  /**
    * Create the 72 parcel meshes mapped to centered 3D coordinates.
    */
   private setupParcelMeshes(): void {
@@ -765,11 +909,25 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       this.renderer.setSize(this.width, this.height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
+      const postOff =
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('post') === 'off';
+      if (this.useDiorama && !postOff) {
+        this.post = new PixelPost(this.renderer, { pixelSize: 2 });
+        this.post.setSize(this.width, this.height);
+      } else {
+        this.useDiorama = false;
+      }
+
       const domElement = this.renderer.domElement;
       domElement.style.display = 'block';
       domElement.style.width = '100%';
       domElement.style.height = '100%';
       domElement.style.touchAction = 'none';
+      if (this.post) {
+        // Nearest-neighbour upscale of the low-resolution pixel-art target.
+        domElement.style.imageRendering = 'pixelated';
+      }
 
       if (this.options.container && typeof this.options.container.appendChild === 'function') {
         this.options.container.appendChild(domElement);
@@ -794,12 +952,9 @@ export class ThreeBoardRenderer implements Board3DRenderer {
    */
   private startAnimationLoop(): void {
     const animate = (timestamp: number) => {
-      this.updateAnimations(timestamp);
-
-      if (this.renderer) {
-        this.renderer.render(this.scene, this.activeCamera);
-      }
-
+      const time = this.frozenTime ?? timestamp;
+      this.updateAnimations(time);
+      this.drawFrame();
       this.animFrameId = requestAnimationFrame(animate);
     };
 
@@ -811,12 +966,38 @@ export class ThreeBoardRenderer implements Board3DRenderer {
    */
   private updateAnimations(timestamp: number): void {
     // Golden aura pulsating bob and rotation
+    // All animation is a pure function of the clock so frozen frames repeat exactly.
+    this.lastTime = timestamp;
     const timeSec = timestamp * 0.001;
     for (const child of this.goldenAuraGroup.children) {
       if (child.name.startsWith('GoldenCrown_')) {
-        child.rotation.y += 0.02;
+        child.rotation.y = timeSec * 1.2;
         child.position.y = ELEVATION_GOLDEN_CROWN + Math.sin(timeSec * 2.5) * 1.2;
       }
+    }
+    for (const child of this.clusterGroup.children) {
+      if (child.name.startsWith('ClusterBorder_')) {
+        // Palette-aware pulse: a bob plus a flip between two palette golds, so
+        // the animation survives the 64-colour snap.
+        const wave = Math.sin(timeSec * 3.0);
+        child.position.y = wave * 2.0;
+        child.traverse((node) => {
+          const mesh = node as THREE.Mesh;
+          if (mesh.isMesh) {
+            (mesh.material as THREE.MeshBasicMaterial).color.setHex(wave >= 0 ? 0xffd700 : 0xfff0a0);
+          }
+        });
+      }
+    }
+
+    if (this.frozenTime !== null) {
+      // Frozen frames snap the camera instead of easing, so repeats are identical.
+      this.isTransitioning = false;
+      this.cameraTarget.copy(this.targetCameraTarget);
+      this.cameraDistance = this.targetCameraDistance;
+      this.activeCamera = this.cameraMode === 'isometric' ? this.orthoCamera : this.perspCamera;
+      this.updateCameraPositions();
+      return;
     }
 
     // Camera mode transition lerp
@@ -852,6 +1033,76 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     this.updateCameraPositions();
   }
 
+  /** Draw the scene once, through the diorama post pass when enabled. */
+  private drawFrame(): void {
+    if (!this.renderer) return;
+    if (this.post) {
+      this.post.render(this.scene, this.activeCamera);
+    } else {
+      this.renderer.render(this.scene, this.activeCamera);
+    }
+  }
+
+  /**
+   * Stop the animation clock at `t` (ms) and draw that frame synchronously.
+   * This is the `freeze(t)` hook the diorama QA scripts expect.
+   */
+  public freeze(t: number): void {
+    this.frozenTime = Number.isFinite(t) ? t : 0;
+    this.updateAnimations(this.frozenTime);
+    this.drawFrame();
+  }
+
+  /** Resume the live clock after `freeze`. */
+  public unfreeze(): void {
+    this.frozenTime = null;
+  }
+
+  /**
+   * Draw one frame at time `t` (ms) without changing whether the clock is
+   * frozen. Used by `window.__diorama.renderAt(t)`.
+   */
+  public renderAt(t: number): void {
+    const wasFrozen = this.frozenTime;
+    this.frozenTime = Number.isFinite(t) ? t : 0;
+    this.updateAnimations(this.frozenTime);
+    this.drawFrame();
+    this.frozenTime = wasFrozen;
+  }
+
+  /** Serializable summary of the diorama for QA scripts. */
+  public getDioramaState(): DioramaState {
+    return {
+      frozen: this.frozenTime !== null,
+      time: this.frozenTime ?? this.lastTime,
+      cameraMode: this.cameraMode,
+      postProcessing: this.post !== null,
+      paletteSize: PALETTE_SIZE,
+      pixelSize: this.post ? Math.round(this.width / this.post.size.x) : 1,
+      viewport: { width: this.width, height: this.height },
+      target: this.post ? { width: this.post.size.x, height: this.post.size.y } : null,
+      parcels: this.parcelHitMeshes.length,
+      buildings: this.buildingMeshes.size,
+      completeClusters: this.completeClusterCount,
+      bridges: this.bridgeCount,
+      contactShadows: this.lotShadows.length + this.buildingMeshes.size,
+      selectedLot: this.selectedLotId,
+      hoveredLot: this.hoveredLotId,
+    };
+  }
+
+  /** Normalised device coordinates of a parcel's top-face centre (for hit-test QA). */
+  public projectLotToNdc(lotId: number): { x: number; y: number } | null {
+    if (!Number.isInteger(lotId) || lotId < 0 || lotId >= TOTAL_LOTS) return null;
+    const mesh = this.parcelHitMeshes[lotId];
+    this.activeCamera.updateMatrixWorld(true);
+    this.scene.updateMatrixWorld(true);
+    const point = mesh.position.clone();
+    point.y += 1.0; // top face of the 2-unit parcel box
+    point.project(this.activeCamera);
+    return { x: point.x, y: point.y };
+  }
+
   /**
    * Unmount renderer, cancel animations, detach DOM listeners, and dispose resources.
    */
@@ -874,6 +1125,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       if (el.parentElement) {
         el.parentElement.removeChild(el);
       }
+      this.post?.dispose();
+      this.post = null;
       this.renderer.dispose();
       this.renderer = null;
     }
@@ -889,8 +1142,15 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   /**
    * Synchronize 3D board scene with incoming GameState and selected lot ID.
    */
-  public render(state: GameState, selectedLotId: number | null): void {
+  public render(
+    state: GameState,
+    selectedLotId: number | null,
+    overlay: Board3DOverlay = {}
+  ): void {
     this.selectedLotId = selectedLotId;
+    const pending = new Set(overlay.pendingLots ?? []);
+    const drafted = new Set(overlay.draftLots ?? []);
+    const buildable = new Set(overlay.validBuildLots ?? []);
 
     // Detect completed clusters
     const allClusters = findAllClusters(state.lots);
@@ -949,6 +1209,9 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       }
     }
 
+    this.rebuildClusterVisuals(allClusters);
+    this.completeClusterCount = allClusters.filter((c) => c.isComplete).length;
+
     // Update 72 parcels and procedural buildings
     for (let lotId = 0; lotId < TOTAL_LOTS; lotId++) {
       const lot = state.lots[lotId];
@@ -969,6 +1232,15 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       }
       mesh.position.set(basePos[0], elevationY, basePos[2]);
 
+      // Contact shadow grows and softens as the parcel lifts off the slab.
+      const shadow = this.lotShadows[lotId];
+      if (shadow) {
+        const lift = elevationY - ELEVATION_PARCEL_BASE;
+        shadow.scale.setScalar(1 + lift * 0.12);
+        (shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.28, 0.5 - lift * 0.08);
+        shadow.visible = lot.owner !== null || pending.has(lotId) || lot.shop !== null || lift > 0;
+      }
+
       // Dynamic material colors
       if (isSelected) {
         mat.color.setHex(0x00c805); // Robin emerald
@@ -977,6 +1249,18 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       } else if (isHovered) {
         mat.color.setHex(0x00f0ff); // Cyber cyan
         mat.emissive.setHex(0x00f0ff);
+        mat.emissiveIntensity = 0.6;
+      } else if (drafted.has(lotId)) {
+        mat.color.setHex(0x00c805); // Picked deed
+        mat.emissive.setHex(0x00c805);
+        mat.emissiveIntensity = 0.7;
+      } else if (pending.has(lotId)) {
+        mat.color.setHex(0xeec353); // Candidate deed
+        mat.emissive.setHex(0xeec353);
+        mat.emissiveIntensity = 0.55;
+      } else if (buildable.has(lotId)) {
+        mat.color.setHex(0x39a883); // Valid build target
+        mat.emissive.setHex(0x39a883);
         mat.emissiveIntensity = 0.6;
       } else if (lot.owner !== null && lot.shop !== null) {
         // Built shop parcel: protocol category color
@@ -1027,6 +1311,75 @@ export class ThreeBoardRenderer implements Board3DRenderer {
         disposeHierarchy(existingBuilding);
         this.buildingGroup.remove(existingBuilding);
         this.buildingMeshes.delete(lotId);
+      }
+    }
+  }
+
+  /**
+   * Visually merge connected shops of one type: a low bridge between every pair
+   * of orthogonally adjacent lots, plus a pulsing golden border around each
+   * completed cluster.
+   */
+  private rebuildClusterVisuals(clusters: readonly ShopCluster[]): void {
+    while (this.clusterGroup.children.length > 0) {
+      const child = this.clusterGroup.children[0];
+      this.clusterGroup.remove(child);
+      disposeHierarchy(child);
+    }
+    this.bridgeCount = 0;
+
+    for (const cluster of clusters) {
+      if (cluster.lots.length < 2 && !cluster.isComplete) continue;
+      const category = SHOP_VISUAL_CATEGORIES[cluster.shopType] || SHOP_VISUAL_CATEGORIES[0];
+      const members = new Set(cluster.lots);
+      const bridgeMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(category.colorHex),
+        emissive: new THREE.Color(category.colorHex),
+        emissiveIntensity: 0.35,
+        roughness: 0.5,
+      });
+
+      for (const lotId of cluster.lots) {
+        for (const neighbourId of plotNeighbors(lotId)) {
+          if (neighbourId <= lotId || !members.has(neighbourId)) continue;
+          const a = LOT_DEFINITIONS[lotId];
+          const b = LOT_DEFINITIONS[neighbourId];
+          const pa = getParcelWorldPosition(a.x, a.y, ELEVATION_PARCEL_BASE);
+          const pb = getParcelWorldPosition(b.x, b.y, ELEVATION_PARCEL_BASE);
+          const horizontal = Math.abs(pa[0] - pb[0]) > Math.abs(pa[2] - pb[2]);
+          const gap = CELL_SIZE + 4;
+          const bridge = new THREE.Mesh(
+            new THREE.BoxGeometry(horizontal ? gap : 18, 3.0, horizontal ? 18 : gap),
+            bridgeMat
+          );
+          bridge.position.set((pa[0] + pb[0]) / 2, ELEVATION_PARCEL_BASE + 1.5, (pa[2] + pb[2]) / 2);
+          bridge.name = `ClusterBridge_${lotId}_${neighbourId}`;
+          this.clusterGroup.add(bridge);
+          this.bridgeCount++;
+        }
+      }
+
+      if (cluster.isComplete) {
+        const border = new THREE.Group();
+        border.name = `ClusterBorder_${cluster.districtId}_${cluster.shopType}_${cluster.lots[0]}`;
+        const frameMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 1 });
+        for (const lotId of cluster.lots) {
+          const def = LOT_DEFINITIONS[lotId];
+          const pos = getParcelWorldPosition(def.x, def.y, ELEVATION_PARCEL_BASE + 1.1);
+          const half = CELL_SIZE / 2 + 1;
+          const sides: [number, number, number, number][] = [
+            [0, -half, CELL_SIZE + 4, 2.6],
+            [0, half, CELL_SIZE + 4, 2.6],
+            [-half, 0, 2.6, CELL_SIZE + 4],
+            [half, 0, 2.6, CELL_SIZE + 4],
+          ];
+          for (const [ox, oz, w, d] of sides) {
+            const edge = new THREE.Mesh(new THREE.BoxGeometry(w, 1.0, d), frameMat);
+            edge.position.set(pos[0] + ox, pos[1], pos[2] + oz);
+            border.add(edge);
+          }
+        }
+        this.clusterGroup.add(border);
       }
     }
   }
@@ -1091,12 +1444,14 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     this.width = width;
     this.height = height;
 
-    if (this.renderer) {
+    if (this.post) {
+      this.post.setSize(width, height);
+    } else if (this.renderer) {
       this.renderer.setSize(width, height);
     }
 
     const aspect = width / height;
-    const frustumSize = 720;
+    const frustumSize = orthoFrustumHeight(aspect);
 
     this.orthoCamera.left = (-frustumSize * aspect) / 2;
     this.orthoCamera.right = (frustumSize * aspect) / 2;
@@ -1299,5 +1654,17 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
   public getHoveredLotId(): number | null {
     return this.hoveredLotId;
+  }
+
+  public getBaseGroup(): THREE.Group {
+    return this.baseGroup;
+  }
+
+  public getShadowGroup(): THREE.Group {
+    return this.shadowGroup;
+  }
+
+  public getClusterGroup(): THREE.Group {
+    return this.clusterGroup;
   }
 }
