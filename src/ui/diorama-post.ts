@@ -47,6 +47,32 @@ uniform vec3 uBackdrop;
 uniform vec3 uInk;
 uniform float uInkStrength;
 uniform float uDither;
+uniform float uExposure;
+
+// three.js ACES Filmic fit; the post pass applies it itself because three.js
+// only tone maps when drawing straight to the screen.
+vec3 RRTAndODTFit(vec3 v) {
+  vec3 a = v * (v + 0.0245786) - 0.000090537;
+  vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+  return a / b;
+}
+vec3 acesFilmic(vec3 color) {
+  const mat3 ACESInputMat = mat3(
+    vec3(0.59719, 0.07600, 0.02840),
+    vec3(0.35458, 0.90834, 0.13383),
+    vec3(0.04823, 0.01566, 0.83777)
+  );
+  const mat3 ACESOutputMat = mat3(
+    vec3(1.60475, -0.10208, -0.00327),
+    vec3(-0.53108, 1.10813, -0.07276),
+    vec3(-0.07367, -0.00605, 1.07602)
+  );
+  color *= uExposure / 0.6;
+  color = ACESInputMat * color;
+  color = RRTAndODTFit(color);
+  color = ACESOutputMat * color;
+  return clamp(color, 0.0, 1.0);
+}
 
 float bayer2(vec2 a) {
   a = floor(a);
@@ -68,7 +94,9 @@ void main() {
   float cov = centre.a;
 
   // Composite onto the backdrop, then bring the linear target into display sRGB.
-  vec3 c = pow(max(centre.rgb, vec3(0.0)), vec3(1.0 / 2.2));
+  vec3 lin = max(centre.rgb, vec3(0.0));
+  if (uExposure > 0.0) lin = acesFilmic(lin);
+  vec3 c = pow(lin, vec3(1.0 / 2.2));
   c = mix(uBackdrop, c, smoothstep(0.05, 0.6, cov));
 
   // Gentle grade.
@@ -116,6 +144,8 @@ export interface PixelPostOptions {
   maxDim?: number;
   /** 0 disables the dither (tests and flat-colour checks). */
   dither?: number;
+  /** ACES Filmic tone-mapping exposure applied before the palette snap; 0 disables it. */
+  exposure?: number;
 }
 
 export class PixelPost {
@@ -155,6 +185,7 @@ export class PixelPost {
       uInk: { value: new THREE.Vector3(...INK_COLOR) },
       uInkStrength: { value: INK_STRENGTH },
       uDither: { value: options.dither ?? 1.0 },
+      uExposure: { value: options.exposure ?? 0 },
     };
 
     this.material = new THREE.ShaderMaterial({
@@ -187,6 +218,11 @@ export class PixelPost {
     // One drawing-buffer pixel per target pixel; CSS size is controlled by the page.
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(w, h, false);
+  }
+
+  /** ACES exposure (0 turns tone mapping off). */
+  public setExposure(exposure: number): void {
+    this.uniforms.uExposure.value = Math.max(0, exposure);
   }
 
   public setDither(amount: number): void {

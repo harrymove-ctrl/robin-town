@@ -78,6 +78,109 @@ function glowMaterial(hex: number, opacity = 1): THREE.MeshBasicMaterial {
   });
 }
 
+/** Radius of the DEX Swap rooftop dish rim. */
+export const SATELLITE_DISH_RADIUS = 7;
+
+/**
+ * Parabolic satellite dish: a lathed paraboloid bowl (y = r^2 / 4f), a back
+ * hub, a feed arm and a feed horn at the focal point. Built pointing up, then
+ * tilted 30 deg toward the street (+Z) and seated on the DEX Swap struts.
+ */
+export function buildSatelliteDish(
+  bowlMat: THREE.Material,
+  trimMat: THREE.Material
+): THREE.Group {
+  const group = new THREE.Group();
+  const radius = SATELLITE_DISH_RADIUS;
+  const depth = 2.6;
+  const focal = (radius * radius) / (4 * depth);
+  const profile: THREE.Vector2[] = [];
+  const steps = 8;
+  for (let i = 0; i <= steps; i++) {
+    const r = (radius * i) / steps;
+    profile.push(new THREE.Vector2(r, (r * r) / (4 * focal)));
+  }
+  const bowlGeom = new THREE.LatheGeometry(profile, 16);
+  const bowlSurface = bowlMat.clone();
+  bowlSurface.side = THREE.DoubleSide;
+  const bowl = new THREE.Mesh(bowlGeom, bowlSurface);
+  bowl.name = 'SatelliteDishBowl';
+  group.add(bowl);
+
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 1.2, 8), trimMat);
+  hub.position.y = -0.4;
+  hub.name = 'SatelliteDishHub';
+  group.add(hub);
+
+  // Feed arm from the rim to the focus, and the horn at the focus.
+  const armLength = Math.hypot(radius * 0.85, focal - depth * 0.72);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, armLength, 4), trimMat);
+  arm.position.set(0, (focal + depth * 0.72) / 2, -radius * 0.425);
+  arm.rotation.x = Math.atan2(radius * 0.85, focal - depth * 0.72);
+  arm.name = 'SatelliteDishArm';
+  group.add(arm);
+
+  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.6, 6), trimMat);
+  horn.rotation.x = Math.PI;
+  horn.position.y = focal;
+  horn.name = 'SatelliteDishFeed';
+  group.add(horn);
+
+  group.rotation.x = Math.PI / 6;
+  group.position.set(0, 23, 0);
+  return group;
+}
+
+/**
+ * Bevelled stone plinth under one district block: a square frustum (chamfered
+ * sides) that steps out from the district slab onto the base slab, with a
+ * thin lighter cap ring so the bevel reads in the ink pass.
+ */
+export function buildDistrictPlinth(
+  centre: [number, number, number],
+  width: number,
+  depth: number,
+  bottomY: number,
+  topY: number
+): THREE.Group {
+  const group = new THREE.Group();
+  const height = Math.max(0.4, topY - bottomY);
+  const stone = new THREE.MeshStandardMaterial({
+    color: 0x2d3748,
+    roughness: 0.85,
+    metalness: 0.05,
+    flatShading: true,
+  });
+  const capStone = new THREE.MeshStandardMaterial({ color: 0x3f4a5c, roughness: 0.75, metalness: 0.05 });
+
+  // A 4-sided cylinder rotated 45 deg is a square frustum with unit-diagonal radius.
+  const topPad = 6;
+  const bottomPad = 18;
+  const frustum = new THREE.CylinderGeometry(Math.SQRT1_2, Math.SQRT1_2, 1, 4, 1);
+  frustum.rotateY(Math.PI / 4);
+  // Shape the bottom ring wider than the top so the sides are chamfered.
+  const pos = frustum.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const isTop = pos.getY(i) > 0;
+    const w = width + (isTop ? topPad : bottomPad);
+    const d = depth + (isTop ? topPad : bottomPad);
+    pos.setXYZ(i, pos.getX(i) * w, pos.getY(i) * height, pos.getZ(i) * d);
+  }
+  pos.needsUpdate = true;
+  frustum.computeVertexNormals();
+  const body = new THREE.Mesh(frustum, stone);
+  body.position.set(centre[0], bottomY + height / 2, centre[2]);
+  body.name = 'DistrictPlinthBevel';
+  group.add(body);
+
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(width + topPad, 0.5, depth + topPad), capStone);
+  cap.position.set(centre[0], topY - 0.25, centre[2]);
+  cap.name = 'DistrictPlinthCap';
+  group.add(cap);
+
+  return group;
+}
+
 /**
  * Adds the pass-2 construction assemblies and pass-3 story details for one of
  * the six protocol storefronts. Dimensions follow the 38-unit footprint used by
@@ -120,6 +223,9 @@ export function addStorefrontDetail(
       // Dish support struts.
       parts.push(cylinder(0.5, 0.5, 5, trim, -2, 20, -2, 'Detail_DishStrutA', 2, 6));
       parts.push(cylinder(0.5, 0.5, 5, trim, 2, 20, 2, 'Detail_DishStrutB', 2, 6));
+      // Parabolic satellite dish on the struts, tilted toward the street, with
+      // a feed arm and horn at its focus.
+      parts.push(tag(buildSatelliteDish(main, trim), 'Detail_SatelliteDish', 2));
       break;
     }
     case 1: {
