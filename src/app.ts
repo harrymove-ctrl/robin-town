@@ -1313,9 +1313,13 @@ export class RobinTownApp {
               <div class="lobby-seats-grid">
                 ${[0, 1, 2, 3].map((seatIdx) => {
                   const occupant = roomState?.players.find((p) => p.seat === seatIdx && p.connected);
+                  const isMine = !!occupant && occupant.clientId === this.networkRoom?.localClientId;
+                  const takenByOther = !!occupant && !isMine;
                   return `
-                    <div class="seat-card ${occupant ? 'occupied' : 'empty'}">
-                      <span class="seat-label">Seat ${seatIdx + 1}</span>
+                    <button type="button" class="seat-card ${occupant ? 'occupied' : 'empty'} ${isMine ? 'mine' : ''}"
+                      data-seat="${seatIdx}" ${takenByOther ? 'disabled' : ''}
+                      title="${takenByOther ? `Seat ${seatIdx} is taken` : isMine ? 'Your seat' : `Take seat ${seatIdx}`}">
+                      <span class="seat-label">Seat ${seatIdx}${isMine ? ' (You)' : ''}</span>
                       ${occupant ? `
                         <span class="occupant-name">${occupant.name}</span>
                         <span class="ready-badge ${occupant.isReady ? 'ready' : ''}">
@@ -1323,8 +1327,9 @@ export class RobinTownApp {
                         </span>
                       ` : `
                         <span class="ai-autofill-badge">AI Bot Autofill</span>
+                        <span class="seat-cta">Click to sit here</span>
                       `}
-                    </div>
+                    </button>
                   `;
                 }).join('')}
               </div>
@@ -1343,54 +1348,76 @@ export class RobinTownApp {
   }
 
   private bindRoomModalEvents(modalEl: HTMLElement): void {
-    modalEl.addEventListener('click', (e) => {
-      const target = (e.target as HTMLElement).closest('[data-modal-close], [data-action]') as HTMLElement | null;
-      if (!target) return;
+    // renderAll() re-binds on every render; keep a single listener so clicks fire once.
+    modalEl.removeEventListener('click', this.handleRoomModalClick);
+    modalEl.addEventListener('click', this.handleRoomModalClick);
+  }
 
-      if (target.dataset.modalClose) {
-        this.closeModals();
-      } else if (target.dataset.action === 'create-room') {
-        const code = generateRoomCode();
+  /** Follows the room's state so seat / ready changes from other tabs re-render the lobby. */
+  private watchRoom(room: NetworkRoom): void {
+    room.onStateChange(() => {
+      if (this.isRoomModalOpen && this.networkRoom === room) this.renderAll();
+    });
+  }
+
+  private handleRoomModalClick = (e: Event): void => {
+    const target = (e.target as HTMLElement).closest('[data-modal-close], [data-action], [data-seat]') as HTMLElement | null;
+    if (!target) return;
+    const modalEl = (e.currentTarget as HTMLElement | null) ?? (this.container?.querySelector('#modal-overlay-container') as HTMLElement | null);
+
+    if (target.dataset.seat !== undefined) {
+      try {
+        this.networkRoom?.setSeat(parseInt(target.dataset.seat, 10));
+        this.audio.playClick();
+      } catch {
+        this.audio.playErrorBuzzer();
+      }
+      this.renderAll();
+    } else if (target.dataset.modalClose) {
+      this.closeModals();
+    } else if (target.dataset.action === 'create-room') {
+      const code = generateRoomCode();
+      this.networkRoom = new NetworkRoom({
+        roomCode: code,
+        localPlayer: {
+          name: 'You (Host)',
+          address: '0x1000000000000000000000000000000000000000',
+          avatar: 'avatar_0.png',
+        },
+        isHost: true,
+      });
+      this.watchRoom(this.networkRoom);
+      void this.networkRoom.start();
+      this.renderAll();
+    } else if (target.dataset.action === 'join-room') {
+      const input = modalEl?.querySelector('#room-code-field') as HTMLInputElement | null;
+      const code = normalizeRoomCode(input?.value || '');
+      if (isValidRoomCode(code)) {
         this.networkRoom = new NetworkRoom({
           roomCode: code,
           localPlayer: {
-            name: 'You (Host)',
+            name: 'Player Peer',
             address: '0x1000000000000000000000000000000000000000',
             avatar: 'avatar_0.png',
           },
-          isHost: true,
+          isHost: false,
         });
+        this.watchRoom(this.networkRoom);
         void this.networkRoom.start();
         this.renderAll();
-      } else if (target.dataset.action === 'join-room') {
-        const input = modalEl.querySelector('#room-code-field') as HTMLInputElement;
-        const code = normalizeRoomCode(input?.value || '');
-        if (isValidRoomCode(code)) {
-          this.networkRoom = new NetworkRoom({
-            roomCode: code,
-            localPlayer: {
-              name: 'Player Peer',
-              address: '0x1000000000000000000000000000000000000000',
-              avatar: 'avatar_0.png',
-            },
-            isHost: false,
-          });
-          void this.networkRoom.start();
-          this.renderAll();
-        } else {
-          this.audio.playErrorBuzzer();
-        }
-      } else if (target.dataset.action === 'toggle-ready') {
-        this.networkRoom?.toggleReady();
-        this.renderAll();
-      } else if (target.dataset.action === 'leave-room') {
-        this.networkRoom?.stop();
-        this.networkRoom = null;
-        this.renderAll();
-      } else if (target.dataset.action === 'start-room-match') {
-        this.networkRoom?.startMatch();
-        this.closeModals();
+      } else {
+        this.audio.playErrorBuzzer();
       }
-    });
-  }
+    } else if (target.dataset.action === 'toggle-ready') {
+      this.networkRoom?.toggleReady();
+      this.renderAll();
+    } else if (target.dataset.action === 'leave-room') {
+      this.networkRoom?.stop();
+      this.networkRoom = null;
+      this.renderAll();
+    } else if (target.dataset.action === 'start-room-match') {
+      this.networkRoom?.startMatch();
+      this.closeModals();
+    }
+  };
 }
