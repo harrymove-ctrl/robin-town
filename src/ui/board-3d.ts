@@ -39,6 +39,7 @@ export const ELEVATION_GOLDEN_CROWN = 22.0;
 const BOARD_FIT_HEIGHT = 40;
 const BOARD_FIT_PADDING = 1.06;
 const PAN_LIMIT = 380;
+const WALK_LOOP = 2 * (2 * 126 + 2 * 132);
 const MOTE_CEILING = 180;
 const BUILD_RISE_MS = 400;
 const SINK_MS = 300;
@@ -48,6 +49,26 @@ const FLAG_CLOTH_GEOM = new THREE.BoxGeometry(8, 5, 0.6);
 
 // Valid build target: violet, distinct from every PLAYER_HEX_COLORS entry
 export const BUILDABLE_HIGHLIGHT_HEX = 0xc77dff;
+
+const DUSK_COLOR = new THREE.Color(0x8fa8ff);
+
+/**
+ * Point on a rectangular loop (half-extents 126 x 132) at distance d along its perimeter.
+ */
+export function perimeterPoint(d: number): [number, number] {
+  const hw = 126;
+  const hd = 132;
+  const w = 2 * hw;
+  const h = 2 * hd;
+  let t = ((d % (2 * (w + h))) + 2 * (w + h)) % (2 * (w + h));
+  if (t < w) return [-hw + t, -hd];
+  t -= w;
+  if (t < h) return [hw, -hd + t];
+  t -= h;
+  if (t < w) return [hw - t, hd];
+  t -= w;
+  return [-hw, hd - t];
+}
 
 /** Ease-out-back: overshoots slightly before settling at 1. */
 export function easeOutBack(t: number): number {
@@ -445,6 +466,15 @@ export function createShopBuilding(
     }
   }
 
+  // Blinking rooftop beacon (animated by the renderer)
+  const beacon = new THREE.Mesh(
+    new THREE.SphereGeometry(1.4, 8, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff4d4d })
+  );
+  beacon.name = 'RooftopBeacon';
+  beacon.position.set(14, totalHeight + 12, -14);
+  group.add(beacon);
+
   // Facade Decal on front surface (+Z side)
   const facadeGeom = new THREE.PlaneGeometry(24, 24);
   const facadeMat = new THREE.MeshBasicMaterial({
@@ -581,6 +611,11 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private labelSprites = new Map<number, THREE.Sprite>();
   private ambientGroup: THREE.Group;
   private motes: THREE.Points | null = null;
+  private walkers: { group: THREE.Group; district: number; offset: number; speed: number }[] = [];
+  private sunLight: THREE.DirectionalLight | null = null;
+  private ambientLightRef: THREE.AmbientLight | null = null;
+  private targetDusk = 0;
+  private dusk = 0;
   private effects: RingEffect[] = [];
   private sinking: SinkingBuilding[] = [];
   private completeSignature: string | null = null;
@@ -704,6 +739,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     fillLight.name = 'FillLight';
     fillLight.position.set(-300, 300, -200);
 
+    this.sunLight = sunLight;
+    this.ambientLightRef = ambientLight;
     this.lightingGroup.add(ambientLight, sunLight, fillLight);
 
     // Add subtle colored point lights above each of the 6 districts
@@ -825,6 +862,29 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     );
     this.motes.name = 'DriftMotes';
     this.ambientGroup.add(this.motes);
+
+    // Tiny pedestrians strolling the street around each district slab
+    const bodyGeom = new THREE.BoxGeometry(1.6, 3.2, 1.6);
+    const headGeom = new THREE.BoxGeometry(1.3, 1.3, 1.3);
+    const palette = [0xe5e7eb, 0xeec353, 0x29b6f6, 0xff7043, 0x00c805];
+    for (const district of DISTRICT_BLOCKS) {
+      for (let n = 0; n < 3; n++) {
+        const walker = new THREE.Group();
+        walker.name = `Walker_${district.id}_${n}`;
+        const body = new THREE.Mesh(bodyGeom, new THREE.MeshStandardMaterial({ color: palette[(district.id + n) % palette.length] }));
+        body.position.y = 1.6;
+        const head = new THREE.Mesh(headGeom, new THREE.MeshStandardMaterial({ color: 0xf1d3b0 }));
+        head.position.y = 3.8;
+        walker.add(body, head);
+        this.ambientGroup.add(walker);
+        this.walkers.push({
+          group: walker,
+          district: district.id,
+          offset: (n / 3) * WALK_LOOP + district.id * 40,
+          speed: (n % 2 === 0 ? 1 : -1) * (10 + n * 3),
+        });
+      }
+    }
   }
 
   /**
@@ -1053,6 +1113,29 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       return true;
     });
 
+    // Day to night drift across the six epochs
+    this.dusk += (this.targetDusk - this.dusk) * (1 - Math.exp(-dt * 1.5));
+    if (this.sunLight && this.ambientLightRef) {
+      this.sunLight.intensity = 1.2 - 0.6 * this.dusk;
+      this.sunLight.color.setHex(0xfff2d6).lerp(DUSK_COLOR, this.dusk);
+      this.ambientLightRef.intensity = 0.7 - 0.15 * this.dusk;
+    }
+
+    // Walkers pace the loop around their district
+    for (const w of this.walkers) {
+      w.offset = (w.offset + w.speed * dt + WALK_LOOP) % WALK_LOOP;
+      const center = this.getDistrictCenter3D(DISTRICT_BLOCKS[w.district]);
+      const [px, pz] = perimeterPoint(w.offset);
+      w.group.position.set(center[0] + px, 0.5, center[2] + pz);
+      w.group.position.y = 0.5 + Math.abs(Math.sin(timeSec * 8 + w.offset)) * 0.3;
+    }
+
+    // Rooftop beacons blink
+    for (const building of this.buildingMeshes.values()) {
+      const beacon = building.getObjectByName('RooftopBeacon');
+      if (beacon) beacon.visible = Math.sin(timeSec * 3 + building.position.x) > 0;
+    }
+
     if (this.motes) {
       const attr = this.motes.geometry.getAttribute('position') as THREE.BufferAttribute;
       for (let i = 0; i < attr.count; i++) {
@@ -1171,6 +1254,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     overlay: Board3DOverlay = {}
   ): void {
     this.lastRender = { state, selected: selectedLotId, overlay };
+    this.targetDusk = Math.min(Math.max((state.year - 1) / 5, 0), 1);
     this.selectedLotId = selectedLotId;
     const pending = new Set(overlay.pendingLots ?? []);
     const drafted = new Set(overlay.draftLots ?? []);
