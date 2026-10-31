@@ -38,7 +38,8 @@ import {
   validateOffer,
   startYear,
 } from './engine/engine';
-import type { GameConfig, GamePhase, GameState, Player, TradeOffer } from './engine/types';
+import type { GameConfig, GamePhase, GameState, Player, RandomSource, TradeOffer } from './engine/types';
+import { createSeededRandom } from './engine/rng';
 import {
   BURN_ADDRESS,
   calculateMatchPayouts,
@@ -88,6 +89,8 @@ export interface RobinTownAppConfig {
   gameConfig?: GameConfig;
   audio?: AudioSynthesizer;
   isStaked?: boolean;
+  /** Seed for a reproducible match (deals, bot drafts, tile draws). Omit for Math.random. */
+  seed?: number;
 }
 
 /**
@@ -118,6 +121,8 @@ export class RobinTownApp {
   private selectedLotId: number | null = null;
   private hoveredLotId: number | null = null;
   private isStaked = true;
+  private seed: number | undefined;
+  private rng: RandomSource = Math.random;
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
   private isRulesModalOpen = false;
@@ -139,6 +144,8 @@ export class RobinTownApp {
     this.isStaked = config.isStaked ?? true;
     this.audio = config.audio ?? getAudioSynthesizer();
     this.walletAdapter = new WalletAdapter({ mode: 'simulation' });
+    this.seed = config.seed;
+    if (this.seed !== undefined) this.rng = createSeededRandom(this.seed);
 
     // Initialize core game state
     this.state = createGame(config.gameConfig || {
@@ -149,7 +156,7 @@ export class RobinTownApp {
         { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_2.png' },
       ],
       startingCash: 50,
-    });
+    }, this.rng);
 
     // createGame already opens Epoch 1 (deeds and tiles)
 
@@ -662,7 +669,7 @@ export class RobinTownApp {
 
     try {
       const ownersBefore = this.state.lots.map((l) => l.owner);
-      draftPlots(this.state, 0, lotIds);
+      draftPlots(this.state, 0, lotIds, this.rng);
       this.claimFlashes = buildClaimFlashes(ownersBefore, this.state, performance.now());
       this.selectedDraftLots = [];
       this.incomingOffers = this.collectBotProposals();
@@ -873,7 +880,7 @@ export class RobinTownApp {
       this.audio.playGameOverFanfare();
       this.openSettlementModal();
     } else {
-      nextYear(this.state);
+      nextYear(this.state, this.rng);
       this.audio.playYearFanfare();
       this.tradeDeskController.updateGameState(this.state);
     }
@@ -914,6 +921,8 @@ export class RobinTownApp {
   }
 
   public startNewGame(config?: GameConfig): void {
+    // A seeded session replays the same deal on every fresh match.
+    if (this.seed !== undefined) this.rng = createSeededRandom(this.seed);
     this.state = createGame(config || {
       players: [
         { name: 'You (Trader)', address: '0x1000000000000000000000000000000000000000', avatar: 'avatar_0.png' },
@@ -922,7 +931,7 @@ export class RobinTownApp {
         { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_2.png' },
       ],
       startingCash: 50,
-    });
+    }, this.rng);
     this.selectedDraftLots = [];
     this.selectedShopType = null;
     this.selectedLotId = null;

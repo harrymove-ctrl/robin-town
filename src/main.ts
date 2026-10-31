@@ -7,12 +7,16 @@
 
 import './styles/index.css';
 import { RobinTownApp } from './app';
+import { parseSeedParam } from './engine/rng';
 
 console.log('[robin-town] Initializing game application...');
 
 const appContainer = document.getElementById('app');
 if (appContainer) {
-  const game = new RobinTownApp(appContainer);
+  // ?seed=<n> makes deals, bot drafts and tile draws reproducible (QA screenshots).
+  const seed = parseSeedParam(window.location.search);
+  const game = new RobinTownApp(appContainer, seed !== null ? { seed } : {});
+  if (seed !== null) console.log(`[robin-town] Deterministic match: seed ${seed}`);
   console.log('[robin-town] Game application mounted successfully.');
 
   // Attach game instance to window for interactive debugging if in browser

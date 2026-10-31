@@ -5,6 +5,14 @@
  *   const { walk } = await import('/qa/state-walk.js');
  *   console.table(await walk());
  *
+ * Deterministic mode: open the app with `?seed=<n>` (e.g. /?seed=42). Deals,
+ * bot drafts and tile draws then come from a seeded RNG, so every run and
+ * screenshot shows the same board. Each row reports the seed in use.
+ *
+ * States covered: idle, drafting, wallet-simulation, wallet-web3, rules-modal,
+ * lobby-modal, trading, proposals-modal, trade-desk-open, building,
+ * harvesting, epoch-summary, settlement.
+ *
  * Each state reports overlapping HUD panels, buttons that are off-screen or
  * covered by another element, sideways scrollers, page-level horizontal
  * scroll and modals taller or wider than the viewport. The run ends with a
@@ -110,7 +118,8 @@ export function audit(state) {
   }
 
   const issues = [...overlaps, ...blocked, ...scrollers, ...pageScroll, ...modalOverflow, ...missing];
-  return { state, viewport: `${innerWidth}x${innerHeight}`, ok: issues.length === 0, issues: issues.join('; ') };
+  const seed = new URLSearchParams(location.search).get('seed') ?? 'random';
+  return { state, viewport: `${innerWidth}x${innerHeight}`, seed, ok: issues.length === 0, issues: issues.join('; ') };
 }
 
 async function closeAll() {
@@ -124,6 +133,12 @@ async function closeAll() {
 
 export async function walk() {
   const out = [];
+  // Fresh load: nothing selected, no modal open.
+  out.push(audit('idle'));
+
+  // Allocation with a deed picked in the tray.
+  q('.deed-card[data-draft-lot]')?.click();
+  await wait(200);
   out.push(audit('drafting'));
 
   q('[data-action="wallet-toggle"]').click();
@@ -173,7 +188,15 @@ export async function walk() {
       await wait(100);
     }
     q('[data-action-id="finish-building"]').click();
-    await wait(epoch < 6 ? 2700 : 600);
+    if (epoch === 1) {
+      // Yield badges and cluster glows are on the board before the summary card opens.
+      await wait(500);
+      out.push(audit('harvesting'));
+      await wait(2200);
+    } else {
+      // The summary (epochs 1-5) and the auto-opened settlement (epoch 6) appear after the badges.
+      await wait(2700);
+    }
     if (epoch === 1) out.push(audit('epoch-summary'));
     if (epoch < 6) {
       q('[data-action="epoch-continue"]')?.click();
