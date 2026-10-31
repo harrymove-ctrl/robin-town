@@ -60,8 +60,8 @@ export const COMPLETE = COMPLETE_PAYOUTS;
 export const INCOMPLETE = INCOMPLETE_PAYOUTS;
 
 export const PLOT_KEEP_SCHEDULE = [5, 4, 3, 2, 2, 2];
-export const TILE_DEAL_SCHEDULE = [6, 5, 5, 5, 5, 5];
-export const TILE_KEEP_SCHEDULE = [5, 4, 3, 2, 2, 2];
+// Tiles drawn per player each epoch: 4 x (5 + 4*5) = 100 of the 120-tile bag.
+export const TILE_DEAL_SCHEDULE = [5, 4, 4, 4, 4, 4];
 export const KEEP = PLOT_KEEP_SCHEDULE;
 
 export function shuffle<T>(items: readonly T[], rng: RandomSource = Math.random): T[] {
@@ -289,7 +289,7 @@ export function startYear(state: GameState, rng: RandomSource = Math.random): Ga
   );
 
   // Distribute shop tiles: 5 in Year 1, 4 in Years 2 to 6
-  const tileCount = state.year === 1 ? 5 : 4;
+  const tileCount = TILE_DEAL_SCHEDULE[state.year - 1];
   for (let player = 0; player < 4; player++) {
     drawTiles(state, player, tileCount);
   }
