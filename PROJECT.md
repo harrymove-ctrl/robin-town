@@ -9,7 +9,7 @@ The robin-town application is structured as a high-performance web game with a c
 * 3D UI/UX Diorama Layer: Real-time Three.js scene implementing the `sloemo01/diorama` Look Contract (locked 20.5 fov, 45 azimuth, 33 elevation), SolaceUI WebGL2 exposure-grid shader background pass, 64-color palette quantization with 8x8 Bayer dithering and inked contours (`PixelPost`), Apple Carousel infinite autoplay property navigation, and iPod Classic tactile click wheel controller.
 * Core Game Engine: Pure, deterministic TypeScript state machine with zero DOM or network dependencies. Implements 72-parcel board geometry across 6 financial districts, 120-tile pool conservation, 6 protocol shop types, strict Chinatown capacity enforcement (`canBuildShop` parity), cluster recalculation on trades, canonical action reducer (`gameReducer`), and 3 autonomous AI bot trader personas (Sherwood, Apex, Luna).
 * Tokenomics Flywheel: Pure mathematical calculation module managing $wif currency accounting, 4,000 $wif competitive match buy-in pools (5% permanent burn to `0x...dEaD`, 5% community staking vault, 90% podium purse with winner dust conservation), casual point-to-token swap with 3% burn tax, 1% OTC trade micro-tax (50% burn, 50% staking vault), continuous staking yield curves up to 50,000 $wif, and round prediction wagering markets.
-* Dual-Mode Wallet Adapter: Instant off-chain simulation with 4 pre-funded local accounts (10,000 $wif each) and browser local storage persistence, combined with standard Web3 EIP-1193 provider integration supporting ERC-20 contract calls (`balanceOf`, `transfer`, `approve`, `burn`) on Robinhood Chain Testnet (Chain ID 46630).
+* Dual-Mode Wallet Adapter: Instant off-chain simulation with 4 pre-funded local accounts (10,000 $wif each) and browser local storage persistence, combined with standard Web3 EIP-1193 provider integration supporting ERC-20 contract calls (`balanceOf`, `transfer`, `approve`, `burn`) on Robinhood Chain Testnet (Chain ID 46631).
 * Networking Layer: Authoritative host multiplayer synchronization supporting 6-character room codes, monotonic state sequencing, deterministic AI bot autofill, heartbeat-based host failover, targeted `SYNC_REQUEST` re-synchronization, and pluggable WebSocket transport relays.
 * Pixel Art Asset Pipeline: Standalone programmatic sprite generator producing 32x32 native and 96x96 HD pixel sprites for shops, avatars, board terrain, and UI tokens, with Aseprite fallback compatibility and zero-404 asset verification.
 * Automated Verification Pyramid: Multi-tier testing hierarchy containing 517 tests across 137 test suites covering unit rules, boundary analysis, pairwise interactions, multi-epoch match simulations, and adversarial stress testing.
@@ -61,7 +61,7 @@ The robin-town application is structured as a high-performance web game with a c
 |  +---------------------------------------------------------------------------------------------+  |
 |  |                            Dual-Mode Wallet Connectivity Layer                              |  |
 |  |  Mode 1: Simulation (4 Pre-Funded Wallets, 10,000 $wif Each, LocalStorage Persistence)      |  |
-|  |  Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet 46630, ERC-20 Call Selectors)      |  |
+|  |  Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet 46631, ERC-20 Call Selectors)      |  |
 |  |  Mode 3: Resilient Auto-Fallback on Provider Absence or User Rejection                      |  |
 |  +---------------------------------------------------------------------------------------------+  |
 +---------------------------------------------------------------------------------------------------+
@@ -97,7 +97,7 @@ Every feature from user requirements (R1 through R5), specialist surveys, and ha
 | 22 | iPod Classic Controller | 3D UI | Tangible click wheel controller with angular gesture tracking and tactile audio ticks | D5 | Planned |
 | 23 | Audio & Visual Optimization | 3D UI | Instanced parcel mesh (draw calls from 72 to 1), procedural audio expansion, visual QA | D6 | Planned |
 | 24 | Trade Tax 50/50 Split & Wagering | Tokenomics | Split trade tax 50% burn / 50% vault, continuous staking curve, round prediction wagers | M4-A | Planned |
-| 25 | ERC-20 Encoding & Persistence | Wallet | 4-byte EVM method selectors on Robinhood Chain 46630 and localStorage balance storage | M4-B | Planned |
+| 25 | ERC-20 Encoding & Persistence | Wallet | 4-byte EVM method selectors on Robinhood Chain 46631 and localStorage balance storage | M4-B | Planned |
 | 26 | Multiplayer SYNC_REQUEST & Relay | Network | Explicit SYNC_REQUEST packet handler, optimistic action queuing, WebSocket relay | M4-C | Planned |
 | 27 | Synthetic Latency Verification | QA | Extend Tier 5 with `LaggyMemoryTransport` test suite validating network resilience | M6 | Planned |
 
@@ -119,7 +119,7 @@ Every feature from user requirements (R1 through R5), specialist surveys, and ha
 | D5 | 3D UI/UX | iPod Classic Controller | Angular click wheel controller with procedural haptic ticks | D4, M-ENG-3 |
 | D6 | 3D UI/UX | Audio & Visual Optimization | `InstancedMesh` parcel draw call reduction, audio expansion | D2, D3, D5 |
 | M4-A | Tokenomics | Flywheel Polish & Wagering | 50/50 trade tax burn split, continuous staking, wagering engine | Baseline |
-| M4-B | Wallet | ERC-20 & Storage Persistence | ABI method selectors on Robinhood Chain 46630, localStorage | M4-A |
+| M4-B | Wallet | ERC-20 & Storage Persistence | ABI method selectors on Robinhood Chain 46631, localStorage | M4-A |
 | M4-C | Network | SYNC_REQUEST & WebSocket | Targeted state snapshot resync, WebSocket transport relay | M-ENG-4, M4-B |
 | M6 | QA | Hardening & Build Gate | `LaggyMemoryTransport` suite, full build and test pass | All Tracks |
 

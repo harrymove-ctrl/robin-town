@@ -267,7 +267,7 @@ describe('Tier 3: Cross-Feature Pairwise Combinations', () => {
             return ['0xAbCdEf1234567890AbCdEf1234567890AbCdEf12'];
           }
           if (args.method === 'eth_chainId') {
-            return '0xb626';
+            return '0xb627';
           }
           if (args.method === 'eth_getBalance') {
             return '0x1b1ae4d6e2ef500000';

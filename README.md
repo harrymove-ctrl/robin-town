@@ -10,7 +10,7 @@ Up to 4 players (human wallets or autonomous AI bot traders `Sherwood`, `Apex`, 
 2. **Casual AI Bot Mode and 3% Point-to-`$wif` Redemption Burn**: Players competing against AI bots earn Treasury Points from final net worth, placed protocol tiles, and completed district monopolies. Points are redeemable for `$wif` (`10 points = 1 $wif`) with a **3% deflationary burn tax**.
 3. **1% OTC Trade Micro-Tax**: Every bilateral `$wif` cash transfer on the OTC Liquidity Desk deducts a **1% micro-tax** into the community staking vault, rewarding active liquidity providers.
 4. **1.20x Seasonal Staking Boost**: Players who stake `$wif` in the community vault earn a **1.20x yield multiplier** on every Epoch income harvest.
-5. **Dual-Mode Wallet Onboarding**: Instant off-chain simulation mode with 4 pre-funded `10,000 $wif` accounts (`Alice`, `Bob`, `Charlie`, `Dave`) for zero-friction onboarding, paired with native EIP-1193 Web3 connectivity for **Robinhood Chain Testnet** (`Chain ID 46630`, `0xb626`).
+5. **Dual-Mode Wallet Onboarding**: Instant off-chain simulation mode with 4 pre-funded `10,000 $wif` accounts (`Alice`, `Bob`, `Charlie`, `Dave`) for zero-friction onboarding, paired with native EIP-1193 Web3 connectivity for **Robinhood Chain Testnet** (`Chain ID 46631`, `0xb627`).
 
 ## Architecture Overview
 

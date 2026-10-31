@@ -4,15 +4,15 @@
  * Dual-Mode Wallet Adapter for robin-town.
  * Supports:
  * 1. Mode 1: Off-Chain Simulation (4 pre-funded wallets: Alice, Bob, Charlie, Dave with 10,000 $wif each).
- * 2. Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet, Chain ID 46630).
+ * 2. Mode 2: Web3 EIP-1193 Provider (Robinhood Chain Testnet, Chain ID 46631).
  * 3. Resilient fallback to simulation when window.ethereum is absent or rejects connection.
  * 4. Pure TypeScript with zero third-party runtime dependencies.
  */
 
-export const ROBINHOOD_CHAIN_ID = 46630;
-export const ROBINHOOD_CHAIN_ID_HEX = '0xb626';
-export const ROBINHOOD_RPC_URL = 'https://rpc.testnet.chain.robinhood.com';
-export const ROBINHOOD_EXPLORER_URL = 'https://explorer.testnet.chain.robinhood.com';
+export const ROBINHOOD_CHAIN_ID = 46631;
+export const ROBINHOOD_CHAIN_ID_HEX = '0xb627';
+export const ROBINHOOD_RPC_URL = 'https://rpc.testnet.robinhood.com';
+export const ROBINHOOD_EXPLORER_URL = 'https://explorer.testnet.robinhood.com';
 export const ROBINHOOD_CHAIN_NAME = 'Robinhood Chain Testnet';
 export const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
 
@@ -661,11 +661,10 @@ export class WalletAdapter {
               {
                 chainId: this.chainConfig.chainIdHex,
                 chainName: this.chainConfig.chainName,
-                // Robinhood Chain Testnet's native gas token is ETH; $wif is the in-game unit.
                 nativeCurrency: {
-                  name: 'Ether',
-                  symbol: 'ETH',
-                  decimals: 18,
+                  name: 'Robinhood WIF',
+                  symbol: 'WIF',
+                  decimals: this.chainConfig.decimals,
                 },
                 rpcUrls: [this.chainConfig.rpcUrl],
                 blockExplorerUrls: [this.chainConfig.explorerUrl],
