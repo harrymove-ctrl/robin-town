@@ -39,6 +39,7 @@ export const ELEVATION_GOLDEN_CROWN = 22.0;
 const BOARD_FIT_HEIGHT = 40;
 const BOARD_FIT_PADDING = 1.06;
 const PAN_LIMIT = 380;
+const MOTE_CEILING = 180;
 const BUILD_RISE_MS = 400;
 const SINK_MS = 300;
 const EMPTY_PARCEL_HEX = 0x2d3a56;
@@ -578,6 +579,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private lotPulseAmp: number[] = [];
   private ownerFlags: THREE.Mesh[] = [];
   private labelSprites = new Map<number, THREE.Sprite>();
+  private ambientGroup: THREE.Group;
+  private motes: THREE.Points | null = null;
   private effects: RingEffect[] = [];
   private sinking: SinkingBuilding[] = [];
   private completeSignature: string | null = null;
@@ -636,7 +639,9 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       this.buildingGroup,
       this.goldenAuraGroup
     );
-    this.scene.add(this.boardGroup, this.lightingGroup);
+    this.ambientGroup = new THREE.Group();
+    this.ambientGroup.name = 'AmbientGroup';
+    this.scene.add(this.boardGroup, this.lightingGroup, this.ambientGroup);
 
     // Initialize dual cameras
     const aspect = this.width / this.height;
@@ -655,6 +660,9 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
     // Setup 72 parcel meshes
     this.setupParcelMeshes();
+
+    // Ground glow, grid and drifting motes behind the board
+    this.setupAmbient();
 
     // Bind event handlers
     this.onPointerDownBound = this.handlePointerDown.bind(this);
@@ -753,6 +761,70 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       districtGroup.add(slabMesh, neonEdges);
       this.districtGroup.add(districtGroup);
     }
+  }
+
+  /**
+   * Fill the empty backdrop: radial ground glow, a faint grid and drifting light motes.
+   */
+  private setupAmbient(): void {
+    if (typeof document !== 'undefined') {
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+        grad.addColorStop(0, 'rgba(38, 78, 120, 0.85)');
+        grad.addColorStop(0.45, 'rgba(24, 40, 80, 0.45)');
+        grad.addColorStop(1, 'rgba(7, 10, 18, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const disc = new THREE.Mesh(
+          new THREE.PlaneGeometry(1500, 1500),
+          new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+        );
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.y = -3;
+        disc.name = 'GroundGlow';
+        this.ambientGroup.add(disc);
+      }
+    }
+
+    const grid = new THREE.GridHelper(1500, 30, 0x2a4a7a, 0x1b2a44);
+    const gridMat = grid.material as THREE.LineBasicMaterial;
+    gridMat.transparent = true;
+    gridMat.opacity = 0.35;
+    gridMat.depthWrite = false;
+    grid.position.y = -2.5;
+    grid.name = 'GroundGrid';
+    this.ambientGroup.add(grid);
+
+    // Motes drift upward and wrap around, like pixels of data rising off the city
+    const count = 140;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 1100;
+      positions[i * 3 + 1] = Math.random() * MOTE_CEILING;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 900;
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.motes = new THREE.Points(
+      geom,
+      new THREE.PointsMaterial({
+        color: 0x7fd8ff,
+        size: 2.6,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    this.motes.name = 'DriftMotes';
+    this.ambientGroup.add(this.motes);
   }
 
   /**
@@ -981,6 +1053,17 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       return true;
     });
 
+    if (this.motes) {
+      const attr = this.motes.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < attr.count; i++) {
+        let y = attr.getY(i) + dt * (6 + (i % 5) * 2);
+        if (y > MOTE_CEILING) y = 0;
+        attr.setY(i, y);
+        attr.setX(i, attr.getX(i) + Math.sin(timeSec * 0.5 + i) * dt * 3);
+      }
+      attr.needsUpdate = true;
+    }
+
     // Camera mode transition lerp
     if (this.isTransitioning) {
       const elapsed = performance.now() - this.transitionStartTime;
@@ -1073,6 +1156,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       sprite.material.dispose();
     }
     this.labelSprites.clear();
+    this.motes?.geometry.dispose();
+    (this.motes?.material as THREE.Material | undefined)?.dispose();
     this.effects = [];
     this.sinking = [];
   }

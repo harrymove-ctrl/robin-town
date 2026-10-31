@@ -68,6 +68,7 @@ body {
   position: relative;
   overflow: hidden;
   background-color: #070a12;
+  background-image: radial-gradient(ellipse at 50% 55%, #14233f 0%, #0b1325 45%, #070a12 80%);
 }
 
 .board-canvas {
