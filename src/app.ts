@@ -632,7 +632,7 @@ export class RobinTownApp {
       payouts[0] = playerHarvest;
       this.epochSummary = { year: this.state.year, payouts };
       // Let the yield badges play over the board before the summary card covers it.
-      window.setTimeout(() => {
+      setTimeout(() => {
         if ((this.state.phase as GamePhase) === 'income') {
           this.isEpochSummaryOpen = true;
           this.renderAll();
