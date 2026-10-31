@@ -660,15 +660,34 @@ export class RobinTownApp {
   private collectBotProposals(): TradeOffer[] {
     const offers: TradeOffer[] = [];
     for (let botId = 1; botId < 4 && offers.length < 2; botId++) {
-      const offer = generateBotTradeOffer(botId, 0, this.state);
-      if (offer && validateOffer(this.state, offer)) offers.push(offer);
+      const raw = generateBotTradeOffer(botId, 0, this.state);
+      if (!raw) continue;
+      // Re-express as the player's trade: they give the parcel, the bot gives cash.
+      const offer: TradeOffer = {
+        fromPlayer: 0,
+        toPlayer: botId,
+        partner: botId,
+        give: raw.take,
+        take: raw.give,
+      };
+      try {
+        if (validateOffer(this.state, offer)) offers.push(offer);
+      } catch {
+        // Stale or unaffordable proposal: skip it.
+      }
     }
     return offers;
   }
 
   public acceptProposal(index: number): boolean {
     const offer = this.incomingOffers[index];
-    if (!offer || this.state.phase !== 'trade' || !validateOffer(this.state, offer)) {
+    let valid = false;
+    try {
+      valid = !!offer && this.state.phase === 'trade' && validateOffer(this.state, offer);
+    } catch {
+      valid = false;
+    }
+    if (!offer || !valid) {
       this.audio.playErrorBuzzer();
       return false;
     }
@@ -686,7 +705,7 @@ export class RobinTownApp {
     if (!offer) return;
     this.incomingOffers.splice(index, 1);
     this.isProposalsOpen = false;
-    this.openTradeDesk(offer.fromPlayer);
+    this.openTradeDesk(offer.toPlayer);
   }
 
   public dismissProposal(index: number): void {
@@ -1027,11 +1046,11 @@ export class RobinTownApp {
 
   private renderProposalsModalHTML(): string {
     const rows = this.incomingOffers.map((offer, i) => {
-      const bot = this.state.players[offer.fromPlayer ?? 1];
-      const lots = offer.take.lots.map((id) => `Parcel ${id + 1}`).join(', ') || 'no parcels';
+      const bot = this.state.players[offer.toPlayer ?? 1];
+      const lots = offer.give.lots.map((id) => `Parcel ${id + 1}`).join(', ') || 'no parcels';
       return `
         <div class="proposal-row">
-          <p><strong>${bot.name}</strong> offers <strong>${offer.give.cash} $wif</strong> for your ${lots}.</p>
+          <p><strong>${bot.name}</strong> offers <strong>${offer.take.cash} $wif</strong> for your ${lots}.</p>
           <button class="btn-primary" data-proposal-action="accept" data-proposal-index="${i}">Accept</button>
           <button class="btn-secondary" data-proposal-action="counter" data-proposal-index="${i}">Counter</button>
           <button class="btn-secondary" data-proposal-action="dismiss" data-proposal-index="${i}">Dismiss</button>

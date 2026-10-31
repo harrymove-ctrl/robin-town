@@ -1,7 +1,7 @@
 /**
  * tests/unit/gameplay-flow.test.ts
  *
- * Covers bot-initiated proposals: applyTrade moves cash and parcels without
+ * Covers bot proposals as shown to the player: applyTrade moves cash and parcels without
  * creating or destroying value.
  */
 
@@ -11,16 +11,16 @@ import { newGame, draftPlots, applyTrade, validateOffer } from '../../src/engine
 import type { TradeOffer } from '../../src/engine/types';
 
 describe('applyTrade', () => {
-  it('swaps cash and a parcel between a bot and the player', () => {
+  it('swaps cash and a parcel between the player and a bot', () => {
     const state = newGame();
     draftPlots(state, 0, state.pending.slice(0, state.draftCount));
     const lotId = state.lots.find((l) => l.owner === 0)!.id;
     const offer: TradeOffer = {
-      fromPlayer: 1,
-      toPlayer: 0,
-      partner: 0,
-      give: { cash: 40, tiles: [0, 0, 0, 0, 0, 0], lots: [] },
-      take: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [lotId] },
+      fromPlayer: 0,
+      toPlayer: 1,
+      partner: 1,
+      give: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [lotId] },
+      take: { cash: 40, tiles: [0, 0, 0, 0, 0, 0], lots: [] },
     };
     assert.ok(validateOffer(state, offer));
     const totalBefore = state.players.reduce((n, p) => n + p.cash, 0);
