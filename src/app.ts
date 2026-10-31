@@ -145,8 +145,7 @@ export class RobinTownApp {
       startingCash: 50,
     });
 
-    // Start Year 1 automatically
-    startYear(this.state);
+    // createGame already opens Epoch 1 (deeds and tiles)
 
     // Initialize camera and board renderer
     this.camera = new CameraController();
@@ -777,7 +776,6 @@ export class RobinTownApp {
       ],
       startingCash: 50,
     });
-    startYear(this.state);
     this.selectedDraftLots = [];
     this.selectedShopType = null;
     this.selectedLotId = null;
