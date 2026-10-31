@@ -290,6 +290,9 @@ export class RobinTownApp {
       this.board3dResizeObserver.observe(boardBox);
     }
     this.canvas.style.visibility = 'hidden';
+    if (new URLSearchParams(window.location.search).get('pixel') === '1') {
+      renderer.setPixelMode(true);
+    }
   }
 
   private preloadAssets(): void {
@@ -469,6 +472,8 @@ export class RobinTownApp {
         this.setBoard3dEnabled(!this.board3d);
       } else if ((e.key === 'c' || e.key === 'C') && this.board3d) {
         this.board3d.toggleCameraMode();
+      } else if ((e.key === 'p' || e.key === 'P') && this.board3d) {
+        this.board3d.setPixelMode(!this.board3d.isPixelMode());
       } else if ((e.key === 'r' || e.key === 'R') && this.board3d) {
         this.board3d.resetCamera();
       } else if (e.key === 't' || e.key === 'T') {

@@ -20,6 +20,7 @@ import {
   type ShopCluster,
 } from '../engine/board-layout';
 import type { GameState } from '../engine/types';
+import { PixelPost } from './pixel-post';
 
 // Board spatial constants
 export const BOARD_ORIGIN_X = 550;
@@ -610,6 +611,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private ownerFlags: THREE.Mesh[] = [];
   private labelSprites = new Map<number, THREE.Sprite>();
   private ambientGroup: THREE.Group;
+  private pixelPost: PixelPost | null = null;
+  private pixelMode = false;
   private motes: THREE.Points | null = null;
   private walkers: { group: THREE.Group; district: number; offset: number; speed: number }[] = [];
   private sunLight: THREE.DirectionalLight | null = null;
@@ -1025,7 +1028,11 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       this.updateAnimations(timestamp);
 
       if (this.renderer) {
-        this.renderer.render(this.scene, this.activeCamera);
+        if (this.pixelMode && this.pixelPost) {
+          this.pixelPost.render(this.scene, this.activeCamera);
+        } else {
+          this.renderer.render(this.scene, this.activeCamera);
+        }
       }
 
       this.animFrameId = requestAnimationFrame(animate);
@@ -1224,6 +1231,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       if (el.parentElement) {
         el.parentElement.removeChild(el);
       }
+      this.pixelPost?.dispose();
+      this.pixelPost = null;
       this.renderer.dispose();
       this.renderer = null;
     }
@@ -1577,6 +1586,22 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   }
 
   /**
+   * Switch the pixel-art post pass (palette snap, 8x8 dither, ink contours) on or off.
+   */
+  public setPixelMode(enabled: boolean): void {
+    if (!this.renderer) return;
+    if (enabled && !this.pixelPost) {
+      this.pixelPost = new PixelPost(this.renderer, 2);
+      this.pixelPost.setSize(this.width, this.height);
+    }
+    this.pixelMode = enabled;
+  }
+
+  public isPixelMode(): boolean {
+    return this.pixelMode;
+  }
+
+  /**
    * Toggle between isometric orthographic and perspective orbit camera modes.
    */
   public toggleCameraMode(): void {
@@ -1669,6 +1694,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     if (this.renderer) {
       this.renderer.setSize(width, height);
     }
+    this.pixelPost?.setSize(width, height);
 
     const aspect = width / height;
     this.fitOrthoFrustum();
