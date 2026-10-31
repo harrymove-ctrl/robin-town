@@ -398,6 +398,8 @@ export interface HudEventHandlers {
   onDraftToggle?: (lotId: number) => void;
   onWalletClick?: () => void;
   onRulesClick?: () => void;
+  onPlayerClick?: (playerId: number) => void;
+  onDeedHover?: (lotId: number | null) => void;
   onLobbyClick?: () => void;
   onAudioToggle?: () => void;
 }
@@ -464,7 +466,7 @@ export class HudManager {
       <!-- 4-Player Status Ribbon -->
       <section class="player-ribbon" aria-label="Trader Status">
         ${ribbon.players.map((p) => `
-          <div class="player-card ${p.isActive ? 'active' : ''}" style="--player-accent: ${p.colorHex}">
+          <div class="player-card ${p.isActive ? 'active' : ''}" data-player-id="${p.id}" style="--player-accent: ${p.colorHex}">
             <img src="assets/avatars/${p.avatar}" class="player-avatar pixel-art" alt="${p.name}" />
             <div class="player-meta">
               <div class="player-header-row">
@@ -564,7 +566,24 @@ export class HudManager {
   private bindEvents(): void {
     if (typeof window === 'undefined') return;
 
+    const deedOf = (e: Event): number | null => {
+      const el = (e.target as HTMLElement).closest('[data-draft-lot]') as HTMLElement | null;
+      return el ? parseInt(el.dataset.draftLot as string, 10) : null;
+    };
+    this.container.addEventListener('mouseover', (e) => {
+      const id = deedOf(e);
+      if (id !== null) this.handlers.onDeedHover?.(id);
+    });
+    this.container.addEventListener('mouseout', (e) => {
+      if (deedOf(e) !== null) this.handlers.onDeedHover?.(null);
+    });
+
     this.container.addEventListener('click', (e) => {
+      const playerCard = (e.target as HTMLElement).closest('[data-player-id]') as HTMLElement | null;
+      if (playerCard && !(e.target as HTMLElement).closest('[data-action]')) {
+        this.handlers.onPlayerClick?.(parseInt(playerCard.dataset.playerId as string, 10));
+        return;
+      }
       const target = (e.target as HTMLElement).closest(
         '[data-action], [data-action-id], [data-shop-type], [data-draft-lot]'
       ) as HTMLElement | null;

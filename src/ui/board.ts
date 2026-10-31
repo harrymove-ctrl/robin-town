@@ -57,7 +57,22 @@ export interface BoardRenderState {
   invalidBuildLots?: number[];
   activePlayerId?: number;
   selectedShopType?: number | null;
+  /** Epoch time in ms driving pulses and floating animations. */
+  now?: number;
+  /** Candidate deeds dealt this epoch (Allocation phase). */
+  pendingLots?: number[];
+  /** Deeds the player has toggled but not yet confirmed. */
+  draftLots?: number[];
+  /** Projected cluster result shown next to the hovered valid build lot. */
+  buildPreview?: { lotId: number; text: string; complete: boolean } | null;
+  /** Floating yield badges raised during the Yield Harvest phase. */
+  floaters?: { lotId: number; text: string; start: number }[];
+  /** Rings that expand from freshly claimed parcels. */
+  claimFlashes?: { lotId: number; color: string; start: number }[];
 }
+
+export const FLOATER_MS = 1800;
+export const CLAIM_FLASH_MS = 900;
 
 export const PLAYER_COLORS: readonly string[] = Object.freeze([
   '#00C805', // Player 0: Robin Emerald
@@ -398,6 +413,8 @@ export class BoardRenderer {
       }
     }
 
+    this.renderAnimatedOverlays(ctx, state);
+
     // Hovered lot outline
     if (state.hoveredLotId !== null && state.hoveredLotId >= 0 && state.hoveredLotId < TOTAL_LOTS) {
       const def = LOT_DEFINITIONS[state.hoveredLotId];
@@ -412,6 +429,70 @@ export class BoardRenderer {
       ctx.strokeStyle = '#00C805';
       ctx.lineWidth = 3;
       ctx.strokeRect(def.x - 1, def.y - 1, CELL_SIZE + 2, CELL_SIZE + 2);
+    }
+  }
+
+  private renderAnimatedOverlays(ctx: Canvas2DContextLike, state: BoardRenderState): void {
+    const now = state.now ?? 0;
+
+    // Pulsing candidate deeds; confirmed picks get a solid frame
+    if (state.pendingLots && state.pendingLots.length > 0) {
+      const draft = new Set(state.draftLots ?? []);
+      const pulse = 0.5 + 0.5 * Math.sin(now / 250);
+      for (const id of state.pendingLots) {
+        const def = LOT_DEFINITIONS[id];
+        const picked = draft.has(id);
+        ctx.globalAlpha = picked ? 0.45 : 0.15 + 0.3 * pulse;
+        ctx.fillStyle = picked ? '#00C805' : DISTRICT_BLOCKS[def.block]?.accentHex ?? '#FFD700';
+        ctx.fillRect(def.x, def.y, CELL_SIZE, CELL_SIZE);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = picked ? '#00C805' : '#FFD700';
+        ctx.lineWidth = picked ? 3 : 1 + pulse * 1.5;
+        ctx.strokeRect(def.x - 1, def.y - 1, CELL_SIZE + 2, CELL_SIZE + 2);
+      }
+    }
+
+    // Expanding rings on freshly claimed parcels
+    for (const flash of state.claimFlashes ?? []) {
+      const t = (now - flash.start) / CLAIM_FLASH_MS;
+      if (t < 0 || t > 1) continue;
+      const def = LOT_DEFINITIONS[flash.lotId];
+      ctx.globalAlpha = 1 - t;
+      ctx.strokeStyle = flash.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(def.x + CELL_SIZE / 2, def.y + CELL_SIZE / 2, CELL_SIZE * (0.4 + t), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Projected cluster size while hovering a valid build target
+    const preview = state.buildPreview;
+    if (preview) {
+      const def = LOT_DEFINITIONS[preview.lotId];
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(11, 15, 25, 0.9)';
+      ctx.fillRect(def.x - 40, def.y - 18, CELL_SIZE + 80, 16);
+      ctx.fillStyle = preview.complete ? '#FFD700' : '#FFFFFF';
+      ctx.fillText(preview.text, def.x + CELL_SIZE / 2, def.y - 5);
+    }
+
+    // Floating yield badges rising above harvested clusters
+    for (const f of state.floaters ?? []) {
+      const t = (now - f.start) / FLOATER_MS;
+      if (t < 0 || t > 1) continue;
+      const def = LOT_DEFINITIONS[f.lotId];
+      ctx.globalAlpha = 1 - t * t;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#0B0F19';
+      ctx.fillText(f.text, def.x + CELL_SIZE / 2 + 1, def.y - 8 - t * 36 + 1);
+      ctx.fillStyle = '#00C805';
+      ctx.fillText(f.text, def.x + CELL_SIZE / 2, def.y - 8 - t * 36);
+      ctx.globalAlpha = 1;
     }
   }
 

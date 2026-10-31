@@ -14,27 +14,32 @@ import {
   TOTAL_LOTS,
   canBuildShop,
   findAllClusters,
+  findAllPlayerClusters,
 } from './engine/board-layout';
 import {
   BOT_PERSONALITIES,
   botDraft,
+  generateBotTradeOffer,
 } from './engine/bot';
 import {
   COMPLETE,
   INCOMPLETE,
   SHOPS,
   advancePhase,
+  applyTrade,
   beginBuild,
   buildTile,
   claimPlots,
   collectIncome,
   createGame,
   draftPlots,
+  groupIncome,
   nextYear,
   rankings,
+  validateOffer,
   startYear,
 } from './engine/engine';
-import type { GameConfig, GamePhase, GameState, Player } from './engine/types';
+import type { GameConfig, GamePhase, GameState, Player, TradeOffer } from './engine/types';
 import {
   BURN_ADDRESS,
   calculateMatchPayouts,
@@ -59,7 +64,7 @@ import {
   type RoomState,
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
-import { BoardRenderer, type BoardRenderState } from './ui/board';
+import { BoardRenderer, PLAYER_COLORS, type BoardRenderState } from './ui/board';
 import { CameraController } from './ui/camera';
 import {
   HudManager,
@@ -111,6 +116,12 @@ export class RobinTownApp {
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
   private isRulesModalOpen = false;
+  private isEpochSummaryOpen = false;
+  private isProposalsOpen = false;
+  private incomingOffers: TradeOffer[] = [];
+  private claimFlashes: { lotId: number; color: string; start: number }[] = [];
+  private floaters: { lotId: number; text: string; start: number }[] = [];
+  private epochSummary: { year: number; payouts: number[] } | null = null;
   private isRoomModalOpen = false;
   private roomCodeInput = '';
 
@@ -216,6 +227,12 @@ export class RobinTownApp {
         onDraftToggle: (lotId) => this.toggleDraftLot(lotId),
         onWalletClick: () => this.openWalletModal(),
         onRulesClick: () => this.openRulesModal(),
+        onPlayerClick: (playerId) => {
+          if (this.state.phase === 'trade' && playerId !== 0) this.openTradeDesk(playerId);
+        },
+        onDeedHover: (lotId) => {
+          this.hoveredLotId = lotId;
+        },
         onLobbyClick: () => this.openRoomModal(),
         onAudioToggle: () => {
           this.audio.toggleMute();
@@ -316,9 +333,33 @@ export class RobinTownApp {
       invalidBuildLots: invalidLots,
       activePlayerId: 0,
       selectedShopType: this.selectedShopType,
+      now: performance.now(),
+      pendingLots: this.state.phase === 'receive' ? this.state.pending ?? [] : [],
+      draftLots: this.selectedDraftLots,
+      buildPreview: this.computeBuildPreview(validLots),
+      floaters: this.floaters,
+      claimFlashes: this.claimFlashes,
     };
 
     this.boardRenderer.render(this.ctx, vp, renderState);
+  }
+
+  /** Projected cluster size and yield for the hovered build target. */
+  private computeBuildPreview(validLots: number[]): BoardRenderState['buildPreview'] {
+    const lotId = this.hoveredLotId;
+    if (lotId === null || this.selectedShopType === null || !validLots.includes(lotId)) return null;
+    const res = canBuildShop(this.state.lots, lotId, 0, this.selectedShopType);
+    if (!res.valid || res.resultingClusterSize === undefined) return null;
+    const target = SHOPS[this.selectedShopType].size;
+    const size = res.resultingClusterSize;
+    const before = size - 1;
+    const gain = groupIncome(this.selectedShopType, size) - groupIncome(this.selectedShopType, before);
+    const sign = gain >= 0 ? '+' : '';
+    return {
+      lotId,
+      complete: !!res.isComplete,
+      text: `${before}/${target} -> ${size}/${target}${res.isComplete ? ' COMPLETE!' : ''} ${sign}${gain} $wif/yr`,
+    };
   }
 
   private renderAll(): void {
@@ -352,6 +393,10 @@ export class RobinTownApp {
       const lotId = this.camera.hitTest(sx, sy);
       if (lotId !== this.hoveredLotId) {
         this.hoveredLotId = lotId;
+        this.container?.querySelectorAll('.deed-card').forEach((el) => {
+          const card = el as HTMLElement;
+          card.classList.toggle('spotlight', lotId !== null && card.dataset.draftLot === String(lotId));
+        });
       }
     });
 
@@ -389,7 +434,7 @@ export class RobinTownApp {
 
   private bindKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e) => {
-      if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen || this.isRulesModalOpen) {
+      if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen || this.isRulesModalOpen || this.isEpochSummaryOpen || this.isProposalsOpen) {
         if (e.key === 'Escape') {
           this.closeModals();
         }
@@ -487,8 +532,19 @@ export class RobinTownApp {
     }
 
     try {
+      const dealt = [...(this.state.pending ?? [])];
       draftPlots(this.state, 0, lotIds);
+      const start = performance.now();
+      this.claimFlashes = dealt
+        .filter((id) => this.state.lots[id].owner !== null)
+        .map((id) => ({
+          lotId: id,
+          color: PLAYER_COLORS[this.state.lots[id].owner as number] ?? '#FFFFFF',
+          start,
+        }));
       this.selectedDraftLots = [];
+      this.incomingOffers = this.collectBotProposals();
+      this.isProposalsOpen = this.incomingOffers.length > 0;
       this.tradeDeskController.updateGameState(this.state);
       this.audio.playPhaseFanfare();
       this.renderAll();
@@ -571,6 +627,11 @@ export class RobinTownApp {
     }
 
     this.audio.playCoinChime();
+    this.raiseYieldFloaters();
+    if ((this.state.phase as GamePhase) === 'income') {
+      this.epochSummary = { year: this.state.year, payouts: [...incomeResult.payouts] };
+      this.isEpochSummaryOpen = true;
+    }
     this.renderAll();
 
     const currentPhase = this.state.phase as GamePhase;
@@ -583,6 +644,55 @@ export class RobinTownApp {
       totalHarvest: playerHarvest,
       payouts: incomeResult.payouts,
     };
+  }
+
+  /** Floats a +XX $wif badge above each of the player's clusters, noting the staking boost. */
+  private raiseYieldFloaters(): void {
+    const start = performance.now();
+    this.floaters = findAllPlayerClusters(this.state.lots, 0).map((cluster, i) => {
+      const boosted = this.isStaked ? calculateStakingBoost(cluster.annualIncome, true) : cluster.annualIncome;
+      const suffix = this.isStaked && boosted !== cluster.annualIncome ? ` (${cluster.annualIncome} x1.20)` : '';
+      return { lotId: cluster.lots[0], text: `+${boosted} $wif${suffix}`, start: start + i * 250 };
+    });
+  }
+
+  /** Picks up to two valid, bot-initiated offers for the player's parcels. */
+  private collectBotProposals(): TradeOffer[] {
+    const offers: TradeOffer[] = [];
+    for (let botId = 1; botId < 4 && offers.length < 2; botId++) {
+      const offer = generateBotTradeOffer(botId, 0, this.state);
+      if (offer && validateOffer(this.state, offer)) offers.push(offer);
+    }
+    return offers;
+  }
+
+  public acceptProposal(index: number): boolean {
+    const offer = this.incomingOffers[index];
+    if (!offer || this.state.phase !== 'trade' || !validateOffer(this.state, offer)) {
+      this.audio.playErrorBuzzer();
+      return false;
+    }
+    applyTrade(this.state, offer);
+    this.incomingOffers.splice(index, 1);
+    this.isProposalsOpen = this.incomingOffers.length > 0;
+    this.tradeDeskController.updateGameState(this.state);
+    this.audio.playCoinChime();
+    this.renderAll();
+    return true;
+  }
+
+  public counterProposal(index: number): void {
+    const offer = this.incomingOffers[index];
+    if (!offer) return;
+    this.incomingOffers.splice(index, 1);
+    this.isProposalsOpen = false;
+    this.openTradeDesk(offer.fromPlayer);
+  }
+
+  public dismissProposal(index: number): void {
+    this.incomingOffers.splice(index, 1);
+    this.isProposalsOpen = this.incomingOffers.length > 0;
+    this.renderAll();
   }
 
   // Phase 5: Advance to next year or final settlement
@@ -684,6 +794,8 @@ export class RobinTownApp {
     this.isSettlementModalOpen = false;
     this.isRoomModalOpen = false;
     this.isRulesModalOpen = false;
+    this.isEpochSummaryOpen = false;
+    this.isProposalsOpen = false;
     this.renderAll();
   }
 
@@ -698,6 +810,16 @@ export class RobinTownApp {
     } else if (this.isSettlementModalOpen) {
       modalEl.innerHTML = this.renderSettlementModalHTML();
       this.bindSettlementModalEvents(modalEl);
+    } else if (this.isProposalsOpen) {
+      modalEl.innerHTML = this.renderProposalsModalHTML();
+      modalEl.addEventListener('click', this.handleProposalClick);
+    } else if (this.isEpochSummaryOpen) {
+      modalEl.innerHTML = this.renderEpochSummaryHTML();
+      modalEl.querySelector('[data-action="epoch-continue"]')?.addEventListener('click', () => {
+        this.isEpochSummaryOpen = false;
+        this.advanceToNextYear();
+      });
+      modalEl.querySelector('[data-modal-close]')?.addEventListener('click', () => this.closeModals());
     } else if (this.isRulesModalOpen) {
       modalEl.innerHTML = this.renderRulesModalHTML();
       modalEl.querySelector('[data-modal-close]')?.addEventListener('click', () => this.closeModals());
@@ -886,6 +1008,68 @@ export class RobinTownApp {
         this.startNewGame();
       }
     });
+  }
+
+  private handleProposalClick = (e: Event): void => {
+    const target = (e.target as HTMLElement).closest('[data-proposal-action], [data-modal-close]') as HTMLElement | null;
+    if (!target) return;
+    const modalEl = e.currentTarget as HTMLElement;
+    modalEl.removeEventListener('click', this.handleProposalClick);
+    if (target.dataset.modalClose) {
+      this.closeModals();
+      return;
+    }
+    const index = parseInt(target.dataset.proposalIndex as string, 10);
+    if (target.dataset.proposalAction === 'accept') this.acceptProposal(index);
+    else if (target.dataset.proposalAction === 'counter') this.counterProposal(index);
+    else this.dismissProposal(index);
+  };
+
+  private renderProposalsModalHTML(): string {
+    const rows = this.incomingOffers.map((offer, i) => {
+      const bot = this.state.players[offer.fromPlayer ?? 1];
+      const lots = offer.take.lots.map((id) => `Parcel ${id + 1}`).join(', ') || 'no parcels';
+      return `
+        <div class="proposal-row">
+          <p><strong>${bot.name}</strong> offers <strong>${offer.give.cash} $wif</strong> for your ${lots}.</p>
+          <button class="btn-primary" data-proposal-action="accept" data-proposal-index="${i}">Accept</button>
+          <button class="btn-secondary" data-proposal-action="counter" data-proposal-index="${i}">Counter</button>
+          <button class="btn-secondary" data-proposal-action="dismiss" data-proposal-index="${i}">Dismiss</button>
+        </div>`;
+    }).join('');
+    return `
+      <div class="modal-backdrop" data-modal-close="true"></div>
+      <div class="modal-dialog proposals-modal">
+        <div class="modal-header">
+          <h3>Incoming Trade Proposals</h3>
+          <button class="btn-close" data-modal-close="true">&times;</button>
+        </div>
+        <div class="modal-body">${rows}</div>
+      </div>
+    `;
+  }
+
+  private renderEpochSummaryHTML(): string {
+    const summary = this.epochSummary;
+    const rows = this.state.players.map((p) => `
+      <tr><td>${p.name}</td><td class="text-green">+${summary?.payouts[p.id] ?? 0}</td><td>${p.cash.toLocaleString()}</td></tr>`).join('');
+    const nextEpoch = (summary?.year ?? this.state.year) + 1;
+    return `
+      <div class="modal-backdrop" data-modal-close="true"></div>
+      <div class="modal-dialog epoch-summary-modal">
+        <div class="modal-header">
+          <h3>Epoch ${summary?.year ?? this.state.year} Summary</h3>
+          <button class="btn-close" data-modal-close="true">&times;</button>
+        </div>
+        <div class="modal-body">
+          <table class="payout-table">
+            <thead><tr><th>Trader</th><th>Yield</th><th>Balance ($wif)</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <button class="btn-primary" data-action="epoch-continue">Continue to Epoch ${nextEpoch}</button>
+        </div>
+      </div>
+    `;
   }
 
   private renderRulesModalHTML(): string {

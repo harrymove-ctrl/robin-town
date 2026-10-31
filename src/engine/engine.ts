@@ -560,15 +560,10 @@ export function evaluateOffer(state: GameState, offer: TradeOffer): TradeEvaluat
 }
 
 /**
- * Atomically executes trade if accepted.
+ * Moves the assets of an already-agreed trade between the two players.
+ * Callers are responsible for having validated and accepted the offer.
  */
-export function executeTrade(
-  state: GameState,
-  offer: TradeOffer
-): { state: GameState; evaluation: TradeEvaluation } {
-  const evaluation = evaluateOffer(state, offer);
-  if (!evaluation.accepted) return { state, evaluation };
-
+export function applyTrade(state: GameState, offer: TradeOffer): void {
   const proposer = state.players[offer.fromPlayer ?? 0];
   const partner = state.players[offer.toPlayer ?? offer.partner!];
 
@@ -602,6 +597,18 @@ export function executeTrade(
     state,
     `Order ${state.trades} FILLED: ${proposer.name} and ${partner.name} exchanged assets.`
   );
+}
+
+/**
+ * Atomically executes trade if accepted.
+ */
+export function executeTrade(
+  state: GameState,
+  offer: TradeOffer
+): { state: GameState; evaluation: TradeEvaluation } {
+  const evaluation = evaluateOffer(state, offer);
+  if (!evaluation.accepted) return { state, evaluation };
+  applyTrade(state, offer);
   return { state, evaluation };
 }
 

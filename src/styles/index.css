@@ -1140,3 +1140,21 @@ body {
   text-align: left;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
+
+.deed-card.spotlight {
+  outline: 2px solid #ffd700;
+  transform: translateY(-4px);
+}
+
+.player-card[data-player-id]:not([data-player-id="0"]) {
+  cursor: pointer;
+}
+
+.proposal-row {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.proposal-row button {
+  margin-right: 6px;
+}
