@@ -7,7 +7,8 @@
  */
 
 import { findAllPlayerClusters } from '../engine/board-layout';
-import type { GameState } from '../engine/types';
+import { SHOPS } from '../engine/engine';
+import type { GameState, OfferSide, TradeOffer } from '../engine/types';
 import { calculateStakingBoost } from '../tokenomics/flywheel';
 import { PLAYER_COLORS, type ClaimFlash, type HarvestGlow } from './board';
 
@@ -61,4 +62,25 @@ export function buildHarvestEffects(
     }
   }
   return { glows, floaters };
+}
+
+function describeSide(side: OfferSide): string {
+  const parts: string[] = [];
+  if (side.cash > 0) parts.push(`<strong>${side.cash} $wif</strong>`);
+  (side.tiles as number[]).forEach((n, s) => {
+    if (typeof n === 'number' && n > 0) parts.push(`<strong>${n}x ${SHOPS[s]?.name ?? 'tile'}</strong> tile${n > 1 ? 's' : ''}`);
+  });
+  for (const id of side.lots) parts.push(`<strong>Parcel ${id + 1}</strong>`);
+  return parts.join(' + ') || 'nothing';
+}
+
+/**
+ * One-line summary of an incoming bot proposal, written from the human's side
+ * (`offer.give` = what the human hands over, `offer.take` = what the bot pays).
+ */
+export function describeProposal(botName: string, offer: TradeOffer): string {
+  const swap = offer.give.cash === 0 && offer.take.cash === 0;
+  const verb = swap ? 'proposes a cluster swap' : 'offers';
+  const why = swap ? ' Both of you grow a cluster.' : '';
+  return `<strong>${botName}</strong> ${verb}: ${describeSide(offer.take)} for your ${describeSide(offer.give)}.${why}`;
 }

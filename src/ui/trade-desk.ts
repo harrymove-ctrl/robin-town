@@ -38,6 +38,14 @@ import type {
   TradeOffer,
 } from '../engine/types';
 
+/** Text of the stamp that slams onto the desk when a deal executes. */
+export const ORDER_FILLED_STAMP = 'ORDER FILLED';
+
+/** Bot acceptance threshold as shown on the desk, e.g. 1.00x / 1.15x / 0.95x. */
+export function formatMargin(margin: number): string {
+  return `${margin.toFixed(2)}x`;
+}
+
 export interface TradeDeskConfig {
   defaultPartnerId?: number;
   tradeTaxRate?: number;
@@ -119,17 +127,48 @@ export class TradeDeskController {
     this.recalculate();
   }
 
-  public open(partnerId?: number): void {
+  /**
+   * Opens the desk aimed at `partnerId`. When `lotId` is one of the partner's
+   * parcels it is preloaded into the take side (the partner is inferred from
+   * the parcel's owner if no partner is given).
+   */
+  public open(partnerId?: number, lotId?: number): void {
     if (this.state.phase !== 'trade') {
       throw new Error('OTC Liquidity Desk is available only during the Trade phase.');
     }
+    const lot = lotId !== undefined ? this.state.lots[lotId] : undefined;
+    if (partnerId === undefined && lot && lot.owner !== null) partnerId = lot.owner;
     this.deskState.isOpen = true;
     if (partnerId !== undefined && partnerId >= 1 && partnerId <= 3) {
       this.deskState.partnerId = partnerId;
     }
     this.deskState.give = emptyOffer();
     this.deskState.take = emptyOffer();
+    if (lot && lot.owner === this.deskState.partnerId) {
+      this.deskState.take.lots.push(lot.id);
+    }
     this.deskState.isFilledAnimationActive = false;
+    this.recalculate();
+  }
+
+  /**
+   * Opens the desk prefilled with an existing deal (e.g. to counter a bot's
+   * proposal). Assets the owner no longer holds are dropped and amounts are
+   * clamped to current balances.
+   */
+  public openWithOffer(partnerId: number, give: OfferSide, take: OfferSide): void {
+    this.open(partnerId);
+    const proposer = this.getProposer();
+    const partner = this.getPartner();
+    const clampSide = (side: OfferSide, owner: Player): OfferSide => ({
+      cash: Math.max(0, Math.min(Math.floor(side.cash || 0), owner.cash)),
+      tiles: [0, 1, 2, 3, 4, 5].map((s) =>
+        Math.max(0, Math.min(Math.floor(((side.tiles as number[])[s] as number) || 0), owner.tiles[s] ?? 0))
+      ),
+      lots: side.lots.filter((id) => this.state.lots[id]?.owner === owner.id),
+    });
+    this.deskState.give = clampSide(give, proposer);
+    this.deskState.take = clampSide(take, partner);
     this.recalculate();
   }
 
@@ -409,7 +448,7 @@ export class TradeDeskModal {
                 <img src="assets/avatars/${p.avatar}" class="avatar-sprite pixel-art" alt="${p.name}" />
                 <div class="partner-tab-info">
                   <span class="partner-name">${p.name}</span>
-                  <span class="partner-tag">${p.title} (${p.profitMargin}x)</span>
+                  <span class="partner-tag">${p.title} (${formatMargin(p.profitMargin)})</span>
                 </div>
               </button>
             `;
@@ -609,7 +648,7 @@ export class TradeDeskModal {
             <div class="quote-content">
               <span class="quote-author">${partner.name} (${partner.title}):</span>
               <div class="quote-badges">
-                <span class="persona-badge" title="Bot profit margin: the bot wants ${partner.profitMargin}x the value it gives up">${partner.name} wants ${partner.profitMargin}x</span>
+                <span class="persona-badge" title="Bot profit margin: the bot wants ${formatMargin(partner.profitMargin)} the value it gives up">${partner.name} wants ${formatMargin(partner.profitMargin)}</span>
                 ${evalResult
                   ? (evalResult.accepted
                     ? '<span class="verdict-badge accepted">Accepted</span>'
@@ -639,10 +678,10 @@ export class TradeDeskModal {
           </div>
         </footer>
 
-        <!-- Holographic FILLED Stamp Overlay -->
+        <!-- Holographic deal stamp overlay -->
         ${state.isFilledAnimationActive ? `
           <div class="deal-stamp-overlay animate-stamp">
-            <div class="stamp-box">FILLED!</div>
+            <div class="stamp-box">${ORDER_FILLED_STAMP}</div>
           </div>
         ` : ''}
       </div>

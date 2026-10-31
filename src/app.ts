@@ -65,7 +65,7 @@ import {
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
 import { BoardRenderer, FLOATER_MS, type BoardRenderState, type ClaimFlash, type HarvestGlow } from './ui/board';
-import { buildClaimFlashes, buildHarvestEffects, epochContinueLabel } from './ui/phase-fx';
+import { buildClaimFlashes, buildHarvestEffects, describeProposal, epochContinueLabel } from './ui/phase-fx';
 import { CameraController } from './ui/camera';
 import { ThreeBoardRenderer } from './ui/board-3d';
 import {
@@ -548,7 +548,7 @@ export class RobinTownApp {
     } else if (this.state.phase === 'trade') {
       const lot = this.state.lots[lotId];
       if (lot && lot.owner !== null && lot.owner !== 0) {
-        this.openTradeDesk(lot.owner);
+        this.openTradeDesk(lot.owner, lotId);
       }
     }
 
@@ -691,9 +691,10 @@ export class RobinTownApp {
   }
 
   // Phase 2: OTC Liquidity Desk
-  public openTradeDesk(partnerId?: number): void {
+  /** Opens the OTC desk aimed at `partnerId`, preloading `lotId` (one of their parcels) into the take side. */
+  public openTradeDesk(partnerId?: number, lotId?: number): void {
     if (this.state.phase !== 'trade') return;
-    this.tradeDeskController.open(partnerId);
+    this.tradeDeskController.open(partnerId, lotId);
     this.tradeDeskModal?.render();
   }
 
@@ -846,7 +847,10 @@ export class RobinTownApp {
     if (!offer) return;
     this.incomingOffers.splice(index, 1);
     this.isProposalsOpen = false;
-    this.openTradeDesk(offer.toPlayer);
+    // Start the negotiation from the bot's terms rather than an empty desk.
+    if (this.state.phase === 'trade') {
+      this.tradeDeskController.openWithOffer(offer.toPlayer ?? offer.partner ?? 1, offer.give, offer.take);
+    }
     this.renderAll();
   }
 
@@ -1188,10 +1192,9 @@ export class RobinTownApp {
   private renderProposalsModalHTML(): string {
     const rows = this.incomingOffers.map((offer, i) => {
       const bot = this.state.players[offer.toPlayer ?? 1];
-      const lots = offer.give.lots.map((id) => `Parcel ${id + 1}`).join(', ') || 'no parcels';
       return `
         <div class="proposal-row">
-          <p><strong>${bot.name}</strong> offers <strong>${offer.take.cash} $wif</strong> for your ${lots}.</p>
+          <p>${describeProposal(bot.name, offer)}</p>
           <button class="btn-primary" data-proposal-action="accept" data-proposal-index="${i}">Accept</button>
           <button class="btn-secondary" data-proposal-action="counter" data-proposal-index="${i}">Counter</button>
           <button class="btn-secondary" data-proposal-action="dismiss" data-proposal-index="${i}">Dismiss</button>
