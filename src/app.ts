@@ -236,6 +236,8 @@ export class RobinTownApp {
         },
         onDeedHover: (lotId) => {
           this.hoveredLotId = lotId;
+          // Hovering a deed card in the tray lifts its lot on the 3D board.
+          this.board3d?.setHighlightLot(lotId);
         },
         onLobbyClick: () => this.openRoomModal(),
         onAudioToggle: () => {
@@ -295,6 +297,7 @@ export class RobinTownApp {
       width: boardBox.clientWidth || window.innerWidth,
       height: boardBox.clientHeight || window.innerHeight,
       onSelectLot: (lotId) => this.handleLotClick(lotId),
+      onClusterComplete: () => this.audio.playCoinChime(),
       onHoverLot: (lotId) => {
         this.hoveredLotId = lotId;
         this.board3dKey = '';
@@ -325,6 +328,7 @@ export class RobinTownApp {
     const target = window as unknown as {
       __diorama?: {
         freeze(t: number): void;
+        unfreeze(): void;
         renderAt(t: number): void;
         getState(): unknown;
         projectLot(lotId: number): { x: number; y: number } | null;
@@ -333,6 +337,7 @@ export class RobinTownApp {
     };
     target.__diorama = {
       freeze: (t: number) => renderer.freeze(t),
+      unfreeze: () => renderer.unfreeze(),
       renderAt: (t: number) => renderer.renderAt(t),
       getState: () => renderer.getDioramaState(),
       projectLot: (lotId: number) => renderer.projectLotToNdc(lotId),
@@ -559,6 +564,10 @@ export class RobinTownApp {
 
       if (e.key === 'v' || e.key === 'V') {
         this.setBoard3dEnabled(!this.board3d);
+      } else if ((e.key === 'c' || e.key === 'C') && this.board3d) {
+        this.board3d.toggleCameraMode();
+      } else if ((e.key === 'r' || e.key === 'R') && this.board3d) {
+        this.board3d.resetCamera();
       } else if (e.key === 't' || e.key === 'T') {
         if (this.state.phase === 'trade') {
           this.openTradeDesk();
@@ -719,6 +728,11 @@ export class RobinTownApp {
     try {
       buildTile(this.state, 0, lotId, this.selectedShopType);
       this.audio.playTilePop();
+      // Build is done: drop the lot selection, and the module too once none are left.
+      this.selectedLotId = null;
+      if ((this.state.players[0].tiles[this.selectedShopType] ?? 0) <= 0) {
+        this.selectedShopType = null;
+      }
       this.renderAll();
       return true;
     } catch {

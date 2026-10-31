@@ -25,10 +25,13 @@ import {
   addStorefrontDetail,
   buildBaseSlab,
   buildDistrictCurb,
+  buildDistrictPlinth,
   createContactShadow,
+  isContactShadow,
 } from './diorama-detail';
 import { PALETTE_SIZE } from './diorama-palette';
 import { PixelPost } from './diorama-post';
+import { createLabelTexture } from './diorama-label';
 
 // Board spatial constants
 export const BOARD_ORIGIN_X = 550;
@@ -52,6 +55,78 @@ export const PLAYER_HEX_COLORS: readonly string[] = Object.freeze([
   '#29B6F6', // Player 2: Ocean Cyan
   '#FF7043', // Player 3: Sunset Coral
 ]);
+
+/** Valid build target: palette violet, distinct from every PLAYER_HEX_COLORS entry. */
+export const BUILDABLE_HIGHLIGHT_HEX = 0xa855f7;
+
+/** Vertical field of view of the perspective (orbit) camera, per the diorama spec. */
+export const PERSPECTIVE_FOV = 20.5;
+const PERSPECTIVE_ELEVATION = (35 * Math.PI) / 180;
+
+/** The orthographic camera sits at a fixed distance; only its zoom changes. */
+const ORTHO_DISTANCE = 600;
+const PAN_LIMIT_X = 600;
+const PAN_LIMIT_Z = 420;
+const ORTHO_ZOOM_MIN = 0.6;
+const ORTHO_ZOOM_MAX = 4;
+
+// Tween timings, all measured on the deterministic animation clock (ms).
+const BUILD_RISE_MS = 420;
+const SINK_MS = 320;
+
+// Ambient life
+const MOTE_COUNT = 90;
+const MOTE_CEILING = 160;
+const WALK_HALF_W = 126;
+const WALK_HALF_D = 132;
+const WALK_LOOP = 2 * (2 * WALK_HALF_W + 2 * WALK_HALF_D);
+const DAY_SUN_HEX = 0xfff2d6;
+const DUSK_SUN = new THREE.Color(0x8fa8ff);
+
+// Owner flag pieces are shared by all 72 parcels.
+const FLAG_POLE_GEOM = new THREE.CylinderGeometry(0.6, 0.6, 18, 6);
+const FLAG_CLOTH_GEOM = new THREE.BoxGeometry(9, 6, 0.8);
+const FLAG_POLE_MAT = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.5, metalness: 0.4 });
+
+/** CSS pixels per label texel; labels keep this size on screen at any zoom. */
+const LABEL_CSS_PX_PER_TEXEL = 2;
+
+/** Ease-out-back: overshoots slightly before settling at 1. */
+export function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const x = Math.min(Math.max(t, 0), 1);
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+/**
+ * Point on the street loop around a district (half-extents 126 x 132) at
+ * distance `d` along its perimeter.
+ */
+export function perimeterPoint(d: number): [number, number] {
+  const w = 2 * WALK_HALF_W;
+  const h = 2 * WALK_HALF_D;
+  let t = ((d % WALK_LOOP) + WALK_LOOP) % WALK_LOOP;
+  if (t < w) return [-WALK_HALF_W + t, -WALK_HALF_D];
+  t -= w;
+  if (t < h) return [WALK_HALF_W, -WALK_HALF_D + t];
+  t -= h;
+  if (t < w) return [WALK_HALF_W - t, WALK_HALF_D];
+  t -= w;
+  return [-WALK_HALF_W, WALK_HALF_D - t];
+}
+
+/** Small deterministic PRNG so ambient layouts repeat exactly between runs. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 // Shop category definitions for 3D procedural construction
 export interface ShopVisualCategory {
@@ -131,6 +206,17 @@ export function orthoFrustumHeight(aspect: number): number {
     (slabWidth * Math.abs(Math.sin(az)) + slabDepth * Math.abs(Math.cos(az))) * Math.sin(el) + 60;
   const fit = 1.06;
   return Math.max(vertical * fit, (horizontal * fit) / Math.max(aspect, 0.1));
+}
+
+/**
+ * Distance at which the narrow-lens perspective camera frames the same view
+ * height as the orthographic diorama view. The extra factor covers the near
+ * edge of the slab, which perspective draws slightly larger.
+ */
+export function perspectiveFitDistance(aspect: number, fovDeg = PERSPECTIVE_FOV): number {
+  const halfHeight = orthoFrustumHeight(aspect) / 2;
+  const halfFov = (fovDeg * Math.PI) / 360;
+  return (halfHeight / Math.tan(halfFov)) * 1.12;
 }
 
 /**
@@ -238,6 +324,16 @@ export function isWebGLAvailable(): boolean {
   }
 }
 
+/** Roof point (x, y, z) per shop category where the blinking beacon mast stands. */
+const ROOFTOP_BEACON_SPOTS: readonly [number, number, number][] = [
+  [16, 18, -16], // DEX Swap: mezzanine corner
+  [16, 16, -16], // Memecoin Lounge: parapet corner
+  [11, 24, -11], // Staking Vault: lock cap corner
+  [0, 27, 0], // Lending Protocol: pediment apex
+  [7, 36, -7], // Derivatives Exchange: top tier corner
+  [17, 24, -17], // Validator Citadel: turret top
+];
+
 /**
  * Procedural building factory for the 6 protocol shop categories.
  */
@@ -294,12 +390,7 @@ export function createShopBuilding(
       pedestal.position.y = 19.5;
       group.add(pedestal);
 
-      const dishGeom = new THREE.CylinderGeometry(7, 3, 2, 8);
-      const dish = new THREE.Mesh(dishGeom, mainMat);
-      dish.position.set(0, 22, 0);
-      dish.rotation.x = Math.PI / 6;
-      group.add(dish);
-
+      // The parabolic satellite dish itself sits on its struts in the detail pass.
       const antennaGeom = new THREE.CylinderGeometry(0.4, 0.4, 8, 4);
       const antenna = new THREE.Mesh(antennaGeom, trimMat);
       antenna.position.set(6, 22, -6);
@@ -455,6 +546,19 @@ export function createShopBuilding(
   // Passes 2 and 3 of the Detail Bar: construction assemblies, then story details.
   addStorefrontDetail(group, shopType, { main: mainMat, dark: darkMat, trim: trimMat }, isComplete);
 
+  // Blinking rooftop beacon on a short mast at a roof corner (blink driven by the renderer clock).
+  const beaconSpot = ROOFTOP_BEACON_SPOTS[shopType] ?? ROOFTOP_BEACON_SPOTS[0];
+  const beaconMast = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 3, 4), darkMat);
+  beaconMast.name = 'RooftopBeaconMast';
+  beaconMast.position.set(beaconSpot[0], beaconSpot[1] + 1.5, beaconSpot[2]);
+  const beacon = new THREE.Mesh(
+    new THREE.OctahedronGeometry(1.4),
+    new THREE.MeshBasicMaterial({ color: 0xff3b5c })
+  );
+  beacon.name = 'RooftopBeacon';
+  beacon.position.set(beaconSpot[0], beaconSpot[1] + 4, beaconSpot[2]);
+  group.add(beaconMast, beacon);
+
   // Contact shadow anchors the building to its parcel.
   const buildingShadow = createContactShadow(60, 0.62, 'ContactShadow');
   buildingShadow.position.set(0, -0.85, 0);
@@ -503,6 +607,8 @@ export interface Board3DOptions {
   height?: number;
   onSelectLot?: (lotId: number) => void;
   onHoverLot?: (lotId: number | null) => void;
+  /** Fired when a cluster becomes complete (not on the initial sync). */
+  onClusterComplete?: () => void;
   /**
    * Apply the diorama post pass (64-colour palette, ordered dither, inked
    * contours). Defaults to true; `?post=off` in the page URL turns it off.
@@ -527,6 +633,31 @@ export interface DioramaState {
   contactShadows: number;
   selectedLot: number | null;
   hoveredLot: number | null;
+  ownerFlags: number;
+  labels: number;
+  zoom: number;
+  cameraTarget: { x: number; z: number };
+}
+
+/** Short-lived expanding ring burst (build dust, cluster-complete shockwave). */
+interface RingEffect {
+  mesh: THREE.Mesh;
+  start: number;
+  duration: number;
+  maxScale: number;
+}
+
+/** Demolished building sinking before removal. */
+interface SinkingBuilding {
+  group: THREE.Group;
+  start: number;
+}
+
+interface Walker {
+  group: THREE.Group;
+  district: number;
+  offset: number;
+  speed: number;
 }
 
 /**
@@ -607,6 +738,35 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private parcelMaterials: THREE.MeshStandardMaterial[] = [];
   private buildingMeshes = new Map<number, THREE.Group>();
 
+  // Tweened parcel heights, pulsing highlights, flags and labels
+  private lotCurrentY: number[] = [];
+  private lotTargetY: number[] = [];
+  private lotPulseBase: number[] = [];
+  private lotPulseAmp: number[] = [];
+  private ownerFlags: THREE.Group[] = [];
+  private ownerFlagCloths: THREE.Mesh[] = [];
+  private labelScene = new THREE.Scene();
+  private labelSprites = new Map<number, THREE.Sprite>();
+  private effects: RingEffect[] = [];
+  private sinking: SinkingBuilding[] = [];
+  private completeSignature: string | null = null;
+  private clusterSignature: string | null = null;
+  private goldenRebuilds = 0;
+  private highlightLotId: number | null = null;
+  private lastRender: { state: GameState; selected: number | null; overlay: Board3DOverlay } | null =
+    null;
+
+  // Ambient backdrop and life
+  private ambientGroup: THREE.Group;
+  private motes: THREE.Points | null = null;
+  private moteSeeds: { x: number; y: number; z: number; speed: number }[] = [];
+  private walkers: Walker[] = [];
+  private sunLight: THREE.DirectionalLight | null = null;
+  private ambientLight: THREE.AmbientLight | null = null;
+  private districtLights: THREE.PointLight[] = [];
+  private targetDusk = 0;
+  private dusk = 0;
+
   // Interactive Selection and Hover State
   private selectedLotId: number | null = null;
   private hoveredLotId: number | null = null;
@@ -616,6 +776,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private pointerDownPos = { x: 0, y: 0, time: 0 };
   private isPointerDown = false;
   private isDragging = false;
+  private isPanning = false;
   private readonly DRAG_THRESHOLD_PX = 5;
   private readonly CLICK_TIME_LIMIT_MS = 600;
 
@@ -624,6 +785,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   private onPointerMoveBound: (e: PointerEvent) => void;
   private onPointerUpBound: (e: PointerEvent) => void;
   private onWheelBound: (e: WheelEvent) => void;
+  private onContextMenuBound: (e: Event) => void;
   private onResizeBound: () => void;
 
   constructor(options: Board3DOptions) {
@@ -665,7 +827,9 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       this.buildingGroup,
       this.goldenAuraGroup
     );
-    this.scene.add(this.boardGroup, this.lightingGroup);
+    this.ambientGroup = new THREE.Group();
+    this.ambientGroup.name = 'AmbientGroup';
+    this.scene.add(this.boardGroup, this.lightingGroup, this.ambientGroup);
 
     // Initialize dual cameras
     const aspect = this.width / this.height;
@@ -679,7 +843,8 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       2000
     );
 
-    this.perspCamera = new THREE.PerspectiveCamera(38, aspect, 1, 2000);
+    // Narrow lens, pulled back far enough to frame the whole slab.
+    this.perspCamera = new THREE.PerspectiveCamera(PERSPECTIVE_FOV, aspect, 20, 9000);
     this.activeCamera = this.orthoCamera;
     this.updateCameraPositions();
 
@@ -695,12 +860,18 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     // Setup 72 parcel meshes
     this.setupParcelMeshes();
     this.setupLotShadows();
+    this.applyShadowFlags(this.baseGroup, false, true);
+    this.applyShadowFlags(this.districtGroup, false, true);
+
+    // Ground glow, drifting motes and street walkers around the slab
+    this.setupAmbient();
 
     // Bind event handlers
     this.onPointerDownBound = this.handlePointerDown.bind(this);
     this.onPointerMoveBound = this.handlePointerMove.bind(this);
     this.onPointerUpBound = this.handlePointerUp.bind(this);
     this.onWheelBound = this.handleWheel.bind(this);
+    this.onContextMenuBound = (e: Event) => e.preventDefault();
     this.onResizeBound = () => {
       if (this.options.container) {
         const rect = this.options.container.getBoundingClientRect();
@@ -721,11 +892,24 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     const sunLight = new THREE.DirectionalLight(0xfff2d6, 1.2);
     sunLight.name = 'SunLight';
     sunLight.position.set(300, 600, 400);
+    // Real cast shadows from the sun; the soft contact shadows stay as anchors.
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.camera.left = -700;
+    sunLight.shadow.camera.right = 700;
+    sunLight.shadow.camera.top = 560;
+    sunLight.shadow.camera.bottom = -560;
+    sunLight.shadow.camera.near = 100;
+    sunLight.shadow.camera.far = 1600;
+    sunLight.shadow.bias = -0.0006;
+    sunLight.shadow.normalBias = 0.6;
 
     const fillLight = new THREE.DirectionalLight(0x7aa2f7, 0.5);
     fillLight.name = 'FillLight';
     fillLight.position.set(-300, 300, -200);
 
+    this.sunLight = sunLight;
+    this.ambientLight = ambientLight;
     this.lightingGroup.add(ambientLight, sunLight, fillLight);
 
     // Add subtle colored point lights above each of the 6 districts
@@ -734,7 +918,138 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       const districtLight = new THREE.PointLight(district.accentHex, 0.55, 180);
       districtLight.name = `DistrictLight_${district.id}`;
       districtLight.position.set(slabCenter[0], 35.0, slabCenter[2]);
+      this.districtLights.push(districtLight);
       this.lightingGroup.add(districtLight);
+    }
+  }
+
+  /** Set cast / receive shadow flags on every solid mesh under `root`. */
+  private applyShadowFlags(root: THREE.Object3D, cast: boolean, receive: boolean): void {
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || isContactShadow(mesh)) return;
+      const mat = mesh.material as THREE.Material;
+      if (mat && mat.transparent) return;
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+    });
+  }
+
+  /**
+   * Backdrop around the slab: stepped ground glow (flat palette rings, so the
+   * pixel pass bands it cleanly), drifting light motes, and
+   * tiny pedestrians strolling the street loop around each district. Everything
+   * is seeded, and animated as a pure function of the clock.
+   */
+  private setupAmbient(): void {
+    const groundY = ELEVATION_DISTRICT - 15.5;
+    // One soft step only: every extra ring edge adds staircase speckle under the dither.
+    const rings: [number, number][] = [[900, 0x111827]];
+    rings.forEach(([radius, hex], i) => {
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(radius, 48),
+        new THREE.MeshBasicMaterial({ color: hex, depthWrite: false })
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.scale.set(1, 0.72, 1); // elliptical, follows the wide board
+      disc.position.y = groundY + i * 0.15;
+      disc.renderOrder = -10 + i;
+      disc.name = `GroundGlow_${i}`;
+      this.ambientGroup.add(disc);
+    });
+
+    // No table grid: at the 45 deg diorama azimuth its 1-px diagonal lines
+    // break into single-pixel islands under the pixel pass (flat-area contract).
+
+    // Motes rise and wrap, like pixels of data drifting off the city.
+    const rand = mulberry32(0x5eed);
+    this.moteSeeds = [];
+    const positions = new Float32Array(MOTE_COUNT * 3);
+    for (let i = 0; i < MOTE_COUNT; i++) {
+      const seed = {
+        x: (rand() - 0.5) * 1200,
+        y: rand() * MOTE_CEILING,
+        z: (rand() - 0.5) * 820,
+        speed: 6 + rand() * 8,
+      };
+      this.moteSeeds.push(seed);
+      positions[i * 3] = seed.x;
+      positions[i * 3 + 1] = seed.y;
+      positions[i * 3 + 2] = seed.z;
+    }
+    const moteGeom = new THREE.BufferGeometry();
+    moteGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.motes = new THREE.Points(
+      moteGeom,
+      new THREE.PointsMaterial({
+        color: 0x7ad2f9,
+        size: 2,
+        sizeAttenuation: false,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+      })
+    );
+    this.motes.name = 'DriftMotes';
+    this.ambientGroup.add(this.motes);
+
+    // Pedestrians: chunky enough to survive the pixel pass as 2x3 sprites.
+    const bodyGeom = new THREE.BoxGeometry(3.2, 5, 3.2);
+    const headGeom = new THREE.BoxGeometry(2.6, 2.6, 2.6);
+    const coats = [0xf3f4f6, 0xeec353, 0x29b6f6, 0xff7043, 0x00c805, 0xab47bc];
+    const skin = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.8 });
+    const streetY = ELEVATION_DISTRICT - 0.4;
+    for (const district of DISTRICT_BLOCKS) {
+      for (let n = 0; n < 3; n++) {
+        const walker = new THREE.Group();
+        walker.name = `Walker_${district.id}_${n}`;
+        const body = new THREE.Mesh(
+          bodyGeom,
+          new THREE.MeshStandardMaterial({ color: coats[(district.id + n) % coats.length], roughness: 0.7 })
+        );
+        body.position.y = 2.5;
+        body.castShadow = true;
+        const head = new THREE.Mesh(headGeom, skin);
+        head.position.y = 6.3;
+        walker.add(body, head);
+        walker.position.y = streetY;
+        this.ambientGroup.add(walker);
+        this.walkers.push({
+          group: walker,
+          district: district.id,
+          offset: (n / 3) * WALK_LOOP + district.id * 40,
+          speed: (n % 2 === 0 ? 1 : -1) * (10 + n * 3),
+        });
+      }
+    }
+    this.updateAmbientLife(0, 0);
+  }
+
+  /** Motes, walkers and rooftop beacons at clock time `timeSec` (seconds). */
+  private updateAmbientLife(timeSec: number, _dt: number): void {
+    if (this.motes) {
+      const attr = this.motes.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < this.moteSeeds.length; i++) {
+        const s = this.moteSeeds[i];
+        const y = (s.y + s.speed * timeSec) % MOTE_CEILING;
+        attr.setXYZ(i, s.x + Math.sin(timeSec * 0.5 + i) * 6, y, s.z);
+      }
+      attr.needsUpdate = true;
+    }
+
+    const streetY = ELEVATION_DISTRICT - 0.4;
+    for (const w of this.walkers) {
+      const d = w.offset + w.speed * timeSec;
+      const center = this.getDistrictCenter3D(DISTRICT_BLOCKS[w.district]);
+      const [px, pz] = perimeterPoint(d);
+      const [ax, az] = perimeterPoint(d + Math.sign(w.speed));
+      w.group.position.set(center[0] + px, streetY + Math.abs(Math.sin(timeSec * 8 + w.offset)) * 0.6, center[2] + pz);
+      w.group.rotation.y = Math.atan2(ax - px, az - pz);
+    }
+
+    for (const [lotId, building] of this.buildingMeshes) {
+      const beacon = building.getObjectByName('RooftopBeacon');
+      if (beacon) beacon.visible = Math.sin(timeSec * 3 + lotId * 1.7) > -0.3;
     }
   }
 
@@ -808,6 +1123,18 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     });
     this.baseGroup.add(base);
 
+    // A bevelled stone plinth per district block, standing on the base slab
+    // under the district slab and its parcels.
+    const plinths = new THREE.Group();
+    plinths.name = 'DistrictPlinths';
+    for (const district of DISTRICT_BLOCKS) {
+      const center = this.getDistrictCenter3D(district);
+      const plinth = buildDistrictPlinth(center, 224, 236, ELEVATION_DISTRICT - 1.0 + 0.6, center[1] + 0.9);
+      plinth.name = `DistrictPlinth_${district.id}`;
+      plinths.add(plinth);
+    }
+    this.baseGroup.add(plinths);
+
     for (const district of DISTRICT_BLOCKS) {
       const center = this.getDistrictCenter3D(district);
       this.baseGroup.add(
@@ -857,6 +1184,31 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       this.parcelMaterials[lotId] = mat;
 
       const mesh = new THREE.Mesh(sharedGeom, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.lotCurrentY[lotId] = ELEVATION_PARCEL_BASE;
+      this.lotTargetY[lotId] = ELEVATION_PARCEL_BASE;
+      this.lotPulseBase[lotId] = 0;
+      this.lotPulseAmp[lotId] = 0;
+
+      // Owner flag on the parcel's west-front corner, outside the building
+      // footprint, so ownership stays readable once a shop covers the lot.
+      const flag = new THREE.Group();
+      flag.name = `OwnerFlag_${lotId}`;
+      const pole = new THREE.Mesh(FLAG_POLE_GEOM, FLAG_POLE_MAT);
+      pole.position.y = 9;
+      pole.castShadow = true;
+      const cloth = new THREE.Mesh(FLAG_CLOTH_GEOM, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      cloth.name = 'OwnerFlagCloth';
+      cloth.position.set(4.8, 15, 0);
+      cloth.castShadow = true;
+      flag.add(pole, cloth);
+      flag.position.set(-21.5, parcelHeight / 2, 21.5);
+      flag.visible = false;
+      mesh.add(flag);
+      this.ownerFlags[lotId] = flag;
+      this.ownerFlagCloths[lotId] = cloth;
+
       mesh.name = `ParcelMesh_${lotId}`;
       mesh.position.set(pos[0], pos[1], pos[2]);
       mesh.userData = { lotId, blockId: def.block };
@@ -875,21 +1227,20 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     const sinAzim = Math.sin(this.cameraAzimuth);
     const cosAzim = Math.cos(this.cameraAzimuth);
 
-    const offsetX = this.cameraDistance * cosElev * sinAzim;
-    const offsetY = this.cameraDistance * sinElev;
-    const offsetZ = this.cameraDistance * cosElev * cosAzim;
+    const dir = new THREE.Vector3(cosElev * sinAzim, sinElev, cosElev * cosAzim);
 
-    const cameraPos = new THREE.Vector3(
-      this.cameraTarget.x + offsetX,
-      this.cameraTarget.y + offsetY,
-      this.cameraTarget.z + offsetZ
-    );
-
-    this.orthoCamera.position.copy(cameraPos);
+    // The ortho camera keeps a fixed distance (its framing comes from zoom);
+    // the perspective camera dollies.
+    this.orthoCamera.position.copy(this.cameraTarget).addScaledVector(dir, ORTHO_DISTANCE);
     this.orthoCamera.lookAt(this.cameraTarget);
 
-    this.perspCamera.position.copy(cameraPos);
+    this.perspCamera.position.copy(this.cameraTarget).addScaledVector(dir, this.cameraDistance);
     this.perspCamera.lookAt(this.cameraTarget);
+  }
+
+  /** Perspective distance that frames the slab at the current aspect. */
+  private perspectiveDistance(): number {
+    return perspectiveFitDistance(this.width / this.height, this.perspCamera.fov);
   }
 
   /**
@@ -901,19 +1252,33 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     }
 
     try {
+      const params = new URLSearchParams(window.location.search);
+      const wantPost = this.useDiorama && params.get('post') !== 'off';
       this.renderer = new THREE.WebGLRenderer({
-        antialias: true,
+        // The post pass renders through its own non-multisampled target; MSAA on
+        // the screen buffer would only blend the label sprites' edges off-palette.
+        antialias: !wantPost,
         alpha: true,
         powerPreference: 'high-performance',
       });
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFShadowMap;
+      // ACES applies on the direct path; the diorama post pass applies the
+      // same curve itself, because three.js skips tone mapping off-screen.
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      // ACES has a strong toe; lift exposure so the dark slab keeps its tones.
+      this.renderer.toneMappingExposure = 1.6;
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.setSize(this.width, this.height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
-      const postOff =
-        typeof window !== 'undefined' &&
-        new URLSearchParams(window.location.search).get('post') === 'off';
-      if (this.useDiorama && !postOff) {
-        this.post = new PixelPost(this.renderer, { pixelSize: 2 });
+      if (params.get('tone') === 'off') this.renderer.toneMapping = THREE.NoToneMapping;
+      const exposureParam = Number(params.get('exposure'));
+      if (exposureParam > 0) this.renderer.toneMappingExposure = exposureParam;
+      const exposure =
+        this.renderer.toneMapping === THREE.ACESFilmicToneMapping ? this.renderer.toneMappingExposure : 0;
+      if (wantPost) {
+        this.post = new PixelPost(this.renderer, { pixelSize: 2, exposure });
         this.post.setSize(this.width, this.height);
       } else {
         this.useDiorama = false;
@@ -938,6 +1303,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       domElement.addEventListener('pointermove', this.onPointerMoveBound);
       domElement.addEventListener('pointerup', this.onPointerUpBound);
       domElement.addEventListener('wheel', this.onWheelBound, { passive: false });
+      domElement.addEventListener('contextmenu', this.onContextMenuBound);
       window.addEventListener('resize', this.onResizeBound);
 
       // Start animation loop
@@ -962,13 +1328,20 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   }
 
   /**
-   * Update continuous animations: golden auras, camera transition lerp, target lerps.
+   * Update continuous animations: parcel height tweens, building rise / sink,
+   * pulsing highlights, ring bursts, golden auras, ambient life, day-to-night
+   * drift and camera lerps. Everything reads the animation clock `timestamp`;
+   * while the clock is frozen, tweens snap to their end state so a frozen
+   * frame depends only on `t`.
    */
   private updateAnimations(timestamp: number): void {
-    // Golden aura pulsating bob and rotation
-    // All animation is a pure function of the clock so frozen frames repeat exactly.
+    const frozen = this.frozenTime !== null;
+    const prev = this.lastTime;
     this.lastTime = timestamp;
+    const dt = frozen ? 0 : Math.min(Math.max((timestamp - prev) / 1000, 0), 0.1);
+    const follow = frozen ? 1 : 1 - Math.exp(-dt * 14);
     const timeSec = timestamp * 0.001;
+
     for (const child of this.goldenAuraGroup.children) {
       if (child.name.startsWith('GoldenCrown_')) {
         child.rotation.y = timeSec * 1.2;
@@ -990,13 +1363,79 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       }
     }
 
-    if (this.frozenTime !== null) {
+    // Parcels ease toward their target height; buildings, shadows and labels ride along.
+    for (let lotId = 0; lotId < TOTAL_LOTS; lotId++) {
+      const mesh = this.parcelHitMeshes[lotId];
+      const target = this.lotTargetY[lotId];
+      const current = this.lotCurrentY[lotId];
+      this.lotCurrentY[lotId] =
+        Math.abs(target - current) > 0.001 ? current + (target - current) * follow : target;
+      mesh.position.y = this.lotCurrentY[lotId];
+      this.updateLotShadow(lotId);
+
+      const amp = this.lotPulseAmp[lotId];
+      if (amp > 0) {
+        this.parcelMaterials[lotId].emissiveIntensity =
+          this.lotPulseBase[lotId] + amp * Math.sin(timeSec * 4 + lotId);
+      }
+
+      const building = this.buildingMeshes.get(lotId);
+      if (building) {
+        building.position.y = this.lotCurrentY[lotId] + 1.0;
+        const birth = building.userData.birth as number | undefined;
+        if (birth !== undefined) {
+          const baseScaleY = building.userData.baseScaleY as number;
+          const t = (timestamp - birth) / BUILD_RISE_MS;
+          if (frozen || t >= 1 || t < 0) {
+            building.scale.y = baseScaleY;
+            delete building.userData.birth;
+          } else {
+            building.scale.y = Math.max(0.001, baseScaleY * easeOutBack(t));
+          }
+        }
+      }
+    }
+
+    // Demolished buildings sink, then are removed.
+    this.sinking = this.sinking.filter((entry) => {
+      const t = (timestamp - entry.start) / SINK_MS;
+      if (frozen || t >= 1 || t < 0) {
+        this.buildingGroup.remove(entry.group);
+        disposeHierarchy(entry.group);
+        return false;
+      }
+      entry.group.scale.y = Math.max(0.001, (entry.group.userData.baseScaleY as number) * (1 - t * t));
+      return true;
+    });
+
+    // Expanding ring bursts.
+    this.effects = this.effects.filter((fx) => {
+      const t = (timestamp - fx.start) / fx.duration;
+      if (frozen || t >= 1 || t < 0) {
+        this.boardGroup.remove(fx.mesh);
+        disposeHierarchy(fx.mesh);
+        return false;
+      }
+      const scale = 1 + (fx.maxScale - 1) * (1 - Math.pow(1 - t, 3));
+      fx.mesh.scale.set(scale, 1, scale);
+      (fx.mesh.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - t);
+      return true;
+    });
+
+    // Day to night drift across the six epochs.
+    this.dusk = frozen ? this.targetDusk : this.dusk + (this.targetDusk - this.dusk) * (1 - Math.exp(-dt * 1.5));
+    this.applyDusk();
+
+    this.updateAmbientLife(timeSec, dt);
+
+    if (frozen) {
       // Frozen frames snap the camera instead of easing, so repeats are identical.
       this.isTransitioning = false;
       this.cameraTarget.copy(this.targetCameraTarget);
       this.cameraDistance = this.targetCameraDistance;
       this.activeCamera = this.cameraMode === 'isometric' ? this.orthoCamera : this.perspCamera;
       this.updateCameraPositions();
+      this.updateLabelTransforms();
       return;
     }
 
@@ -1031,15 +1470,71 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     }
 
     this.updateCameraPositions();
+    this.updateLabelTransforms();
   }
 
-  /** Draw the scene once, through the diorama post pass when enabled. */
+  /** Sun, ambient and district lights for the current dusk amount (0 day .. 1 night). */
+  private applyDusk(): void {
+    if (this.sunLight && this.ambientLight) {
+      this.sunLight.intensity = 1.2 - 0.45 * this.dusk;
+      this.sunLight.color.setHex(DAY_SUN_HEX).lerp(DUSK_SUN, this.dusk);
+      this.ambientLight.intensity = 0.7 - 0.12 * this.dusk;
+    }
+    for (const light of this.districtLights) {
+      light.intensity = 0.55 + 0.45 * this.dusk;
+    }
+  }
+
+  /** Contact shadow under a parcel grows and softens as the parcel lifts. */
+  private updateLotShadow(lotId: number): void {
+    const shadow = this.lotShadows[lotId];
+    if (!shadow) return;
+    const lift = Math.max(0, this.lotCurrentY[lotId] - ELEVATION_PARCEL_BASE);
+    shadow.scale.setScalar(1 + lift * 0.12);
+    (shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.28, 0.5 - lift * 0.08);
+  }
+
+  /**
+   * Spawn a flat expanding ring on the parcels at a world position. Skipped
+   * when the clock is not running live (headless, frozen QA frames).
+   */
+  private spawnRing(x: number, z: number, color: number, radius: number, maxScale: number, duration: number): void {
+    if (!this.isAnimating()) return;
+    const geom = new THREE.RingGeometry(radius * 0.8, radius, 40);
+    geom.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, ELEVATION_PARCEL_BASE + 2.2, z);
+    mesh.name = 'RingEffect';
+    this.boardGroup.add(mesh);
+    this.effects.push({ mesh, start: this.lastTime, duration, maxScale });
+  }
+
+  /** True while the live render loop runs; otherwise state changes snap instead of tweening. */
+  private isAnimating(): boolean {
+    return this.animFrameId !== null && this.frozenTime === null;
+  }
+
+  /** Draw the scene once, through the diorama post pass when enabled, then the labels. */
   private drawFrame(): void {
     if (!this.renderer) return;
     if (this.post) {
       this.post.render(this.scene, this.activeCamera);
     } else {
       this.renderer.render(this.scene, this.activeCamera);
+    }
+    if (this.labelScene.children.some((c) => c.visible)) {
+      // Labels skip the palette / ink pass so their pixel font stays crisp.
+      const autoClear = this.renderer.autoClear;
+      this.renderer.autoClear = false;
+      this.renderer.render(this.labelScene, this.activeCamera);
+      this.renderer.autoClear = autoClear;
     }
   }
 
@@ -1088,6 +1583,10 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       contactShadows: this.lotShadows.length + this.buildingMeshes.size,
       selectedLot: this.selectedLotId,
       hoveredLot: this.hoveredLotId,
+      ownerFlags: this.ownerFlags.filter((f) => f.visible).length,
+      labels: [...this.labelSprites.values()].filter((l) => l.visible).length,
+      zoom: this.orthoCamera.zoom,
+      cameraTarget: { x: this.targetCameraTarget.x, z: this.targetCameraTarget.z },
     };
   }
 
@@ -1118,6 +1617,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       el.removeEventListener('pointermove', this.onPointerMoveBound);
       el.removeEventListener('pointerup', this.onPointerUpBound);
       el.removeEventListener('wheel', this.onWheelBound);
+      el.removeEventListener('contextmenu', this.onContextMenuBound);
       if (typeof window !== 'undefined') {
         window.removeEventListener('resize', this.onResizeBound);
       }
@@ -1137,6 +1637,14 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       disposeHierarchy(building);
     }
     this.buildingMeshes.clear();
+    for (const sprite of this.labelSprites.values()) {
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+    }
+    this.labelSprites.clear();
+    this.labelScene.clear();
+    this.effects = [];
+    this.sinking = [];
   }
 
   /**
@@ -1147,7 +1655,13 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     selectedLotId: number | null,
     overlay: Board3DOverlay = {}
   ): void {
+    this.lastRender = { state, selected: selectedLotId, overlay };
     this.selectedLotId = selectedLotId;
+    this.targetDusk = Math.min(Math.max(((state.year ?? 1) - 1) / 5, 0), 1);
+    if (!this.isAnimating()) {
+      this.dusk = this.targetDusk;
+      this.applyDusk();
+    }
     const pending = new Set(overlay.pendingLots ?? []);
     const drafted = new Set(overlay.draftLots ?? []);
     const buildable = new Set(overlay.validBuildLots ?? []);
@@ -1161,125 +1675,100 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       }
     }
 
-    // Clear and rebuild golden auras
-    while (this.goldenAuraGroup.children.length > 0) {
-      const child = this.goldenAuraGroup.children[0];
-      this.goldenAuraGroup.remove(child);
-      disposeHierarchy(child);
+    // Gold lights / crowns and cluster bridges are rebuilt only when their
+    // inputs change, not on every hover or selection.
+    this.syncGoldenAuras(allClusters);
+    const clusterSignature = allClusters
+      .map((c) => `${c.shopType}:${c.isComplete ? 1 : 0}:${c.lots.join('.')}`)
+      .join('|');
+    if (clusterSignature !== this.clusterSignature) {
+      this.clusterSignature = clusterSignature;
+      this.rebuildClusterVisuals(allClusters);
     }
-
-    // Render golden cluster markers
-    for (const cluster of allClusters) {
-      if (cluster.isComplete && cluster.lots.length > 0) {
-        // Find cluster 3D centroid
-        let sumX = 0;
-        let sumZ = 0;
-        for (const lotId of cluster.lots) {
-          const def = LOT_DEFINITIONS[lotId];
-          const pos = getParcelWorldPosition(def.x, def.y);
-          sumX += pos[0];
-          sumZ += pos[2];
-        }
-        const centroidX = sumX / cluster.lots.length;
-        const centroidZ = sumZ / cluster.lots.length;
-
-        // Radiant golden point light above cluster
-        const goldenLight = new THREE.PointLight(0xffd700, 1.2, 120);
-        goldenLight.name = `GoldenLight_${cluster.districtId}_${cluster.shopType}`;
-        goldenLight.position.set(centroidX, ELEVATION_GOLDEN_LIGHT, centroidZ);
-        this.goldenAuraGroup.add(goldenLight);
-
-        // Floating 3D golden crown / hexagon above the lowest ID lot in cluster
-        const rootLotId = cluster.lots[0];
-        const rootDef = LOT_DEFINITIONS[rootLotId];
-        const rootPos = getParcelWorldPosition(rootDef.x, rootDef.y);
-
-        const crownGeom = new THREE.OctahedronGeometry(6.0);
-        const crownMat = new THREE.MeshStandardMaterial({
-          color: 0xffd700,
-          emissive: 0xffd700,
-          emissiveIntensity: 0.85,
-          roughness: 0.2,
-          metalness: 0.85,
-        });
-        const crownMesh = new THREE.Mesh(crownGeom, crownMat);
-        crownMesh.name = `GoldenCrown_${cluster.districtId}_${cluster.shopType}`;
-        crownMesh.position.set(rootPos[0], ELEVATION_GOLDEN_CROWN, rootPos[2]);
-        this.goldenAuraGroup.add(crownMesh);
-      }
-    }
-
-    this.rebuildClusterVisuals(allClusters);
     this.completeClusterCount = allClusters.filter((c) => c.isComplete).length;
 
     // Update 72 parcels and procedural buildings
     for (let lotId = 0; lotId < TOTAL_LOTS; lotId++) {
       const lot = state.lots[lotId];
-      const mesh = this.parcelHitMeshes[lotId];
       const mat = this.parcelMaterials[lotId];
       const def = LOT_DEFINITIONS[lotId];
       const basePos = getParcelWorldPosition(def.x, def.y, ELEVATION_PARCEL_BASE);
 
       const isSelected = this.selectedLotId === lotId;
-      const isHovered = this.hoveredLotId === lotId;
+      const isHovered = this.hoveredLotId === lotId || this.highlightLotId === lotId;
 
-      // Vertical elevation lift: selection lifts +2.0, hover lifts +1.0
-      let elevationY = ELEVATION_PARCEL_BASE;
-      if (isSelected) {
-        elevationY = ELEVATION_PARCEL_SELECTED;
-      } else if (isHovered) {
-        elevationY = ELEVATION_PARCEL_HOVER;
+      // Vertical lift is eased toward this target by the animation loop.
+      this.lotTargetY[lotId] = this.getTargetElevation(lotId);
+      if (!this.isAnimating()) {
+        this.lotCurrentY[lotId] = this.lotTargetY[lotId];
+        this.parcelHitMeshes[lotId].position.y = this.lotCurrentY[lotId];
+        this.updateLotShadow(lotId);
       }
-      mesh.position.set(basePos[0], elevationY, basePos[2]);
+      const elevationY = this.lotCurrentY[lotId];
 
-      // Contact shadow grows and softens as the parcel lifts off the slab.
+      // Contact shadow shows under anything standing or lifted on the slab.
       const shadow = this.lotShadows[lotId];
       if (shadow) {
-        const lift = elevationY - ELEVATION_PARCEL_BASE;
-        shadow.scale.setScalar(1 + lift * 0.12);
-        (shadow.material as THREE.MeshBasicMaterial).opacity = Math.max(0.28, 0.5 - lift * 0.08);
-        shadow.visible = lot.owner !== null || pending.has(lotId) || lot.shop !== null || lift > 0;
+        const lifted = this.lotTargetY[lotId] > ELEVATION_PARCEL_BASE;
+        shadow.visible = lot.owner !== null || pending.has(lotId) || lot.shop !== null || lifted;
       }
 
-      // Dynamic material colors
+      // Dynamic material colors; candidate and buildable lots pulse.
+      let pulse = 0;
+      let label = false;
       if (isSelected) {
         mat.color.setHex(0x00c805); // Robin emerald
         mat.emissive.setHex(0x00c805);
         mat.emissiveIntensity = 0.85;
+        label = true;
       } else if (isHovered) {
         mat.color.setHex(0x00f0ff); // Cyber cyan
         mat.emissive.setHex(0x00f0ff);
         mat.emissiveIntensity = 0.6;
+        label = true;
       } else if (drafted.has(lotId)) {
         mat.color.setHex(0x00c805); // Picked deed
         mat.emissive.setHex(0x00c805);
         mat.emissiveIntensity = 0.7;
+        label = true;
       } else if (pending.has(lotId)) {
         mat.color.setHex(0xeec353); // Candidate deed
         mat.emissive.setHex(0xeec353);
         mat.emissiveIntensity = 0.55;
+        pulse = 0.25;
+        label = true;
       } else if (buildable.has(lotId)) {
-        mat.color.setHex(0x39a883); // Valid build target
-        mat.emissive.setHex(0x39a883);
+        mat.color.setHex(BUILDABLE_HIGHLIGHT_HEX); // Valid build target
+        mat.emissive.setHex(BUILDABLE_HIGHLIGHT_HEX);
         mat.emissiveIntensity = 0.6;
-      } else if (lot.owner !== null && lot.shop !== null) {
-        // Built shop parcel: protocol category color
-        const cat = SHOP_VISUAL_CATEGORIES[lot.shop] || SHOP_VISUAL_CATEGORIES[0];
-        mat.color.set(cat.colorHex);
-        mat.emissive.set(cat.colorHex);
-        mat.emissiveIntensity = 0.25;
+        pulse = 0.25;
       } else if (lot.owner !== null) {
-        // Owned unbuilt parcel: player ownership color
+        // Owned parcel, built or not: the rim around a shop keeps the owner colour.
         const ownerHex = PLAYER_HEX_COLORS[lot.owner] || PLAYER_HEX_COLORS[0];
         mat.color.set(ownerHex);
         mat.emissive.set(ownerHex);
-        mat.emissiveIntensity = 0.3;
+        mat.emissiveIntensity = lot.shop !== null ? 0.18 : 0.3;
       } else {
         // Unowned lot
         mat.color.setHex(0x161d2b);
         mat.emissive.setHex(0x000000);
         mat.emissiveIntensity = 0.0;
       }
+      this.lotPulseBase[lotId] = mat.emissiveIntensity;
+      this.lotPulseAmp[lotId] = pulse;
+
+      // Owner flag
+      const flag = this.ownerFlags[lotId];
+      if (lot.owner !== null) {
+        (this.ownerFlagCloths[lotId].material as THREE.MeshBasicMaterial).color.set(
+          PLAYER_HEX_COLORS[lot.owner] || PLAYER_HEX_COLORS[0]
+        );
+        flag.visible = true;
+      } else {
+        flag.visible = false;
+      }
+
+      this.updateLabel(lotId, label ? this.labelText(lotId, lot.shop) : null);
 
       // Procedural shop building synchronization
       const existingBuilding = this.buildingMeshes.get(lotId);
@@ -1295,12 +1784,29 @@ export class ThreeBoardRenderer implements Board3DRenderer {
           existingBuilding.userData.clusterSize !== clusterSize ||
           existingBuilding.userData.isComplete !== isComplete
         ) {
+          const isNewBuild = !existingBuilding || existingBuilding.userData.shopType !== lot.shop;
+          const inheritedBirth = existingBuilding?.userData.birth as number | undefined;
           if (existingBuilding) {
             disposeHierarchy(existingBuilding);
             this.buildingGroup.remove(existingBuilding);
           }
           const newBuilding = createShopBuilding(lot.shop, clusterSize, isComplete);
-          newBuilding.userData = { shopType: lot.shop, clusterSize, isComplete };
+          this.applyShadowFlags(newBuilding, true, true);
+          newBuilding.userData = {
+            shopType: lot.shop,
+            clusterSize,
+            isComplete,
+            baseScaleY: newBuilding.scale.y,
+          };
+          if (isNewBuild && this.isAnimating()) {
+            // Rise out of the lot with an ease-out-back, plus a dust ring.
+            newBuilding.userData.birth = this.lastTime;
+            newBuilding.scale.y = 0.001;
+            this.spawnRing(basePos[0], basePos[2], 0xd1d5db, 18, 2.2, 520);
+          } else if (inheritedBirth !== undefined && this.isAnimating()) {
+            newBuilding.userData.birth = inheritedBirth;
+            newBuilding.scale.y = 0.001;
+          }
           newBuilding.position.set(basePos[0], elevationY + 1.0, basePos[2]);
           this.buildingMeshes.set(lotId, newBuilding);
           this.buildingGroup.add(newBuilding);
@@ -1308,10 +1814,180 @@ export class ThreeBoardRenderer implements Board3DRenderer {
           existingBuilding.position.set(basePos[0], elevationY + 1.0, basePos[2]);
         }
       } else if (existingBuilding) {
-        disposeHierarchy(existingBuilding);
-        this.buildingGroup.remove(existingBuilding);
         this.buildingMeshes.delete(lotId);
+        if (this.isAnimating()) {
+          // Sink into the lot before removal.
+          existingBuilding.userData.baseScaleY = existingBuilding.scale.y;
+          this.sinking.push({ group: existingBuilding, start: this.lastTime });
+        } else {
+          disposeHierarchy(existingBuilding);
+          this.buildingGroup.remove(existingBuilding);
+        }
       }
+    }
+    this.updateLabelTransforms();
+  }
+
+  /**
+   * Rebuild golden crowns / lights only when the set of complete clusters
+   * changes. A newly completed cluster (after the first sync) gets a gold
+   * shockwave, a camera move and the `onClusterComplete` callback.
+   */
+  private syncGoldenAuras(allClusters: readonly ShopCluster[]): void {
+    const complete = allClusters.filter((c) => c.isComplete && c.lots.length > 0);
+    const signature = complete
+      .map((c) => `${c.districtId}_${c.shopType}:${c.lots.join('.')}`)
+      .join('|');
+    if (signature === this.completeSignature) return;
+
+    const previous = this.completeSignature;
+    this.completeSignature = signature;
+    this.goldenRebuilds++;
+
+    while (this.goldenAuraGroup.children.length > 0) {
+      const child = this.goldenAuraGroup.children[0];
+      this.goldenAuraGroup.remove(child);
+      disposeHierarchy(child);
+    }
+
+    const prevKeys = new Set((previous ?? '').split('|').filter(Boolean));
+    let newlyComplete: { x: number; z: number } | null = null;
+
+    for (const cluster of complete) {
+      // Find cluster 3D centroid
+      let sumX = 0;
+      let sumZ = 0;
+      for (const lotId of cluster.lots) {
+        const def = LOT_DEFINITIONS[lotId];
+        const pos = getParcelWorldPosition(def.x, def.y);
+        sumX += pos[0];
+        sumZ += pos[2];
+      }
+      const centroidX = sumX / cluster.lots.length;
+      const centroidZ = sumZ / cluster.lots.length;
+
+      // Radiant golden point light above cluster
+      const goldenLight = new THREE.PointLight(0xffd700, 1.2, 120);
+      goldenLight.name = `GoldenLight_${cluster.districtId}_${cluster.shopType}`;
+      goldenLight.position.set(centroidX, ELEVATION_GOLDEN_LIGHT, centroidZ);
+      this.goldenAuraGroup.add(goldenLight);
+
+      // Floating 3D golden crown / hexagon above the lowest ID lot in cluster
+      const rootDef = LOT_DEFINITIONS[cluster.lots[0]];
+      const rootPos = getParcelWorldPosition(rootDef.x, rootDef.y);
+
+      const crownGeom = new THREE.OctahedronGeometry(6.0);
+      const crownMat = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        emissive: 0xffd700,
+        emissiveIntensity: 0.85,
+        roughness: 0.2,
+        metalness: 0.85,
+      });
+      const crownMesh = new THREE.Mesh(crownGeom, crownMat);
+      crownMesh.name = `GoldenCrown_${cluster.districtId}_${cluster.shopType}`;
+      crownMesh.position.set(rootPos[0], ELEVATION_GOLDEN_CROWN, rootPos[2]);
+      crownMesh.castShadow = true;
+      this.goldenAuraGroup.add(crownMesh);
+
+      const key = `${cluster.districtId}_${cluster.shopType}:${cluster.lots.join('.')}`;
+      if (previous !== null && !prevKeys.has(key)) {
+        newlyComplete = { x: centroidX, z: centroidZ };
+      }
+    }
+
+    if (newlyComplete) {
+      this.spawnRing(newlyComplete.x, newlyComplete.z, 0xffd700, 30, 5, 900);
+      this.spawnRing(newlyComplete.x, newlyComplete.z, 0xfff0a0, 20, 3.5, 650);
+      if (this.isAnimating()) {
+        this.targetCameraTarget.set(newlyComplete.x, 0, newlyComplete.z);
+      }
+      this.options.onClusterComplete?.();
+    }
+  }
+
+  private getTargetElevation(lotId: number): number {
+    if (this.selectedLotId === lotId) return ELEVATION_PARCEL_SELECTED;
+    if (this.hoveredLotId === lotId || this.highlightLotId === lotId) return ELEVATION_PARCEL_HOVER;
+    return ELEVATION_PARCEL_BASE;
+  }
+
+  private labelText(lotId: number, shop: number | null): string {
+    // The 3x5 font has no room for a readable '#', so the label is the bare lot number.
+    const num = `${LOT_DEFINITIONS[lotId].lotNumber ?? lotId + 1}`;
+    const code = shop !== null ? (SHOP_VISUAL_CATEGORIES[shop] || SHOP_VISUAL_CATEGORIES[0]).code : '';
+    return code ? `${num} ${code}` : num;
+  }
+
+  /**
+   * Show (or hide, when `text` is null) the pixel-font lot label floating
+   * above a parcel. Labels live in their own scene, drawn after the post pass.
+   */
+  private updateLabel(lotId: number, text: string | null): void {
+    let sprite = this.labelSprites.get(lotId);
+    if (text === null) {
+      if (sprite) sprite.visible = false;
+      return;
+    }
+    if (!sprite) {
+      const mat = new THREE.SpriteMaterial({
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+        transparent: false,
+      });
+      sprite = new THREE.Sprite(mat);
+      sprite.name = `LotLabel_${lotId}`;
+      sprite.center.set(0.5, 0);
+      sprite.renderOrder = 10;
+      sprite.userData.text = '';
+      this.labelSprites.set(lotId, sprite);
+      this.labelScene.add(sprite);
+    }
+    sprite.visible = true;
+    if (sprite.userData.text !== text) {
+      sprite.userData.text = text;
+      sprite.material.map?.dispose();
+      const tex = createLabelTexture(text);
+      sprite.material.map = tex;
+      sprite.material.needsUpdate = true;
+      sprite.userData.texSize = [tex.image.width, tex.image.height];
+    }
+  }
+
+  /** Keep labels above their (lifting) parcels at a constant on-screen size. */
+  private updateLabelTransforms(): void {
+    if (this.labelSprites.size === 0) return;
+    const cssWidth = this.width;
+    const cssHeight = this.height;
+    const camera = this.activeCamera;
+    for (const [lotId, sprite] of this.labelSprites) {
+      if (!sprite.visible) continue;
+      const mesh = this.parcelHitMeshes[lotId];
+      sprite.position.set(mesh.position.x, mesh.position.y + 30, mesh.position.z);
+      let unitsPerCssPx: number;
+      if (camera === this.orthoCamera) {
+        unitsPerCssPx = (this.orthoCamera.right - this.orthoCamera.left) / this.orthoCamera.zoom / cssWidth;
+      } else {
+        const dist = this.perspCamera.position.distanceTo(sprite.position);
+        const viewHeight = 2 * dist * Math.tan((this.perspCamera.fov * Math.PI) / 360);
+        unitsPerCssPx = viewHeight / cssHeight;
+      }
+      const [w, h] = sprite.userData.texSize as [number, number];
+      const k = unitsPerCssPx * LABEL_CSS_PX_PER_TEXEL;
+      sprite.scale.set(w * k, h * k, 1);
+    }
+  }
+
+  /**
+   * Externally highlight a lot, e.g. while its deed card in the HUD tray is hovered.
+   */
+  public setHighlightLot(lotId: number | null): void {
+    const next = lotId !== null && Number.isInteger(lotId) && lotId >= 0 && lotId < TOTAL_LOTS ? lotId : null;
+    if (this.highlightLotId === next) return;
+    this.highlightLotId = next;
+    if (this.lastRender) {
+      this.render(this.lastRender.state, this.lastRender.selected, this.lastRender.overlay);
     }
   }
 
@@ -1397,17 +2073,23 @@ export class ThreeBoardRenderer implements Board3DRenderer {
   }
 
   /**
-   * Reset camera target to board center and reset zoom.
+   * Reset camera target to board center and reset zoom (the `R` key).
    */
   public resetCamera(): void {
     this.targetCameraTarget.set(0, 0, 0);
-    this.targetCameraDistance = 600;
     this.orthoCamera.zoom = 1.0;
     this.orthoCamera.updateProjectionMatrix();
+    if (this.cameraMode === 'perspective') {
+      this.cameraAzimuth = Math.PI / 4;
+      this.cameraElevation = PERSPECTIVE_ELEVATION;
+      this.targetCameraDistance = this.perspectiveDistance();
+    } else {
+      this.targetCameraDistance = ORTHO_DISTANCE;
+    }
   }
 
   /**
-   * Toggle between isometric orthographic and perspective orbit camera modes.
+   * Toggle between isometric orthographic and perspective orbit camera modes (the `C` key).
    */
   public toggleCameraMode(): void {
     this.setCameraMode(this.cameraMode === 'isometric' ? 'perspective' : 'isometric');
@@ -1427,12 +2109,13 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     if (mode === 'isometric') {
       this.cameraAzimuth = Math.PI / 4;
       this.cameraElevation = (33 * Math.PI) / 180;
-      this.targetCameraDistance = 600;
+      this.targetCameraDistance = ORTHO_DISTANCE;
     } else {
-      // Perspective mode matched distance
+      // Narrow-lens orbit, pulled back to frame the same slab as the iso view.
       this.cameraAzimuth = Math.PI / 4;
-      this.cameraElevation = (35 * Math.PI) / 180;
-      this.targetCameraDistance = 600;
+      this.cameraElevation = PERSPECTIVE_ELEVATION;
+      this.targetCameraDistance = this.perspectiveDistance();
+      this.cameraDistance = Math.max(this.cameraDistance, this.targetCameraDistance * 0.6);
     }
   }
 
@@ -1441,6 +2124,7 @@ export class ThreeBoardRenderer implements Board3DRenderer {
    */
   public resize(width: number, height: number): void {
     if (width <= 0 || height <= 0) return;
+    const oldFit = this.perspectiveDistance();
     this.width = width;
     this.height = height;
 
@@ -1461,6 +2145,11 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
     this.perspCamera.aspect = aspect;
     this.perspCamera.updateProjectionMatrix();
+    if (this.cameraMode === 'perspective') {
+      // Keep the user's dolly ratio while refitting to the new aspect.
+      const ratio = this.targetCameraDistance / oldFit;
+      this.targetCameraDistance = this.perspectiveDistance() * ratio;
+    }
   }
 
   /**
@@ -1486,12 +2175,22 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     this.isPointerDown = true;
     this.pointerDownPos = { x: e.clientX, y: e.clientY, time: performance.now() };
     this.isDragging = false;
+    // Right / middle / Shift+left drag pans the isometric view.
+    this.isPanning =
+      this.cameraMode === 'isometric' &&
+      (e.button === 1 || e.button === 2 || (e.button === 0 && e.shiftKey === true));
+    try {
+      this.renderer?.domElement.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Synthetic pointer ids cannot be captured.
+    }
   }
 
   private handlePointerMove(e: PointerEvent): void {
     if (e.buttons !== undefined && e.buttons === 0) {
       this.isDragging = false;
       this.isPointerDown = false;
+      this.isPanning = false;
     }
 
     if (this.isPointerDown) {
@@ -1499,10 +2198,13 @@ export class ThreeBoardRenderer implements Board3DRenderer {
       const dy = e.clientY - this.pointerDownPos.y;
       const dist = Math.hypot(dx, dy);
 
-      if (dist > this.DRAG_THRESHOLD_PX) {
+      if (dist > this.DRAG_THRESHOLD_PX || this.isDragging) {
         this.isDragging = true;
-        // If dragging with primary button in perspective mode, orbit camera
-        if (e.buttons === 1 && this.cameraMode === 'perspective') {
+        if (this.isPanning) {
+          this.panByPixels(dx, dy);
+          this.pointerDownPos = { x: e.clientX, y: e.clientY, time: this.pointerDownPos.time };
+        } else if (e.buttons === 1 && this.cameraMode === 'perspective') {
+          // Orbit camera with primary-button drag in perspective mode
           this.cameraAzimuth -= dx * 0.005;
           this.cameraElevation = Math.max(
             (15 * Math.PI) / 180,
@@ -1536,7 +2238,13 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
   private handlePointerUp(e: PointerEvent): void {
     const elapsed = performance.now() - this.pointerDownPos.time;
-    if (this.isPointerDown && !this.isDragging && elapsed < this.CLICK_TIME_LIMIT_MS) {
+    if (
+      this.isPointerDown &&
+      !this.isDragging &&
+      !this.isPanning &&
+      (e.button ?? 0) === 0 &&
+      elapsed < this.CLICK_TIME_LIMIT_MS
+    ) {
       if (this.renderer && this.renderer.domElement) {
         const rect = this.renderer.domElement.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
@@ -1552,42 +2260,91 @@ export class ThreeBoardRenderer implements Board3DRenderer {
     }
     this.isDragging = false;
     this.isPointerDown = false;
+    this.isPanning = false;
+    try {
+      this.renderer?.domElement.releasePointerCapture?.(e.pointerId);
+    } catch {
+      // Nothing captured.
+    }
+  }
+
+  /**
+   * Pan the isometric view so the ground follows the pointer by (dx, dy) CSS pixels.
+   */
+  public panByPixels(dx: number, dy: number): void {
+    const rect = this.renderer?.domElement.getBoundingClientRect();
+    const pxWidth = rect && rect.width > 0 ? rect.width : this.width;
+    const unitsPerPx = (this.orthoCamera.right - this.orthoCamera.left) / this.orthoCamera.zoom / pxWidth;
+    const sinAz = Math.sin(this.cameraAzimuth);
+    const cosAz = Math.cos(this.cameraAzimuth);
+    const sinElev = Math.sin(this.cameraElevation);
+    // Screen-right on the ground is (cosAz, 0, -sinAz); screen-up is (-sinAz, 0, -cosAz) / sinElev.
+    const moveX = -cosAz * dx * unitsPerPx + (-sinAz * dy * unitsPerPx) / sinElev;
+    const moveZ = sinAz * dx * unitsPerPx + (-cosAz * dy * unitsPerPx) / sinElev;
+    this.shiftCameraTarget(moveX, moveZ);
+  }
+
+  /** Move both the live and goal camera targets, clamped to the board area. */
+  private shiftCameraTarget(dx: number, dz: number): void {
+    this.cameraTarget.x = Math.max(-PAN_LIMIT_X, Math.min(PAN_LIMIT_X, this.cameraTarget.x + dx));
+    this.cameraTarget.z = Math.max(-PAN_LIMIT_Z, Math.min(PAN_LIMIT_Z, this.cameraTarget.z + dz));
+    this.targetCameraTarget.x = this.cameraTarget.x;
+    this.targetCameraTarget.z = this.cameraTarget.z;
+    this.updateCameraPositions();
   }
 
   private updateParcelElevation(lotId: number | null): void {
     if (lotId === null || lotId < 0 || lotId >= TOTAL_LOTS) return;
-    const mesh = this.parcelHitMeshes[lotId];
-    if (!mesh) return;
-    const def = LOT_DEFINITIONS[lotId];
-    const basePos = getParcelWorldPosition(def.x, def.y, ELEVATION_PARCEL_BASE);
-    const isSelected = this.selectedLotId === lotId;
-    const isHovered = this.hoveredLotId === lotId;
-    let elevationY = ELEVATION_PARCEL_BASE;
-    if (isSelected) {
-      elevationY = ELEVATION_PARCEL_SELECTED;
-    } else if (isHovered) {
-      elevationY = ELEVATION_PARCEL_HOVER;
+    if (!this.parcelHitMeshes[lotId]) return;
+    this.lotTargetY[lotId] = this.getTargetElevation(lotId);
+    if (!this.isAnimating()) {
+      this.lotCurrentY[lotId] = this.lotTargetY[lotId];
+      this.parcelHitMeshes[lotId].position.y = this.lotCurrentY[lotId];
+      this.updateLotShadow(lotId);
+      const building = this.buildingMeshes.get(lotId);
+      if (building) building.position.y = this.lotCurrentY[lotId] + 1.0;
     }
-    mesh.position.set(basePos[0], elevationY, basePos[2]);
+  }
 
-    const building = this.buildingMeshes.get(lotId);
-    if (building) {
-      building.position.set(basePos[0], elevationY + 1.0, basePos[2]);
+  /** Point on the parcel plane under the given NDC in the ortho view. */
+  private groundPointAt(ndcX: number, ndcY: number): THREE.Vector3 | null {
+    this.orthoCamera.updateMatrixWorld(true);
+    this.raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.orthoCamera);
+    return this.raycaster.ray.intersectPlane(
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), -ELEVATION_PARCEL_BASE),
+      new THREE.Vector3()
+    );
+  }
+
+  /**
+   * Zoom by `factor` keeping the ground point under the given NDC fixed
+   * (isometric), or dolly the perspective camera.
+   */
+  public zoomAt(factor: number, ndcX = 0, ndcY = 0): void {
+    if (!Number.isFinite(factor) || factor <= 0) return;
+    if (this.cameraMode === 'isometric') {
+      const before = this.groundPointAt(ndcX, ndcY);
+      this.orthoCamera.zoom = Math.max(ORTHO_ZOOM_MIN, Math.min(ORTHO_ZOOM_MAX, this.orthoCamera.zoom * factor));
+      this.orthoCamera.updateProjectionMatrix();
+      const after = this.groundPointAt(ndcX, ndcY);
+      if (before && after) {
+        this.shiftCameraTarget(before.x - after.x, before.z - after.z);
+      }
+    } else {
+      const fit = this.perspectiveDistance();
+      this.targetCameraDistance = Math.max(
+        fit * 0.3,
+        Math.min(fit * 1.3, this.targetCameraDistance / factor)
+      );
     }
   }
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    if (this.cameraMode === 'isometric') {
-      const zoomDelta = e.deltaY * -0.001;
-      this.orthoCamera.zoom = Math.max(0.5, Math.min(2.5, this.orthoCamera.zoom + zoomDelta));
-      this.orthoCamera.updateProjectionMatrix();
-    } else {
-      this.targetCameraDistance = Math.max(
-        100,
-        Math.min(550, this.targetCameraDistance + e.deltaY * 0.3)
-      );
-    }
+    const rect = this.renderer?.domElement.getBoundingClientRect();
+    const ndcX = rect && rect.width > 0 ? ((e.clientX - rect.left) / rect.width) * 2 - 1 : 0;
+    const ndcY = rect && rect.height > 0 ? -((e.clientY - rect.top) / rect.height) * 2 + 1 : 0;
+    this.zoomAt(Math.exp(-e.deltaY * 0.0015), ndcX, ndcY);
   }
 
   // Accessors for Verification and Testing
@@ -1666,5 +2423,30 @@ export class ThreeBoardRenderer implements Board3DRenderer {
 
   public getClusterGroup(): THREE.Group {
     return this.clusterGroup;
+  }
+
+  public getAmbientGroup(): THREE.Group {
+    return this.ambientGroup;
+  }
+
+  public getOwnerFlag(lotId: number): THREE.Group | undefined {
+    return this.ownerFlags[lotId];
+  }
+
+  public getLotLabel(lotId: number): THREE.Sprite | undefined {
+    return this.labelSprites.get(lotId);
+  }
+
+  public getParcelMaterial(lotId: number): THREE.MeshStandardMaterial | undefined {
+    return this.parcelMaterials[lotId];
+  }
+
+  public getHighlightLotId(): number | null {
+    return this.highlightLotId;
+  }
+
+  /** How many times the gold lights / crowns have been rebuilt (QA, tests). */
+  public getGoldenRebuildCount(): number {
+    return this.goldenRebuilds;
   }
 }
