@@ -49,5 +49,18 @@ export default defineConfig({
     emptyOutDir: true,
     target: ['es2022', 'safari16.4'],
     sourcemap: true,
+    chunkSizeWarningLimit: 650,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'three-vendor',
+              test: /node_modules[\\/]three/,
+            },
+          ],
+        },
+      },
+    },
   },
 });

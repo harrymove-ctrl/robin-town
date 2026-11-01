@@ -23,7 +23,8 @@ Up to 4 traders (`You`, `Cole`, `Maya`, and `Clara`, or live human players acros
 2. **Ranked `1,000 $wif` Arena + 5% Deflationary Match Burn**: Competitive 4-seat tables pool `4,000 $wif`, awarding **90%** (`3,600 $wif`) to the top-3 podium (`50%` 1st, `25%` 2nd, `15%` 3rd), permanently burning **5%** (`200 $wif`) to `0x000000000000000000000000000000000000dEaD`, and routing **5%** (`200 $wif`) to the neighborhood Staking Vault.
 3. **1.20x `$wif` Staking Payday Multiplier**: Locking `500 $wif` in the neighborhood Staking Vault boosts every annual storefront payday by **1.20x**, creating a clear reason to hold and stake `$wif` across matches.
 4. **1% OTC Bargaining Cash Micro-Fee**: Every bilateral `$wif` cash transfer settled at the OTC Bargaining Table routes a **1% micro-fee** into the Staking Vault, turning player negotiation volume directly into staker yield.
-5. **Official World is Flat (`$wif`) On-Chain Wallet, 1-Click Burn & Live Telemetry**: Connects via EIP-1193 wallets (MetaMask, Rabby) directly to **Robinhood Chain Mainnet (`Chain ID 4663`)** alongside ERC-20 calldata encoders (`balanceOf`, `transfer`, `approve`, `burn`) for the official **World is Flat** (`$wif`) token at [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773), streaming live Robinhood Chain block height, `113,917+ $wif` on-chain burn totals, 1-click on-chain `$wif` burn signing, and direct links to [worldisflat.fun](https://worldisflat.fun), [/build](https://worldisflat.fun/build), [/fair](https://worldisflat.fun/fair/), and [Pons Launchpad](https://www.ponsfamily.com/launchpad/0x5173b8eA6923c2d40267890D45C46a3480954773) inside the in-game `$wif` Hub.
+5. **Official World is Flat (`$wif`) On-Chain Wallet, Receipt Verifier & Harbor Vault**: Connects via EIP-1193 wallets (MetaMask, Rabby) directly to **Robinhood Chain Mainnet (`Chain ID 4663`)** alongside ERC-20 calldata encoders (`balanceOf`, `transfer`, `approve`, `burn`) for the official **World is Flat** (`$wif`) token at [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) and [`contracts/RobinTownHarborVault.sol`](./contracts/RobinTownHarborVault.sol). Includes gasless EIP-191 `personal_sign` ownership verification, real on-chain `eth_getTransactionReceipt` `$wif` Transfer log verification (`POST /api/wallets/tx`) with Blockscout proof links, accessible `0.1 / 1 / 10 $wif` micro-burns and Harbor Patron boosts, plus direct links to [worldisflat.fun](https://worldisflat.fun), [/build](https://worldisflat.fun/build), [/fair](https://worldisflat.fun/fair/), and [Pons Launchpad](https://www.ponsfamily.com/launchpad/0x5173b8eA6923c2d40267890D45C46a3480954773).
+6. **Daily Harbor Seed, Multi-Day Streaks & Shareable Year-6 Score Cards**: Every UTC day deals an identical seeded 6-year harbor puzzle (`📅 Daily Seed`) tracked on `/api/wallets/daily`, rewards consecutive daily play with `1.1x` to `1.5x` Town Point streak multipliers, and renders a crisp `1200x630` PNG **Year-6 Empire Score Card** (`src/town/score-card.ts`) with 1-click PNG download and X sharing.
 
 ## Cross-Device Online Multiplayer (`WebSocket` + `BroadcastChannel`)
 
@@ -60,9 +61,9 @@ npm start
 ## Verification and Testing
 
 ```bash
-npm run verify:assets   # Verify all 69 declared PNG/SVG assets (zero 404s)
+npm run verify:assets   # Verify all 69 declared PNG and SVG assets (zero 404s)
 npm run typecheck       # Strict TypeScript type checking (tsc --noEmit)
-npm test                # Run all 926 unit, integration, WebSocket, and E2E tests
-npm run build           # Production Vite bundle into dist/
+npm test                # Run all 934 unit, integration, WebSocket, and E2E tests
+npm run build           # Code-split production Vite bundle into dist/ (~87 kB initial gzip JS)
 npm run verify:browser  # Multi-viewport headless Playwright browser verification
 ```

@@ -61,6 +61,12 @@ export interface HarborLeaderboardRow {
   wins: number;
   bestNetWorthWif: number;
   totalBurnedWif: number;
+  verifiedTxCount?: number;
+  verifiedOnChainWifMoved?: number;
+  lastVerifiedTxHash?: string | null;
+  onChainPatronBoost?: boolean;
+  currentStreakDays?: number;
+  bestStreakDays?: number;
   lastSeenAt: string;
 }
 
@@ -72,8 +78,24 @@ export interface RecentHarborWalletRow {
   onChainWifBalance: number;
   matchesPlayed: number;
   bestNetWorthWif: number;
+  verifiedTxCount?: number;
+  lastVerifiedTxHash?: string | null;
+  currentStreakDays?: number;
   firstSeenAt: string;
   lastSeenAt: string;
+}
+
+export interface DailyLeaderboardRow {
+  rank: number;
+  label: string;
+  shortAddress: string | null;
+  verified: boolean;
+  verifiedTxCount: number;
+  bestNetWorthWif: number;
+  won: boolean;
+  attempts: number;
+  streakDays: number;
+  updatedAt: string;
 }
 
 export interface MyHarborWalletStanding {
@@ -82,26 +104,47 @@ export interface MyHarborWalletStanding {
   verified: boolean;
   verifiedAt: string | null;
   rank: number | null;
+  dailyRank?: number | null;
   onChainWifBalance: number;
   matchesPlayed: number;
   wins: number;
   bestNetWorthWif: number;
   totalBurnedWif: number;
+  verifiedTxCount?: number;
+  verifiedOnChainWifMoved?: number;
+  lastVerifiedTxHash?: string | null;
+  onChainPatronBoost?: boolean;
+  currentStreakDays?: number;
+  bestStreakDays?: number;
   challengeMessage: string;
 }
 
 export interface HarborWalletRegistrySummary {
   ok: boolean;
   storePersistent: boolean;
+  todaySeed?: string;
   totalUniqueWallets: number;
   verifiedWallets: number;
   totalMatchesPlayed: number;
   walletMatchesPlayed: number;
   guestMatchesPlayed: number;
   totalWifBurnedInGame: number;
+  totalVerifiedOnChainTxs?: number;
+  totalVerifiedOnChainWifMoved?: number;
   leaderboard: HarborLeaderboardRow[];
   recentWallets: RecentHarborWalletRow[];
+  dailyLeaderboard?: DailyLeaderboardRow[];
   me: MyHarborWalletStanding | null;
+}
+
+export interface OpenMultiplayerRoomSummary {
+  code: string;
+  players: number;
+  maxPlayers?: number;
+  status?: string;
+  hostName?: string;
+  joinable?: boolean;
+  updatedAt: number;
 }
 
 export function detectEip1193WalletSource(): string {
@@ -196,7 +239,17 @@ export async function reportCompletedMatch(params: {
   finalNetWorthWif: number;
   won: boolean;
   burnedWif?: number;
-}): Promise<HarborWalletRegistrySummary | null> {
+  entryMode?: string;
+  dailySeed?: string | null;
+  playerName?: string | null;
+}): Promise<
+  | (HarborWalletRegistrySummary & {
+      streakDays?: number;
+      streakMultiplier?: number;
+      streakBonusPoints?: number;
+    })
+  | null
+> {
   if (!canCallLocalWalletApi()) return null;
   try {
     const res = await fetch('/api/wallets/match', {
@@ -207,13 +260,97 @@ export async function reportCompletedMatch(params: {
         finalNetWorthWif: params.finalNetWorthWif,
         won: params.won,
         burnedWif: params.burnedWif ?? 0,
+        entryMode: params.entryMode ?? 'casual',
+        dailySeed: params.dailySeed ?? null,
+        playerName: params.playerName ?? null,
       }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as HarborWalletRegistrySummary;
+    const data = (await res.json()) as HarborWalletRegistrySummary & {
+      streakDays?: number;
+      streakMultiplier?: number;
+      streakBonusPoints?: number;
+    };
     return data.ok ? data : null;
   } catch {
     return null;
+  }
+}
+
+export async function submitOnChainTxVerification(params: {
+  address?: string | null;
+  txHash: string;
+}): Promise<
+  HarborWalletRegistrySummary & {
+    txVerified: boolean;
+    txHash: string;
+    verifiedAddress: string;
+    wifMoved: number;
+    wifBurned: number;
+    bonusTownPoints: number;
+    onChainPatronBoost: boolean;
+  }
+> {
+  const res = await fetch('/api/wallets/tx', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      address: params.address ?? null,
+      txHash: params.txHash.trim(),
+    }),
+  });
+  const data = (await res.json()) as HarborWalletRegistrySummary & {
+    error?: string;
+    txVerified: boolean;
+    txHash: string;
+    verifiedAddress: string;
+    wifMoved: number;
+    wifBurned: number;
+    bonusTownPoints: number;
+    onChainPatronBoost: boolean;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'On-chain $wif transaction verification failed.');
+  }
+  return data;
+}
+
+export async function waitAndVerifyOnChainTx(params: {
+  address?: string | null;
+  txHash: string;
+  maxAttempts?: number;
+}): Promise<Awaited<ReturnType<typeof submitOnChainTxVerification>> | null> {
+  if (!canCallLocalWalletApi()) return null;
+  const attempts = params.maxAttempts ?? 4;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await submitOnChainTxVerification({
+        address: params.address,
+        txHash: params.txHash,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (!msg.toLowerCase().includes('not found yet') || i === attempts - 1) {
+        if (i === attempts - 1) return null;
+      }
+      await new Promise((r) => setTimeout(r, 1600));
+    }
+  }
+  return null;
+}
+
+export async function fetchOpenMultiplayerRooms(): Promise<OpenMultiplayerRoomSummary[]> {
+  if (!canCallLocalWalletApi()) return [];
+  try {
+    const res = await fetch('/api/rooms', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      ok?: boolean;
+      rooms?: OpenMultiplayerRoomSummary[];
+    };
+    return data.ok && Array.isArray(data.rooms) ? data.rooms : [];
+  } catch {
+    return [];
   }
 }
 
@@ -1204,6 +1341,26 @@ export class WalletAdapter {
       await this.connectMainnetWif();
     }
     const tx = await this.transferErc20(BURN_ADDRESS, amountTokens, WIF_TOKEN_CONTRACT_ADDRESS);
+    if (this.web3Account) {
+      const nextBal = await this.getErc20Balance(this.web3Account.address, WIF_TOKEN_CONTRACT_ADDRESS);
+      this.web3Account.balance = Number(nextBal.toFixed(4));
+      this.emitState();
+    }
+    return tx;
+  }
+
+  /**
+   * Patronizes the Harbor Vault on Robinhood Chain Mainnet (`4663`) using `$wif` (`10 $wif` default)
+   * to unlock the verified `1.20x` On-Chain Patron Payday Boost.
+   */
+  public async patronizeMainnetWif(
+    amountTokens: number = 10,
+    vaultRecipient: string = BURN_ADDRESS,
+  ): Promise<WalletTransaction> {
+    if (this.mode !== 'web3' || this.web3ChainId !== ROBINHOOD_MAINNET_CHAIN_ID) {
+      await this.connectMainnetWif();
+    }
+    const tx = await this.transferErc20(vaultRecipient, amountTokens, WIF_TOKEN_CONTRACT_ADDRESS);
     if (this.web3Account) {
       const nextBal = await this.getErc20Balance(this.web3Account.address, WIF_TOKEN_CONTRACT_ADDRESS);
       this.web3Account.balance = Number(nextBal.toFixed(4));

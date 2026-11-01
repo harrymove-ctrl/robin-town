@@ -1,6 +1,6 @@
 import { registerGameTools } from './model-context';
 import { query as $, required as get, eventElement, errorMessage } from './dom';
-import type { GameState, GamePhase, Lot, MatchEntryMode, ShopGroup } from './types';
+import type { GameState, GamePhase, Lot, MatchEntryMode, OfferSide, TradeOffer, ShopGroup } from './types';
 import type { SoundEffect } from './audio';
 import type { Camera, Point } from './camera';
 import { researchMarkup } from './research';
@@ -10,7 +10,9 @@ import {
   COMPLETE,
   INCOMPLETE,
   KEEP,
+  getTodayHarborSeedKey,
   newGame,
+  neighbors,
   groups,
   groupIncome,
   income,
@@ -27,10 +29,18 @@ import {
   chooseSmartDraftPlots,
   findSmartPlayerTrade,
   findNextSmartBuild,
+  perspectiveSwapState,
+  executeAcceptedPlayerTrade,
   validSave,
   updateBoardLayout,
   migrateEnglishState,
 } from './engine';
+import {
+  buildEmpireXShareUrl,
+  downloadEmpireScoreCard,
+  renderEmpireScoreCardDataUrl,
+  type ScoreCardPayload,
+} from './score-card';
 import { createGameAudio } from './audio';
 import { createTrading } from './trading';
 import { zodiacImages } from './zodiac';
@@ -65,21 +75,25 @@ import {
   WalletAdapter,
   detectEip1193WalletSource,
   fetchLiveOnChainWifProof,
+  fetchOpenMultiplayerRooms,
   fetchWalletRegistrySummary,
   reportCompletedMatch,
   reportWalletConnected,
+  submitOnChainTxVerification,
   submitWalletSignatureVerification,
+  waitAndVerifyOnChainTx,
   type HarborWalletRegistrySummary,
   type OnChainWifProof,
+  type OpenMultiplayerRoomSummary,
 } from '../tokenomics/wallet';
 import {
   NetworkRoom,
   generateRoomCode,
   isValidRoomCode,
   normalizeRoomCode,
+  type NetworkPacket,
 } from '../network/room';
-import { isWebGLAvailable } from '../ui/board-3d';
-import { RobinCity3DRenderer, type TouchDragMode } from './city-3d/robin-city-3d';
+import type { RobinCity3DRenderer, TouchDragMode } from './city-3d/robin-city-3d';
 import type { CameraPresetMode, CityAtmosphereMode } from './city-3d/types-3d';
 import { AppleCarousel, type CarouselItem } from '../ui/carousel';
 import { ExposureGrid } from '../ui/exposure-grid';
@@ -91,6 +105,30 @@ const SAVE_KEY = 'robintown-save-v2';
 const FLYWHEEL_KEY = 'robintown-flywheel-v1';
 const VIEW_MODE_KEY = 'robintown-view-mode-v1';
 const ATMO_3D_KEY = 'robintown-atmo-3d-v1';
+const TUTORIAL_DONE_KEY = 'robintown-tutorial-done-v1';
+
+function canUseWebGL(): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  try {
+    const probe = document.createElement('canvas');
+    return Boolean(
+      window.WebGLRenderingContext &&
+        (probe.getContext('webgl2') ||
+          probe.getContext('webgl') ||
+          probe.getContext('experimental-webgl')),
+    );
+  } catch {
+    return false;
+  }
+}
+
+let city3DModulePromise: Promise<typeof import('./city-3d/robin-city-3d')> | null = null;
+function loadCity3DRendererModule() {
+  if (!city3DModulePromise) {
+    city3DModulePromise = import('./city-3d/robin-city-3d');
+  }
+  return city3DModulePromise;
+}
 
 interface EconomySnapshot {
   flywheel: FlywheelState;
@@ -176,11 +214,11 @@ export function mountRobinTown(): void {
     }
   } catch {}
 
-  let viewMode: BoardViewMode = isWebGLAvailable() ? 'city-3d' : 'tabletop-3d';
+  let viewMode: BoardViewMode = canUseWebGL() ? 'city-3d' : 'tabletop-3d';
   let last2DMode: '2d' | 'tabletop-3d' = 'tabletop-3d';
   try {
     const savedMode = localStorage.getItem(VIEW_MODE_KEY);
-    if (savedMode === '2d' || savedMode === 'tabletop-3d' || (savedMode === 'city-3d' && isWebGLAvailable())) {
+    if (savedMode === '2d' || savedMode === 'tabletop-3d' || (savedMode === 'city-3d' && canUseWebGL())) {
       viewMode = savedMode;
       if (savedMode === '2d' || savedMode === 'tabletop-3d') {
         last2DMode = savedMode;
@@ -225,7 +263,7 @@ export function mountRobinTown(): void {
 
   // Interactive 3D & Gadget Subsystems
   let board3D: RobinCity3DRenderer | null = null;
-  let cameraPreset3D: CameraPresetMode = 'neighborhood';
+  let cameraPreset3D: CameraPresetMode = 'isometric';
   let touchDragMode3D: TouchDragMode = 'pan';
   let mobileZenMode = false;
   let atmosphere3D: CityAtmosphereMode = 'day';
@@ -247,8 +285,28 @@ export function mountRobinTown(): void {
   let walletStats: HarborWalletRegistrySummary | null = null;
   let walletStatsOffline = false;
   let walletFlowState: 'idle' | 'connecting' | 'signing' = 'idle';
-  let tradersTab: 'leaderboard' | 'recent' | 'verify' = 'leaderboard';
+  let tradersTab: 'leaderboard' | 'daily' | 'recent' | 'verify' = 'leaderboard';
   let lastReportedWeb3Address = '';
+  let txVerifyPending = false;
+  let lastPastedTxHash = '';
+  let openRoomsList: OpenMultiplayerRoomSummary[] = [];
+  let openRoomsLoaded = false;
+  let openRoomsLoading = false;
+  let city3DMountPending = false;
+  let hoveredLot3D: number | null = null;
+  let tutorialDone = false;
+  try {
+    tutorialDone = localStorage.getItem(TUTORIAL_DONE_KEY) === '1';
+  } catch {}
+  let incomingHumanProposal: {
+    proposalId: string;
+    fromSeat: number;
+    fromName: string;
+    toSeat: number;
+    give: OfferSide;
+    take: OfferSide;
+  } | null = null;
+  let applyingRemoteTownSync = false;
   const claimedConnectBonusWallets = new Set<string>();
 
   // Fast-Time A-to-Z Auto-Play & Live AI Neighbor Feed
@@ -616,16 +674,176 @@ export function mountRobinTown(): void {
     }
   }
 
+  function markTutorialComplete(): void {
+    if (tutorialDone) return;
+    tutorialDone = true;
+    try {
+      localStorage.setItem(TUTORIAL_DONE_KEY, '1');
+    } catch {}
+  }
+
+  function refreshOpenRooms(forceRender = false): void {
+    if (openRoomsLoading) return;
+    openRoomsLoading = true;
+    void fetchOpenMultiplayerRooms()
+      .then((rooms) => {
+        const changedRooms = JSON.stringify(rooms) !== JSON.stringify(openRoomsList);
+        openRoomsList = rooms;
+        openRoomsLoaded = true;
+        if ((changedRooms || forceRender) && get('#modal').open && get('#modal').dataset.wifHub === 'true') {
+          openWifHub();
+        }
+      })
+      .finally(() => {
+        openRoomsLoading = false;
+      });
+  }
+
+  async function verifyOnChainTxHashInteractive(rawHash?: string): Promise<void> {
+    if (txVerifyPending) return;
+    const hashInput = ($('#verify-tx-hash-input') as HTMLInputElement | null)?.value;
+    const txHash = (rawHash ?? hashInput ?? lastMainnetTxHash ?? '').trim();
+    if (!txHash) {
+      toast('Paste a 66-character 0x Robinhood Chain (4663) $wif transaction hash first.');
+      return;
+    }
+    lastPastedTxHash = txHash;
+    txVerifyPending = true;
+    if (get('#modal').open && get('#modal').dataset.wifHub === 'true') openWifHub();
+    if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+    try {
+      const verified = await submitOnChainTxVerification({
+        address: currentRealWeb3Address(),
+        txHash,
+      });
+      walletStats = verified;
+      walletStatsOffline = false;
+      lastMainnetTxHash = verified.txHash;
+      if (verified.bonusTownPoints > 0) {
+        townPoints += verified.bonusTownPoints;
+      }
+      saveEconomy();
+      toast(
+        `⛓️ Verified ${verified.wifMoved} $wif on Chain 4663 (+${verified.bonusTownPoints} pts${verified.onChainPatronBoost ? ' · 1.20x Patron Boost Active!' : ''})!`,
+      );
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'On-chain $wif receipt check failed.');
+    } finally {
+      txVerifyPending = false;
+      if (menuOpen) renderStartMenu();
+      else render();
+      if (get('#modal').open && get('#modal').dataset.wifHub === 'true') openWifHub();
+      if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+    }
+  }
+
+  function getLocalRoomSeat(): number {
+    if (!activeRoom) return 0;
+    const seat = activeRoom.getLocalPlayer()?.seat;
+    return typeof seat === 'number' && seat >= 0 && seat < 4 ? seat : 0;
+  }
+
+  function mapLocalSeatToAuth(localIdx: number): number {
+    const mySeat = getLocalRoomSeat();
+    if (mySeat === 0) return localIdx;
+    if (localIdx === 0) return mySeat;
+    if (localIdx === mySeat) return 0;
+    return localIdx;
+  }
+
+  function isLocalSeatPartnerHuman(partnerIdx: number): boolean {
+    if (!activeRoom || activeRoom.state.status !== 'playing') return false;
+    const authSeat = mapLocalSeatToAuth(partnerIdx);
+    const myClient = activeRoom.getLocalPlayer()?.clientId;
+    return activeRoom.state.players.some(
+      (p) => p.connected && p.seat === authSeat && p.clientId !== myClient,
+    );
+  }
+
+  function sendCustomRoomPacket(type: string, payload: Record<string, unknown>): void {
+    if (!activeRoom || !activeRoomCode) return;
+    activeRoom.transport.broadcast({
+      id: `town_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      roomCode: activeRoomCode,
+      senderId: activeRoom.transport.localClientId,
+      sequenceNumber: Date.now(),
+      timestamp: Date.now(),
+      type: type as NetworkPacket['type'],
+      payload,
+    } as unknown as NetworkPacket);
+  }
+
+  function broadcastAuthoritativeTownState(): void {
+    if (!activeRoom || !activeRoomCode || applyingRemoteTownSync) return;
+    const mySeat = getLocalRoomSeat();
+    const authState = mySeat === 0 ? state : perspectiveSwapState(state, mySeat);
+    sendCustomRoomPacket('TOWN_STATE_SYNC', {
+      townState: authState,
+      updatedBySeat: mySeat,
+    });
+  }
+
+  function showIncomingHumanProposalModal(): void {
+    if (!incomingHumanProposal) return;
+    const p = incomingHumanProposal;
+    const formatSide = (side: OfferSide): string => {
+      const parts: string[] = [];
+      if (side.cash > 0) parts.push(`${side.cash} $wif`);
+      side.tiles.forEach((cnt, idx) => {
+        if (cnt > 0) parts.push(`${cnt}× ${SHOPS[idx].name}`);
+      });
+      if (side.lots.length > 0) {
+        parts.push(`Plots ${side.lots.map((id) => '#' + (id + 1)).join(', ')}`);
+      }
+      return parts.join(' + ') || 'Nothing';
+    };
+    modal(
+      `Live OTC Deal from ${escape(p.fromName)}`,
+      `<div class="wif-hub-section">
+        <p><strong>${escape(p.fromName)}</strong> offers you: <strong>${escape(formatSide(p.give))}</strong></p>
+        <p>In exchange for your: <strong>${escape(formatSide(p.take))}</strong></p>
+        <p class="muted" style="font-size:12px">1% of any $wif cash transfer routes automatically to the Staking Vault.</p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" data-action="decline-pvp-trade">Decline ×</button>
+          <button type="button" class="primary" data-action="accept-pvp-trade">Accept Deal ✓</button>
+        </div>
+      </div>`,
+      `ROOM ${activeRoomCode ?? ''} · LIVE PVP BARGAINING`,
+    );
+  }
+
+  function proposeHumanTradeOverRoom(offer: TradeOffer): boolean {
+    if (!activeRoom || !activeRoomCode) return false;
+    const fromAuthSeat = getLocalRoomSeat();
+    const toAuthSeat = mapLocalSeatToAuth(offer.partner);
+    const proposalId = `pvp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    sendCustomRoomPacket('TOWN_TRADE_PROPOSE', {
+      proposalId,
+      fromSeat: fromAuthSeat,
+      fromName: activeRoom.getLocalPlayer()?.name || 'Trader',
+      toSeat: toAuthSeat,
+      give: offer.give,
+      take: offer.take,
+    });
+    return true;
+  }
+
   function bindRoomSession(room: NetworkRoom, code: string): void {
     activeRoomUnsub?.();
     activeRoom?.stop();
     activeRoom = room;
     activeRoomCode = code;
     const unsubState = room.onStateChange((rState) => {
-      if (rState.status === 'playing' && rState.players.length > 0) {
+      if (rState.players.length > 0) {
+        const mySeat = getLocalRoomSeat();
         rState.players.forEach((rp) => {
           if (rp.seat !== null && rp.seat >= 0 && rp.seat < state.players.length && rp.name) {
-            state.players[rp.seat].name = rp.seat === 0 ? state.players[0].name : rp.name;
+            const localIdx = mapLocalSeatToAuth(rp.seat);
+            if (localIdx > 0 && localIdx < state.players.length) {
+              state.players[localIdx].name = rp.name;
+            } else if (mySeat === rp.seat) {
+              state.players[0].name = 'You';
+            }
           }
         });
       }
@@ -634,6 +852,65 @@ export function mountRobinTown(): void {
       }
       render();
     });
+    const unsubMessages = room.transport.onMessage((packet) => {
+      if (!packet || packet.roomCode !== code) return;
+      if (packet.senderId === room.transport.localClientId) return;
+      const rawType = String((packet as { type?: string }).type || '');
+      const payload = ((packet as { payload?: Record<string, unknown> }).payload || {}) as Record<
+        string,
+        unknown
+      >;
+
+      if (rawType === 'TOWN_STATE_SYNC' && payload.townState) {
+        const authState = payload.townState as GameState;
+        if (validSave(authState)) {
+          applyingRemoteTownSync = true;
+          try {
+            const mySeat = getLocalRoomSeat();
+            state = mySeat === 0 ? authState : perspectiveSwapState(authState, mySeat);
+            if (menuOpen) {
+              menuOpen = false;
+              sessionStarted = true;
+              view = 'play';
+            }
+            chosen = chosen.filter((id) => state.pending.includes(id));
+            save();
+            render();
+          } finally {
+            applyingRemoteTownSync = false;
+          }
+        }
+        return;
+      }
+
+      if (rawType === 'TOWN_TRADE_PROPOSE') {
+        const toSeat = Number(payload.toSeat);
+        if (toSeat === getLocalRoomSeat()) {
+          incomingHumanProposal = {
+            proposalId: String(payload.proposalId || ''),
+            fromSeat: Number(payload.fromSeat),
+            fromName: String(payload.fromName || 'Neighbor'),
+            toSeat,
+            give: payload.give as OfferSide,
+            take: payload.take as OfferSide,
+          };
+          playSound('deal-open');
+          showIncomingHumanProposalModal();
+        }
+        return;
+      }
+
+      if (rawType === 'TOWN_TRADE_RESPOND') {
+        const fromSeat = Number(payload.fromSeat);
+        if (fromSeat === getLocalRoomSeat()) {
+          const accepted = Boolean(payload.accepted);
+          const responderName = String(payload.responderName || 'Neighbor');
+          const taxAmount = Number(payload.taxAmount || 0);
+          trading.resolveExternalTradeResult?.(accepted, responderName, taxAmount);
+          if (accepted && taxAmount > 0) recordTradeTaxToVault(taxAmount, 1);
+        }
+      }
+    });
     const unsubStatus = room.transport.onStatusChange(() => {
       if (get('#modal').open && get('#modal').dataset.wifHub === 'true') {
         openWifHub();
@@ -641,12 +918,13 @@ export function mountRobinTown(): void {
     });
     activeRoomUnsub = () => {
       unsubState();
+      unsubMessages();
       unsubStatus();
     };
     void room.start().catch(() => {});
   }
 
-  const isStaked = () => stakedWif >= 500;
+  const isStaked = () => stakedWif >= 500 || Boolean(walletStats?.me?.onChainPatronBoost);
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const gameAudio = createGameAudio({ onChange: () => updateSoundButton() });
 
@@ -731,6 +1009,8 @@ export function mountRobinTown(): void {
       };
       saveEconomy();
     },
+    isHumanPartner: (partnerSeat) => isLocalSeatPartnerHuman(partnerSeat),
+    onProposeHumanTrade: (offer) => proposeHumanTradeOverRoom(offer),
     playSound,
     onTrading: (v) => gameAudio.setTrading(v),
     speak: (m, p) => gameAudio.speak(m, p),
@@ -738,6 +1018,7 @@ export function mountRobinTown(): void {
 
   function changed() {
     save();
+    broadcastAuthoritativeTownState();
     render();
   }
 
@@ -754,7 +1035,7 @@ export function mountRobinTown(): void {
     delete get('#modal').dataset.settings;
     delete get('#modal').dataset.wifHub;
     delete get('#modal').dataset.tradersBoard;
-    get('#modal').classList.remove('ledger-dialog');
+    get('#modal').classList.remove('ledger-dialog', 'results-dialog');
     if (trading.isOpen()) trading.cancel();
     lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     get('#modal').setAttribute('aria-label', title);
@@ -829,10 +1110,13 @@ export function mountRobinTown(): void {
   function hudUtilities() {
     const wState = wallet.getState();
     const balance = Math.floor(activeWalletBalance());
+    const realWeb3Addr = currentRealWeb3Address();
     const shortLabel =
-      wState.mode === 'web3' && wState.account
-        ? `${wState.account.address.slice(0, 6)}…`
+      realWeb3Addr
+        ? `${realWeb3Addr.slice(0, 6)}…${realWeb3Addr.slice(-4)}`
         : `${wState.account?.name ?? 'Sim'}`;
+    const myRank = walletStats?.me?.rank ?? null;
+    const totalWallets = walletStats?.totalUniqueWallets ?? 0;
     const phaseShort = {
       receive: 'Receive',
       trade: 'Bargain',
@@ -864,15 +1148,15 @@ export function mountRobinTown(): void {
         <button class="view-mode-btn ${viewMode === 'tabletop-3d' ? 'active' : ''}" data-action="set-view" data-view-mode="tabletop-3d" title="3D tilted tabletop Aseprite street map">3D Tilt</button>
         <button class="view-mode-btn ${viewMode === 'city-3d' ? 'active' : ''}" data-action="set-view" data-view-mode="city-3d" title="Full Three.js WebGL 3D City diorama">3D City</button>
       </div>
-      <button type="button" class="traders-hud-pill ${isCurrentWalletVerified() ? 'verified' : ''}" data-action="open-traders-board" title="View connected wallets and Harbor Leaderboard" aria-label="Open Harbor Traders and Wallet Registry">
-        <span>${isCurrentWalletVerified() ? '✓' : '🦊'}</span>
-        <span class="traders-hud-count">${(walletStats?.totalUniqueWallets ?? 0).toLocaleString('en-US')}</span>
-        <span class="traders-hud-label">${currentRealWeb3Address() ? `· ${currentRealWeb3Address()!.slice(0, 6)}…` : 'Wallets'}</span>
+      <button type="button" class="traders-hud-pill ${isCurrentWalletVerified() ? 'verified' : ''}" data-action="open-traders-board" title="View Harbor Leaderboard, Daily Seed & On-Chain Proofs" aria-label="Open Harbor Traders and Wallet Registry">
+        <span>${isCurrentWalletVerified() ? '✓ 🏆' : '🏆'}</span>
+        <span class="traders-hud-count">${myRank ? `#${myRank}` : totalWallets.toLocaleString('en-US')}</span>
+        <span class="traders-hud-label">${myRank ? `· ${totalWallets}` : totalWallets === 1 ? 'Wallet' : 'Wallets'}</span>
       </button>
       <button class="wif-hud-pill" data-action="wif-hub" aria-label="Open $wif Flywheel, Wallet, and Rooms">
         <span class="wif-hud-burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')}</span>
         <span class="wif-hud-mobile-icon" aria-hidden="true">💰</span>
-        <span class="wif-hud-balance"><span class="wif-hud-acct">${escape(shortLabel)}: </span>${balance.toLocaleString('en-US')} $wif</span>
+        <span class="wif-hud-balance">${realWeb3Addr ? `<span class="wif-hud-acct">🦊 ${escape(shortLabel)} · </span>` : `<span class="wif-hud-acct">${escape(shortLabel)} · </span>`}${balance.toLocaleString('en-US')} $wif</span>
         ${isStaked() ? '<span class="wif-hud-boost">1.20x</span>' : ''}
       </button>
       <button class="ipod-hud-btn ${ipodOpen ? 'active' : ''}" data-action="toggle-ipod" aria-pressed="${ipodOpen}" aria-label="Toggle iPod Classic controller">♫ iPod</button>
@@ -880,24 +1164,75 @@ export function mountRobinTown(): void {
     </div>`;
   }
 
+  function previewBuildYield(lotId: number, shopIdx: number): {
+    delta: number;
+    completesChain: boolean;
+    nextSize: number;
+    targetSize: number;
+  } {
+    const targetSize = SHOPS[shopIdx]?.size ?? 3;
+    const lot = state.lots[lotId];
+    if (!lot || lot.owner !== 0 || lot.shop !== null) {
+      return { delta: 0, completesChain: false, nextSize: 1, targetSize };
+    }
+    const before = income(state, 0, isStaked());
+    lot.shop = shopIdx;
+    const after = income(state, 0, isStaked());
+    const grp = groups(state, 0).find((g) => g.lots.includes(lotId));
+    const nextSize = grp?.size ?? 1;
+    lot.shop = null;
+    return {
+      delta: Math.max(0, after - before),
+      completesChain: nextSize >= targetSize && nextSize % targetSize === 0,
+      nextSize,
+      targetSize,
+    };
+  }
+
+  function bestRackShopYield(shopIdx: number): number {
+    if ((state.players[0]?.tiles[shopIdx] ?? 0) <= 0) return 0;
+    let best = 0;
+    for (const lot of holdings(state, 0)) {
+      if (lot.shop !== null) continue;
+      const { delta } = previewBuildYield(lot.id, shopIdx);
+      if (delta > best) best = delta;
+    }
+    return best;
+  }
+
   function phaseCard() {
     let title: string, body: string, action: string;
     switch (state.phase) {
-      case 'receive':
+      case 'receive': {
         title = 'Claim your corner.';
-        body = `Place your stools on ${state.draftCount} glowing plots.`;
-        action = `<div class="claim-tools"><button data-drag-token="0" class="counter-stack" aria-label="Drag your stool onto a glowing plot">${[0, 1, 2, 3].map((n) => token(0, `stack-${n}`)).join('')}</button><div class="address-strip">${state.pending.map((id) => `<button data-lot="${id}" class="address-slip ${chosen.includes(id) ? 'selected' : ''}" aria-pressed="${chosen.includes(id)}" aria-label="Plot ${id + 1}, ${DISTRICTS[Math.floor(id / 12)]}">${sprite('ui', 'plot-mini-v9', 'draft-ground')}<span class="draft-address">${id + 1}</span>${chosen.includes(id) ? token(0, 'draft-stool') : ''}<span class="draft-district">${String(Math.floor(id / 12) + 1).padStart(2, '0')}</span></button>`).join('')}</div><button class="primary" data-action="claim" ${chosen.length !== state.draftCount ? 'disabled' : ''}>Keep ${chosen.length}/${state.draftCount} ✓</button></div>`;
+        body = `Place your stools on ${state.draftCount} glowing plots (★ marks connected street corners).`;
+        const pendingSet = new Set(state.pending);
+        action = `<div class="claim-tools"><button data-drag-token="0" class="counter-stack" aria-label="Drag your stool onto a glowing plot">${[0, 1, 2, 3].map((n) => token(0, `stack-${n}`)).join('')}</button><div class="address-strip">${state.pending
+          .map((id) => {
+            const hasSynergy = neighbors(id).some(
+              (nid) => state.lots[nid].owner === 0 || (nid !== id && pendingSet.has(nid)),
+            );
+            return `<button data-lot="${id}" class="address-slip ${chosen.includes(id) ? 'selected' : ''} ${hasSynergy ? 'synergy-slip' : ''}" aria-pressed="${chosen.includes(id)}" title="Plot #${id + 1} (${DISTRICTS[Math.floor(id / 12)]})${hasSynergy ? ' · Connected corner!' : ''}" aria-label="Plot ${id + 1}, ${DISTRICTS[Math.floor(id / 12)]}${hasSynergy ? ', connected corner' : ''}">${sprite('ui', 'plot-mini-v9', 'draft-ground')}<span class="draft-address">${id + 1}</span>${hasSynergy ? '<span class="draft-synergy" aria-hidden="true">★</span>' : ''}${chosen.includes(id) ? token(0, 'draft-stool') : ''}<span class="draft-district">${String(Math.floor(id / 12) + 1).padStart(2, '0')}</span></button>`;
+          })
+          .join('')}</div>${chosen.length !== state.draftCount ? `<button type="button" class="secondary smart-phase-btn" data-action="coachmark-autopick" title="Highlight the ${state.draftCount} best connected plots">⚡ Smart Pick</button>` : ''}<button class="primary" data-action="claim" ${chosen.length !== state.draftCount ? 'disabled' : ''}>Keep ${chosen.length}/${state.draftCount} ✓</button></div>`;
         break;
-      case 'trade':
+      }
+      case 'trade': {
+        const smartOffer = findSmartPlayerTrade(state);
         title = 'Who holds your missing piece?';
-        body = 'Tap a neighbor, their shop piece, or their street plot to bargain in $wif.';
-        action = `<button class="primary" data-action="trade">Bargain ⇄</button><button class="secondary" data-action="build">Build →</button>`;
+        body = smartOffer
+          ? `Win-win swap ready with ${state.players[smartOffer.partner]?.name ?? 'a neighbor'}! Bargain in $wif or jump to Build.`
+          : 'Tap a neighbor, their shop piece, or their street plot to bargain in $wif.';
+        action = `${smartOffer ? `<button type="button" class="secondary smart-phase-btn" data-action="smart-trade">💡 Smart Deal ⇄</button>` : ''}<button class="primary" data-action="trade">Bargain ⇄</button><button class="secondary" data-action="build">Build →</button>`;
         break;
-      case 'build':
+      }
+      case 'build': {
+        const nextSmart = findNextSmartBuild(state);
         title = 'Open for business.';
-        body = 'Choose a shop piece below, drag it onto your plot, or tap your plot for quick build.';
-        action = `<span class="payday-preview">Next payday <b>${income(state, 0, isStaked())} $wif</b></span><button class="primary" data-action="collect">Finish & collect →</button>`;
+        body = 'Choose a shop piece below, drag it onto your plot, or tap Quick Build.';
+        action = `<span class="payday-preview">Next payday <b>${income(state, 0, isStaked())} $wif</b></span>${nextSmart ? `<button type="button" class="secondary smart-phase-btn" data-action="smart-build-one" title="Open ${SHOPS[nextSmart.shop].name} on plot #${nextSmart.id + 1}">⚡ Open ${SHOPS[nextSmart.shop].name} (#${nextSmart.id + 1})</button>` : ''}<button class="primary" data-action="collect">Finish & collect →</button>`;
         break;
+      }
       case 'income':
         title = 'A thriving year on the block.';
         body = `Your storefronts brought in ${state.lastIncome[0]} $wif${isStaked() ? ' (1.20x staked boost)' : ''}.`;
@@ -912,7 +1247,10 @@ export function mountRobinTown(): void {
   }
 
   function hand() {
-    return `<section class="tile-rack" aria-label="Your shop pieces"><div class="rack-label"><span>YOUR SHOP PIECES</span><button class="ledger-shortcut" data-action="businesses"><span aria-hidden="true">▤</span> Open ledger ↗</button></div><div class="shop-tray">${SHOPS.map((s, i) => `<button class="shop-piece ${selectedShop === i ? 'active' : ''} ${state.players[0].tiles[i] === 0 ? 'depleted' : ''}" data-shop="${i}" data-drag-shop="${i}" aria-pressed="${selectedShop === i}" aria-label="${s.name}: ${state.players[0].tiles[i]} in your rack. Connect ${s.size} matching shops of your color for ${COMPLETE[s.size]} $wif each year"><span class="piece-count"><small>Have</small> ${state.players[0].tiles[i]}</span>${sprite('shops', SPRITES[i])}<strong>${s.name}</strong><small class="shop-requirement"><span>Connect</span> <b>${s.size}</b> <span class="requirement-tail">tiles</span></small><span class="shop-payout">${COMPLETE[s.size]} $wif <em>/ year</em></span></button>`).join('')}</div><div class="rack-hint">Same shop + your stool color + shared edge = connected business. Stake 500 $wif in the Hub for a 1.20x annual payday boost!</div></section>`;
+    return `<section class="tile-rack" aria-label="Your shop pieces"><div class="rack-label"><span>YOUR SHOP PIECES</span><button class="ledger-shortcut" data-action="businesses"><span aria-hidden="true">▤</span> Open ledger ↗</button></div><div class="shop-tray">${SHOPS.map((s, i) => {
+      const bestDelta = state.phase === 'build' ? bestRackShopYield(i) : 0;
+      return `<button class="shop-piece ${selectedShop === i ? 'active' : ''} ${state.players[0].tiles[i] === 0 ? 'depleted' : ''}" data-shop="${i}" data-drag-shop="${i}" aria-pressed="${selectedShop === i}" aria-label="${s.name}: ${state.players[0].tiles[i]} in your rack. Connect ${s.size} matching shops of your color for ${COMPLETE[s.size]} $wif each year"><span class="piece-count"><small>Have</small> ${state.players[0].tiles[i]}</span>${bestDelta > 0 ? `<span class="piece-delta-badge">+${bestDelta} $wif/yr</span>` : ''}${sprite('shops', SPRITES[i])}<strong>${s.name}</strong><small class="shop-requirement"><span>Connect</span> <b>${s.size}</b> <span class="requirement-tail">tiles</span></small><span class="shop-payout">${COMPLETE[s.size]} $wif <em>/ year</em></span></button>`;
+    }).join('')}</div><div class="rack-hint">Same shop + your stool color + shared edge = connected business. Stake 500 $wif in the Hub for a 1.20x annual payday boost!</div></section>`;
   }
 
   function selection() {
@@ -924,10 +1262,14 @@ export function mountRobinTown(): void {
           : groups(state, l.owner).find((grp) => grp.lots.includes(l.id));
     const build =
       state.phase === 'build' && l.owner === 0
-        ? `<div class="quick-build"><small>${l.shop === null ? 'OPEN HERE' : 'EXPAND THIS BUSINESS'}</small><div>${
+        ? `<div class="quick-build"><small>${l.shop === null ? 'OPEN HERE · MARGINAL YIELD' : 'EXPAND THIS BUSINESS'}</small><div>${
             SHOPS.map((s, i) => {
               if (!state.players[0].tiles[i] || (l.shop !== null && i !== l.shop)) return '';
-              return `<button data-action="quick-build" data-id="${l.id}" data-index="${i}" aria-label="${l.shop === null ? 'Build' : 'Select'} ${s.name}">${sprite('shops', SPRITES[i])}<strong>${s.name}</strong><small>×${state.players[0].tiles[i]} · ${s.size} → ${COMPLETE[s.size]} $wif</small></button>`;
+              const preview = l.shop === null ? previewBuildYield(l.id, i) : null;
+              const subText = preview
+                ? `+${preview.delta} $wif/yr · ${preview.completesChain ? '★ COMPLETE!' : `${preview.nextSize}/${preview.targetSize} tiles`}`
+                : `×${state.players[0].tiles[i]} · ${s.size} → ${COMPLETE[s.size]} $wif`;
+              return `<button data-action="quick-build" data-id="${l.id}" data-index="${i}" aria-label="${l.shop === null ? 'Build' : 'Select'} ${s.name}">${sprite('shops', SPRITES[i])}<strong>${s.name} ×${state.players[0].tiles[i]}</strong><small>${subText}</small></button>`;
             }).join('') || `<span>No matching pieces in your rack.</span>`
           }</div></div>`
         : '';
@@ -939,12 +1281,108 @@ export function mountRobinTown(): void {
     return `<div class="map-terrain" aria-hidden="true">${sprite('city', 'saigon-city-board-v6', 'city-background')}<span class="street-name street-top">SHERWOOD AVE</span><span class="street-name street-mid">MERCHANT BLVD</span><span class="street-name street-bottom">HARBORFRONT QUAY</span><span class="river-name">ROBINHOOD RIVER</span><div class="vehicle ninja-ride">${sprite('life', 'ninja-lead')}</div><div class="vehicle ninja-return">${sprite('life', 'ninja-lead')}</div><div class="vehicle city-bus">${sprite('life', 'city-bus')}</div><div class="walker crossing-one"><span></span></div><div class="walker crossing-two"><span></span></div><div class="walker crossing-three"><span></span></div></div>`;
   }
 
+  function render3DHoverTooltip(lotId: number | null) {
+    const tip = $('.city-hover-tooltip');
+    if (!tip) return;
+    if (lotId === null || viewMode !== 'city-3d' || menuOpen) {
+      tip.hidden = true;
+      return;
+    }
+    const lot = state.lots[lotId];
+    if (!lot) {
+      tip.hidden = true;
+      return;
+    }
+    const districtName = DISTRICTS[Math.floor(lotId / 12)] ?? 'Harbor';
+    const ownerLabel =
+      lot.owner === null
+        ? state.pending.includes(lotId)
+          ? chosen.includes(lotId)
+            ? '✓ Selected Draft Deed'
+            : '★ Glowing Land Deed Offer'
+          : 'Unclaimed Street Corner'
+        : lot.owner === 0
+          ? lot.shop !== null
+            ? `Your ${SHOPS[lot.shop].name}`
+            : 'Your Empty Street Plot'
+          : `${state.players[lot.owner]?.name ?? 'Neighbor'}${lot.shop !== null ? ' · ' + SHOPS[lot.shop].name : ' · Empty Plot'}`;
+
+    let detailLine = 'Click to inspect street corner';
+    if (lot.shop !== null && lot.owner !== null) {
+      const grp = groups(state, lot.owner).find((g) => g.lots.includes(lotId));
+      const sz = grp?.size ?? 1;
+      const target = SHOPS[lot.shop].size;
+      const rawYield = groupIncome(lot.shop, sz);
+      const finalYield = lot.owner === 0 && isStaked() ? Math.round(rawYield * 1.2) : rawYield;
+      detailLine = `${sz}/${target} connected · +${finalYield} $wif/yr${sz >= target ? ' (COMPLETE!)' : ''}`;
+    } else if (state.phase === 'receive' && state.pending.includes(lotId)) {
+      const hasAdj = neighbors(lotId).some(
+        (nid) => state.lots[nid].owner === 0 || (nid !== lotId && state.pending.includes(nid)),
+      );
+      detailLine = hasAdj
+        ? '★ Adjacent cluster synergy · Click to toggle stool'
+        : 'Click to place or lift your draft stool';
+    } else if (state.phase === 'build' && lot.owner === 0 && lot.shop === null) {
+      if (selectedShop !== null && canPlace(state, 0, lotId, selectedShop)) {
+        const prev = previewBuildYield(lotId, selectedShop);
+        detailLine = `Click to open ${SHOPS[selectedShop].name}: +${prev.delta} $wif/yr (${prev.nextSize}/${prev.targetSize})`;
+      } else {
+        detailLine = 'Click for Quick Build menu';
+      }
+    } else if (state.phase === 'trade' && lot.owner !== null && lot.owner !== 0) {
+      detailLine = `Click to bargain with ${state.players[lot.owner]?.name ?? 'Neighbor'} for #${lotId + 1}`;
+    }
+
+    tip.innerHTML = `<small>${escape(districtName)} · PLOT #${lotId + 1}</small><strong>${escape(ownerLabel)}</strong><span>${escape(detailLine)}</span>`;
+    tip.hidden = false;
+  }
+
+  function renderCoachmarkBanner(): string {
+    if (tutorialDone || state.year > 1 || autoPlaySpeed > 0 || menuOpen) return '';
+    if (state.phase === 'receive') {
+      const need = Math.max(0, state.draftCount - chosen.length);
+      return `<div class="coachmark-banner" role="region" aria-label="First-turn interactive guide">
+        <span class="coachmark-step">STEP 1/3</span>
+        <span class="coachmark-copy">${need > 0 ? `Tap ${need} glowing gold ${need === 1 ? 'deed' : 'deeds'} in the 3D Harbor (or click Smart Pick), then press Keep ✓` : `Ready! Press Keep ${state.draftCount}/${state.draftCount} ✓ below to lock in your street corners`}</span>
+        <div class="coachmark-actions">
+          ${need > 0 ? `<button type="button" class="coachmark-btn" data-action="coachmark-autopick">⚡ Smart Pick ${state.draftCount}</button>` : `<button type="button" class="coachmark-btn" data-action="claim">Keep ${state.draftCount}/${state.draftCount} ✓</button>`}
+          <button type="button" class="coachmark-skip" data-action="skip-tutorial" aria-label="Skip tutorial">Skip ×</button>
+        </div>
+      </div>`;
+    }
+    if (state.phase === 'trade') {
+      const hasSmart = Boolean(findSmartPlayerTrade(state));
+      return `<div class="coachmark-banner" role="region" aria-label="First-turn interactive guide">
+        <span class="coachmark-step">STEP 2/3</span>
+        <span class="coachmark-copy">Swap tiles & plots in $wif with Cole, Maya & Clara, or jump straight to Build →</span>
+        <div class="coachmark-actions">
+          ${hasSmart ? `<button type="button" class="coachmark-btn" data-action="smart-trade">💡 Load Win-Win Deal</button>` : `<button type="button" class="coachmark-btn" data-action="trade">Bargain ⇄</button>`}
+          <button type="button" class="coachmark-btn secondary" data-action="confirm-build">Build Now →</button>
+          <button type="button" class="coachmark-skip" data-action="skip-tutorial" aria-label="Skip tutorial">Skip ×</button>
+        </div>
+      </div>`;
+    }
+    if (state.phase === 'build') {
+      const nextSmart = findNextSmartBuild(state);
+      return `<div class="coachmark-banner" role="region" aria-label="First-turn interactive guide">
+        <span class="coachmark-step">STEP 3/3</span>
+        <span class="coachmark-copy">Pick a shop piece in your rack below and tap your green plot to earn annual $wif!</span>
+        <div class="coachmark-actions">
+          ${nextSmart ? `<button type="button" class="coachmark-btn" data-action="smart-build-one">⚡ Open ${SHOPS[nextSmart.shop].name}</button>` : ''}
+          <button type="button" class="coachmark-skip" data-action="skip-tutorial" aria-label="Finish tutorial">Got it ✓</button>
+        </div>
+      </div>`;
+    }
+    return '';
+  }
+
   function ensure3DCityMounted() {
     const stage = $('.three-city-stage');
     const host = $('.three-city-canvas-host');
     if (!stage || !host) return;
     if (viewMode !== 'city-3d') {
       board3D?.pause();
+      render3DHoverTooltip(null);
       return;
     }
     const shaderCanvas = stage.querySelector<HTMLCanvasElement>('#robin-city-shader');
@@ -958,23 +1396,49 @@ export function mountRobinTown(): void {
     }
     cityShader?.setPhaseTheme(state.phase);
 
-    if (!board3D && isWebGLAvailable()) {
-      const rect = stage.getBoundingClientRect();
-      const fallbackW = typeof window !== 'undefined' ? window.innerWidth || 390 : 1000;
-      const fallbackH = typeof window !== 'undefined' ? Math.round((window.innerHeight || 680) * 0.72) : 620;
-      board3D = new RobinCity3DRenderer({
-        container: host,
-        width: Math.max(280, rect.width || fallbackW),
-        height: Math.max(240, rect.height || fallbackH),
-        initialPreset: cameraPreset3D,
-        initialAtmosphere: atmosphere3D,
-        onSelectLot: (lotId) => {
-          playSound('tap');
-          clickLot(lotId);
-        },
-      });
-      board3D.setTouchDragMode(touchDragMode3D);
-      board3D.mount();
+    if (!board3D && canUseWebGL() && !city3DMountPending) {
+      city3DMountPending = true;
+      void loadCity3DRendererModule()
+        .then(({ RobinCity3DRenderer: CityRenderer }) => {
+          city3DMountPending = false;
+          const liveStage = $('.three-city-stage');
+          const liveHost = $('.three-city-canvas-host');
+          if (!liveStage || !liveHost || board3D) return;
+          const rect = liveStage.getBoundingClientRect();
+          const fallbackW = typeof window !== 'undefined' ? window.innerWidth || 390 : 1000;
+          const fallbackH =
+            typeof window !== 'undefined' ? Math.round((window.innerHeight || 680) * 0.72) : 620;
+          board3D = new CityRenderer({
+            container: liveHost,
+            width: Math.max(280, rect.width || fallbackW),
+            height: Math.max(240, rect.height || fallbackH),
+            initialPreset: cameraPreset3D,
+            initialAtmosphere: atmosphere3D,
+            onSelectLot: (lotId) => {
+              playSound('tap');
+              clickLot(lotId);
+            },
+            onHoverLot: (lotId) => {
+              hoveredLot3D = lotId;
+              render3DHoverTooltip(lotId);
+            },
+          });
+          board3D.setTouchDragMode(touchDragMode3D);
+          board3D.mount();
+          if (viewMode !== 'city-3d') {
+            board3D.pause();
+            return;
+          }
+          board3D.render({
+            state,
+            selectedLot,
+            chosenLots: chosen,
+            selectedShop,
+          });
+        })
+        .catch(() => {
+          city3DMountPending = false;
+        });
     } else if (board3D) {
       board3D.setTouchDragMode(touchDragMode3D);
       board3D.resume();
@@ -989,6 +1453,7 @@ export function mountRobinTown(): void {
       chosenLots: chosen,
       selectedShop,
     });
+    render3DHoverTooltip(hoveredLot3D);
     stage
       .querySelectorAll<HTMLButtonElement>('button[data-action="set-3d-preset"]')
       .forEach((btn) => {
@@ -1142,11 +1607,12 @@ export function mountRobinTown(): void {
             <div class="three-city-stage">
               <canvas id="robin-city-shader" class="robin-shader-canvas" aria-hidden="true"></canvas>
               <div class="three-city-canvas-host"></div>
+              <div class="city-hover-tooltip" hidden aria-live="off"></div>
               <div class="three-city-toolbar" role="toolbar" aria-label="3D City camera and atmosphere controls">
                 <span class="three-city-label">3D Neighborhood</span>
                 <button type="button" class="touch-only-pill" data-action="toggle-3d-touch-mode" aria-pressed="false" aria-label="Toggle 1-finger touch drag between Pan and Orbit">✋ Pan</button>
-                <button type="button" data-action="set-3d-preset" data-preset="neighborhood" class="active">2D Match</button>
-                <button type="button" data-action="set-3d-preset" data-preset="isometric">Iso</button>
+                <button type="button" data-action="set-3d-preset" data-preset="neighborhood">2D Match</button>
+                <button type="button" data-action="set-3d-preset" data-preset="isometric" class="active">Iso</button>
                 <button type="button" data-action="set-3d-preset" data-preset="street">Street</button>
                 <button type="button" data-action="set-3d-preset" data-preset="topdown">Top</button>
                 <button type="button" data-action="reset-3d-camera">Reset</button>
@@ -1161,7 +1627,10 @@ export function mountRobinTown(): void {
               </div>
             </div>
           </div>
-          <div class="bot-live-feed" role="status" aria-live="polite"></div>
+          <div class="stage-top-stack">
+            <div class="bot-live-feed" role="status" aria-live="polite"></div>
+            <div class="coachmark-layer"></div>
+          </div>
           <div class="calendar-layer"></div>
           <span class="camera-hint"></span>
           <div class="inspector-layer"></div>
@@ -1251,6 +1720,10 @@ export function mountRobinTown(): void {
     get('.game-hud-top').innerHTML = `<div class="game-brand">ROBIN<span>TOWN</span></div>${playerCard()}${hudUtilities()}`;
     get('.plot-layer').innerHTML = board();
     get('.calendar-layer').innerHTML = calendar();
+    const coachEl = $('.coachmark-layer');
+    if (coachEl) {
+      coachEl.innerHTML = renderCoachmarkBanner();
+    }
     const botFeedEl = $('.bot-live-feed');
     if (botFeedEl) {
       const botDots = `<span class="bot-dots" aria-hidden="true"><i style="background:${TOKEN_COLORS[0]}"></i><i style="background:${TOKEN_COLORS[1]}"></i><i style="background:${TOKEN_COLORS[2]}"></i><i style="background:${TOKEN_COLORS[3]}"></i></span>`;
@@ -1440,10 +1913,14 @@ export function mountRobinTown(): void {
         <div class="menu-shops" aria-hidden="true">${sprite('shops', 'banhmi')}${sprite('shops', 'coffee')}${sprite('shops', 'pho')}</div>
         <p class="start-description">Pull up a stool. Bargain for street corners, open neighborhood shops, and put $wif to work in a 6-year trading board game.</p>
 
-        <div class="entry-mode-grid" role="group" aria-label="Choose match entry mode">
+        <div class="entry-mode-grid entry-mode-grid-3" role="group" aria-label="Choose match entry mode">
           <button type="button" class="entry-mode-card ${selectedEntryMode === 'casual' ? 'active' : ''}" data-action="select-entry" data-entry-mode="casual">
-            <strong>Casual Town <span class="entry-tag">FREE ENTRY</span></strong>
-            <small>No $wif needed to play. Beat AI neighbors, earn Town Points, and swap points to $wif (3% burn).</small>
+            <strong>Casual Town <span class="entry-tag">FREE</span></strong>
+            <small>Zero $wif needed. Beat AI neighbors, earn Town Points, and swap points to $wif (3% burn).</small>
+          </button>
+          <button type="button" class="entry-mode-card ${selectedEntryMode === 'daily' ? 'active' : ''}" data-action="select-entry" data-entry-mode="daily">
+            <strong>📅 Daily Seed <span class="entry-tag daily">${escape((walletStats?.todaySeed ?? getTodayHarborSeedKey()).slice(5))}</span></strong>
+            <small>Same 6-year plot & shop deck worldwide today. Build your streak & top the Daily Leaderboard!</small>
           </button>
           <button type="button" class="entry-mode-card ${selectedEntryMode === 'ranked' ? 'active' : ''}" data-action="select-entry" data-entry-mode="ranked">
             <strong>Ranked Arena <span class="entry-tag">1,000 $WIF</span></strong>
@@ -1454,9 +1931,9 @@ export function mountRobinTown(): void {
         ${metaMaskStripHtml}
 
         <div class="start-actions">
-          <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${hasProgress() ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : 'Start free game'} <span>▶</span></button>
+          <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${hasProgress() ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : selectedEntryMode === 'daily' ? `Play Daily Seed (${walletStats?.todaySeed ?? getTodayHarborSeedKey()})` : 'Start free game'} <span>▶</span></button>
           <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Fast Play A to Z (Watch You + Cole, Maya & Clara)</button>
-          ${hasProgress() ? `<span class="save-caption">Year ${state.year}/6 · ${phaseName()} · ${state.players[0].cash} $wif (${state.entryMode === 'ranked' ? 'Ranked Arena' : 'Casual Town'})</span><button class="menu-option" data-action="new">New game</button>` : ''}
+          ${hasProgress() ? `<span class="save-caption">Year ${state.year}/6 · ${phaseName()} · ${state.players[0].cash} $wif (${state.entryMode === 'ranked' ? 'Ranked Arena' : state.entryMode === 'daily' ? `Daily Seed #${state.dailySeed ?? ''}` : 'Casual Town'})</span><button class="menu-option" data-action="new">New game</button>` : ''}
           <button class="menu-option" data-action="wif-hub">$wif Wallet, Staking & Online Rooms (${walletBalance.toLocaleString('en-US')} $wif)</button>
           <button class="menu-option" data-action="rules">How to play</button>
           <button class="menu-option" data-action="settings">Audio & View Settings</button>
@@ -1592,6 +2069,7 @@ export function mountRobinTown(): void {
 
   function openWifHub() {
     if (!onChainProof) refreshOnChainProof();
+    if (!openRoomsLoaded && !openRoomsLoading) refreshOpenRooms();
     const wState = wallet.getState();
     const simAccounts = wallet.getSimulatedAccounts();
     const activeAddr = wState.account?.address ?? '';
@@ -1600,6 +2078,8 @@ export function mountRobinTown(): void {
     const roomSnap = activeRoom?.state;
     const connectedPeers = roomSnap?.players.filter((p) => p.connected) ?? [];
     const wsActive = activeRoom?.isCloudRelayActive() ?? false;
+    const patronActive = Boolean(walletStats?.me?.onChainPatronBoost);
+    const verifiedTxCount = walletStats?.me?.verifiedTxCount ?? 0;
 
     modal(
       '$wif Flywheel, Wallet & Online Rooms',
@@ -1630,38 +2110,44 @@ export function mountRobinTown(): void {
         <div class="wif-row-actions">
           <button type="button" class="primary" data-action="connect-mainnet-wif">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_MAINNET_CHAIN_ID ? `Mainnet 4663: ${activeAddr.slice(0, 8)}…` : 'Connect Robinhood Chain (4663)'}</button>
           ${currentRealWeb3Address() && !isCurrentWalletVerified() ? `<button type="button" class="secondary" data-action="verify-wallet-sig">✍️ Verify Ownership (+100 pts, 0 gas)</button>` : ''}
-          <button type="button" class="secondary" data-action="burn-mainnet-wif">🔥 Burn 0.1 $wif On-Chain (4663)</button>
+          <button type="button" class="secondary" data-action="burn-mainnet-wif" data-amount="0.1">🔥 Burn 0.1 $wif</button>
+          <button type="button" class="secondary" data-action="burn-mainnet-wif" data-amount="1">🔥 Burn 1 $wif (+150 pts)</button>
+          <button type="button" class="secondary" data-action="patronize-mainnet-wif">🏛️ Patronize 10 $wif (1.20x Boost)</button>
           <button type="button" class="secondary" data-action="open-traders-board">🏆 Harbor Leaderboard (${walletStats?.totalUniqueWallets ?? 0} Wallets)</button>
           <button type="button" class="secondary" data-action="connect-web3">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_CHAIN_ID ? `Testnet: ${activeAddr.slice(0, 8)}…` : `Testnet (${ROBINHOOD_CHAIN_ID})`}</button>
-          <span class="muted" style="font-size:12px">Active Balance: <strong>${activeBal.toLocaleString('en-US')} $wif</strong></span>
+          <span class="muted" style="font-size:12px">Active Balance: <strong>${activeBal.toLocaleString('en-US')} $wif</strong>${verifiedTxCount > 0 ? ` · ⛓️ ${verifiedTxCount} Verified Tx` : ''}</span>
           ${
             onChainProof
               ? `<span class="robin-chain-pill" style="font-size:11px">● Block #${onChainProof.mainnetBlockNumber.toLocaleString('en-US')} · <a href="${BURN_EXPLORER_URL}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">${Math.round(onChainProof.burnedDeadBalanceWif).toLocaleString('en-US')} $wif burned on-chain</a></span>`
               : `<button type="button" class="artbook-link" data-action="refresh-onchain" style="font-size:11px">Verify live Robinhood Chain RPC</button>`
           }
         </div>
+        <div class="tx-verify-row">
+          <input id="verify-tx-hash-input" class="tx-hash-input" type="text" maxlength="66" placeholder="Paste Chain 4663 $wif tx hash (0x...)" value="${escape(lastMainnetTxHash ?? lastPastedTxHash)}" aria-label="Robinhood Chain 4663 $wif transaction hash" />
+          <button type="button" class="secondary" data-action="verify-onchain-tx" ${txVerifyPending ? 'disabled' : ''}>${txVerifyPending ? '⏳ Checking RPC…' : '⛓️ Verify On-Chain Tx (+150 pts)'}</button>
+          ${lastMainnetTxHash ? `<button type="button" class="secondary" data-action="copy-onchain-tx">Copy Tx Hash</button>` : ''}
+        </div>
         ${
           lastMainnetTxHash
-            ? `<div class="wif-row-actions" style="margin-top:8px">
-                <span class="robin-chain-pill" style="font-size:11px">✓ On-Chain $wif Burn Tx: <a href="${ROBINHOOD_MAINNET_EXPLORER_URL}/tx/${lastMainnetTxHash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline"><code>${lastMainnetTxHash.slice(0, 12)}…${lastMainnetTxHash.slice(-6)}</code></a></span>
-                <button type="button" class="secondary" data-action="copy-onchain-tx" style="font-size:11px">Copy Tx Hash</button>
+            ? `<div class="wif-row-actions" style="margin-top:6px">
+                <span class="robin-chain-pill" style="font-size:11px">✓ Verified Chain 4663 Tx: <a href="${ROBINHOOD_MAINNET_EXPLORER_URL}/tx/${lastMainnetTxHash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline"><code>${lastMainnetTxHash.slice(0, 12)}…${lastMainnetTxHash.slice(-6)}</code> ↗</a></span>
               </div>`
             : ''
         }
       </section>
 
       <section class="wif-hub-section">
-        <h3>2. $wif Staking Yield Boost (1.20x Shop Paydays)</h3>
-        <p>Lock 500 $wif in the neighborhood Staking Vault to multiply all your annual storefront paydays by <strong>1.20x</strong>.</p>
+        <h3>2. $wif Staking & On-Chain Patron Yield Boost (1.20x Shop Paydays)</h3>
+        <p>Lock 500 $wif in the neighborhood Staking Vault (or verify >= 1 $wif moved on Robinhood Chain 4663) to multiply all your annual storefront paydays by <strong>1.20x</strong>.</p>
         <div class="wif-row-actions">
-          <button type="button" class="primary" data-action="toggle-stake">${isStaked() ? 'Unstake 500 $wif (Active 1.20x)' : 'Stake 500 $wif -> Activate 1.20x Boost'}</button>
-          <span class="muted" style="font-size:12px">${isStaked() ? 'Staked: 500 $wif earning boosted street yield' : 'Currently unstaked (1.00x base yield)'}</span>
+          <button type="button" class="primary" data-action="toggle-stake">${stakedWif >= 500 ? 'Unstake 500 $wif (Active 1.20x)' : 'Stake 500 $wif -> Activate 1.20x Boost'}</button>
+          <span class="muted" style="font-size:12px">${patronActive ? '⛓️ 1.20x On-Chain Patron Boost permanently active!' : isStaked() ? 'Staked: 500 $wif earning boosted street yield' : 'Currently unstaked (1.00x base yield)'}</span>
         </div>
       </section>
 
       <section class="wif-hub-section">
         <h3>3. Swap Casual Town Points to $wif (3% Deflationary Burn)</h3>
-        <p>Earn Town Points from every deal and year-end harvest in Casual Mode, then redeem points for $wif (10 pts = 1 $wif, 3% burned to <code>${BURN_ADDRESS.slice(0, 10)}…dEaD</code>).</p>
+        <p>Earn Town Points from every deal, streak, and year-end harvest, then redeem points for $wif (10 pts = 1 $wif, 3% burned to <code>${BURN_ADDRESS.slice(0, 10)}…dEaD</code>).</p>
         <div class="wif-row-actions">
           <button type="button" class="primary" data-action="swap-points" ${swapQuote.netWif <= 0 ? 'disabled' : ''}>Swap ${townPoints} pts -> +${swapQuote.netWif} $wif (Burn ${swapQuote.burnedWif} $wif)</button>
           <button type="button" class="secondary" data-action="vote-burn">🔥 Burn 100 $wif Community Vote (${communityVotes} cast)</button>
@@ -1670,13 +2156,32 @@ export function mountRobinTown(): void {
 
       <section class="wif-hub-section">
         <h3>4. Cross-Device Online Multiplayer Room Lobby (WebSocket + P2P)</h3>
-        <p>Create a 6-character room code or share an invite link so players on separate laptops, phones, or tabs join the same lobby over live WebSocket relay.</p>
+        <p>Create a 6-character room code, join an open public table in 1 click, or share an invite link across laptops and phones over live WebSocket relay.</p>
         <div class="wif-row-actions">
           <button type="button" class="secondary" data-action="create-room">Create Room Code</button>
           <input id="join-room-input" class="room-code-input" type="text" maxlength="6" placeholder="CODE6X" value="${activeRoomCode ?? ''}" aria-label="6-character room code" />
           <button type="button" class="secondary" data-action="join-room">Join Room</button>
+          <button type="button" class="secondary" data-action="refresh-open-rooms">↻ Refresh Tables</button>
           ${activeRoomCode ? `<button type="button" class="secondary" data-action="copy-room-link">Copy Invite Link</button>` : ''}
         </div>
+        ${
+          openRoomsList.length > 0
+            ? `<div class="open-rooms-list" aria-label="Open multiplayer rooms">
+                ${openRoomsList
+                  .map(
+                    (rm) => `<div class="open-room-chip">
+                      <span>🟢 <strong>${escape(rm.code)}</strong> · Host: ${escape(rm.hostName)} · ${rm.players}/${rm.maxPlayers} Seats (${escape(rm.status)})</span>
+                      ${
+                        activeRoomCode === rm.code
+                          ? `<span class="trader-badge verified">Joined ✓</span>`
+                          : `<button type="button" class="secondary" data-action="quick-join-room" data-room="${escape(rm.code)}">Join 1-Click →</button>`
+                      }
+                    </div>`,
+                  )
+                  .join('')}
+              </div>`
+            : `<p class="muted" style="margin:8px 0 0;font-size:11.5px">No public rooms waiting right now. Click Create Room Code to open Table #1.</p>`
+        }
         ${
           activeRoomCode
             ? `<div class="wif-row-actions" style="margin-top:8px">
@@ -1698,7 +2203,7 @@ export function mountRobinTown(): void {
     get('#modal').dataset.wifHub = 'true';
   }
 
-  function openTradersBoard(nextTab?: 'leaderboard' | 'recent' | 'verify') {
+  function openTradersBoard(nextTab?: 'leaderboard' | 'daily' | 'recent' | 'verify') {
     if (nextTab) tradersTab = nextTab;
     if (!walletStats) refreshWalletStats();
     const realAddr = currentRealWeb3Address();
@@ -1709,6 +2214,8 @@ export function mountRobinTown(): void {
     const walletMatches = walletStats?.walletMatchesPlayed ?? 0;
     const guestMatches = walletStats?.guestMatchesPlayed ?? 0;
     const leaderboardRows = walletStats?.leaderboard ?? [];
+    const dailyRows = walletStats?.dailyLeaderboard ?? [];
+    const todaySeed = walletStats?.todaySeed ?? getTodayHarborSeedKey();
     const recentRows = walletStats?.recentWallets ?? [];
     const me = walletStats?.me ?? null;
 
@@ -1727,7 +2234,7 @@ export function mountRobinTown(): void {
                   <tr>
                     <th>#</th>
                     <th>Trader Wallet</th>
-                    <th>Status</th>
+                    <th>Status & Proofs</th>
                     <th>Best Year-6 $wif</th>
                     <th>Matches</th>
                     <th>Chain 4663 $wif</th>
@@ -1739,10 +2246,53 @@ export function mountRobinTown(): void {
                       (row) => `<tr>
                         <td><strong>#${row.rank}</strong></td>
                         <td><code>${escape(row.shortAddress)}</code></td>
-                        <td><span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span></td>
+                        <td>
+                          <span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span>
+                          ${(row.currentStreakDays ?? 0) >= 2 ? `<span class="streak-pill">🔥 ${row.currentStreakDays}d</span>` : ''}
+                          ${row.onChainPatronBoost ? `<span class="streak-pill patron">1.20x Patron</span>` : ''}
+                          ${
+                            (row.verifiedTxCount ?? 0) > 0 && row.lastVerifiedTxHash
+                              ? `<a class="trader-tx-link" href="${ROBINHOOD_MAINNET_EXPLORER_URL}/tx/${encodeURIComponent(row.lastVerifiedTxHash)}" target="_blank" rel="noopener">⛓️ ${row.verifiedTxCount} Tx ↗</a>`
+                              : ''
+                          }
+                        </td>
                         <td><strong>${row.bestNetWorthWif.toLocaleString('en-US')} $wif</strong></td>
                         <td>${row.matchesPlayed} (${row.wins}W)</td>
                         <td>${row.onChainWifBalance.toLocaleString('en-US')} $wif</td>
+                      </tr>`,
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>`;
+    } else if (tradersTab === 'daily') {
+      tabBody =
+        dailyRows.length === 0
+          ? `<div class="traders-empty-card">
+              <h3>📅 Daily Harbor Challenge (${escape(todaySeed)})</h3>
+              <p>Every player worldwide draws the exact same deterministic 6-year land deeds and shop tiles today. Be the first to post a Year-6 score on today's seed!</p>
+              <button type="button" class="primary" data-action="launch-daily-seed">📅 Play Today's Daily Seed ▶</button>
+            </div>`
+          : `<div class="traders-table-wrap">
+              <table class="traders-table" aria-label="Daily Harbor Challenge Leaderboard">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Trader</th>
+                    <th>Seed</th>
+                    <th>Best Daily $wif</th>
+                    <th>Runs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${dailyRows
+                    .map(
+                      (row) => `<tr>
+                        <td><strong>#${row.rank}</strong></td>
+                        <td><code>${escape(row.label)}</code> ${row.verified ? '<span class="trader-badge verified">✓</span>' : ''}</td>
+                        <td><code>${escape(todaySeed)}</code></td>
+                        <td><strong>${row.bestNetWorthWif.toLocaleString('en-US')} $wif</strong></td>
+                        <td>${row.attempts}${row.won ? ' (Won)' : ''}</td>
                       </tr>`,
                     )
                     .join('')}
@@ -1763,7 +2313,7 @@ export function mountRobinTown(): void {
                   <tr>
                     <th>Wallet</th>
                     <th>Client</th>
-                    <th>Status</th>
+                    <th>Status & Proofs</th>
                     <th>On-Chain $wif</th>
                     <th>Matches</th>
                   </tr>
@@ -1774,7 +2324,14 @@ export function mountRobinTown(): void {
                       (row) => `<tr>
                         <td><code>${escape(row.shortAddress)}</code></td>
                         <td>${escape(row.source.toUpperCase())}</td>
-                        <td><span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span></td>
+                        <td>
+                          <span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span>
+                          ${
+                            (row.verifiedTxCount ?? 0) > 0 && row.lastVerifiedTxHash
+                              ? `<a class="trader-tx-link" href="${ROBINHOOD_MAINNET_EXPLORER_URL}/tx/${encodeURIComponent(row.lastVerifiedTxHash)}" target="_blank" rel="noopener">⛓️ ${row.verifiedTxCount} Tx ↗</a>`
+                              : ''
+                          }
+                        </td>
                         <td>${row.onChainWifBalance.toLocaleString('en-US')} $wif</td>
                         <td>${row.matchesPlayed}</td>
                       </tr>`,
@@ -1789,9 +2346,9 @@ export function mountRobinTown(): void {
         <p>${
           realAddr
             ? verifiedNow
-              ? `Your EIP-191 personal_sign signature is verified on Robinhood Chain (4663). Best Year-6 score: ${(me?.bestNetWorthWif ?? 0).toLocaleString('en-US')} $wif across ${me?.matchesPlayed ?? 0} matches.`
+              ? `Your EIP-191 personal_sign signature is verified on Robinhood Chain (4663). Best Year-6 score: ${(me?.bestNetWorthWif ?? 0).toLocaleString('en-US')} $wif across ${me?.matchesPlayed ?? 0} matches${(me?.currentStreakDays ?? 0) >= 2 ? ` · 🔥 ${me?.currentStreakDays}-day streak` : ''}.`
               : 'Sign a gasless off-chain EIP-191 message to prove cryptographic ownership of this 0x address, unlock the ✓ Verified badge on the leaderboard, and earn +100 Town Points.'
-            : 'Step 1: Connect MetaMask or Rabby on Robinhood Chain (4663) (+50 pts). Step 2: Optional 0-gas signature for ✓ Verified badge (+100 pts). Step 3: Finish a 6-year match to post your $wif net worth.'
+            : 'Step 1: Connect MetaMask or Rabby on Robinhood Chain (4663) (+50 pts). Step 2: Optional 0-gas signature for ✓ Verified badge (+100 pts). Step 3: Paste any Chain 4663 $wif tx hash for +150 pts & 1.20x Patron Boost.'
         }</p>
         ${
           me?.challengeMessage && !verifiedNow
@@ -1809,6 +2366,10 @@ export function mountRobinTown(): void {
           <button type="button" class="secondary" data-action="refresh-wallet-stats">↻ Refresh Live Telemetry</button>
           <button type="button" class="secondary" data-action="wif-hub">Open $wif Hub</button>
         </div>
+        <div class="tx-verify-row" style="margin-top:10px">
+          <input id="verify-tx-hash-input" class="tx-hash-input" type="text" maxlength="66" placeholder="Paste Chain 4663 $wif tx hash (0x...)" value="${escape(lastMainnetTxHash ?? lastPastedTxHash)}" aria-label="Robinhood Chain 4663 $wif transaction hash" />
+          <button type="button" class="secondary" data-action="verify-onchain-tx" ${txVerifyPending ? 'disabled' : ''}>${txVerifyPending ? '⏳ Checking RPC…' : '⛓️ Verify $wif Tx (+150 pts)'}</button>
+        </div>
       </section>`;
     }
 
@@ -1823,8 +2384,9 @@ export function mountRobinTown(): void {
       ${walletStatsOffline ? `<p class="muted" style="margin:8px 0 0;font-size:12px">Showing cached local state while live telemetry reconnects.</p>` : ''}
       <div class="traders-tabs" role="tablist" aria-label="Harbor registry views">
         <button type="button" role="tab" aria-selected="${tradersTab === 'leaderboard'}" class="traders-tab-btn ${tradersTab === 'leaderboard' ? 'active' : ''}" data-action="set-traders-tab" data-tab="leaderboard">🏆 Top Net Worth</button>
-        <button type="button" role="tab" aria-selected="${tradersTab === 'recent'}" class="traders-tab-btn ${tradersTab === 'recent' ? 'active' : ''}" data-action="set-traders-tab" data-tab="recent">🦊 Connected Wallets (${uniqueWallets})</button>
-        <button type="button" role="tab" aria-selected="${tradersTab === 'verify'}" class="traders-tab-btn ${tradersTab === 'verify' ? 'active' : ''}" data-action="set-traders-tab" data-tab="verify">🛡️ My Wallet & Verify</button>
+        <button type="button" role="tab" aria-selected="${tradersTab === 'daily'}" class="traders-tab-btn ${tradersTab === 'daily' ? 'active' : ''}" data-action="set-traders-tab" data-tab="daily">📅 Daily Seed</button>
+        <button type="button" role="tab" aria-selected="${tradersTab === 'recent'}" class="traders-tab-btn ${tradersTab === 'recent' ? 'active' : ''}" data-action="set-traders-tab" data-tab="recent">🦊 Connected (${uniqueWallets})</button>
+        <button type="button" role="tab" aria-selected="${tradersTab === 'verify'}" class="traders-tab-btn ${tradersTab === 'verify' ? 'active' : ''}" data-action="set-traders-tab" data-tab="verify">🛡️ Verify & Tx</button>
       </div>
       ${tabBody}
       <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
@@ -1856,9 +2418,11 @@ export function mountRobinTown(): void {
     document.querySelectorAll(selector).forEach((e) => e.classList.add('guide-target'));
   }
 
-  function showPhase() {
+  function showPhase(manual = false) {
     clearTimeout(phaseDelay);
     if (autoPlaySpeed > 0 || view !== 'play' || menuOpen || get('#modal').open) return;
+    if (!manual && !tutorialDone && state.year === 1) return;
+    if (!manual && state.phase !== 'receive') return;
     clearTimeout(phaseTimer);
     const descriptions: Record<GamePhase, string> = {
       receive: `Choose ${state.draftCount} glowing addresses. Place your green stools, then keep your selection.`,
@@ -1875,7 +2439,7 @@ export function mountRobinTown(): void {
       `<section class="phase-announcement"><button data-action="dismiss-phase" class="close" aria-label="Dismiss guide">×</button><small>YEAR ${state.year} · ${ZODIAC[state.year - 1][0]}</small><h2>${phaseName()}</h2><p>${descriptions[state.phase]}</p>${state.phase === 'receive' ? `<div class="deal-reels">${state.pending.map((id, i) => `<span style="--deal-delay:${i * 90}ms"><b>${id + 1}</b></span>`).join('')}</div>` : state.phase === 'build' ? `<div class="cue-sprites">${sprite('shops', 'coffee')}${sprite('shops', 'banhmi')}${sprite('shops', 'pho')}</div>` : state.phase === 'trade' ? `<div class="cue-tokens">${token(0)}<b>⇄</b>${token(1)}</div>` : ''}<button class="primary" data-action="dismiss-phase">Let us go →</button><div class="cue-countdown"></div></section>`;
     get('#phase-cue').classList.add('show');
     playSound('phase');
-    phaseTimer = setTimeout(dismissPhase, 6500);
+    phaseTimer = setTimeout(dismissPhase, manual ? 6500 : 2600);
   }
 
   function dismissPhase() {
@@ -1926,6 +2490,7 @@ export function mountRobinTown(): void {
   function buildPiece(id: number, shop: number) {
     const before = income(state, 0, isStaked());
     placeShop(state, id, shop);
+    if (state.year === 1) markTutorialComplete();
     selectedLot = null;
     freshLots = [id];
     townPoints += 10;
@@ -1985,6 +2550,16 @@ export function mountRobinTown(): void {
     else payout = null;
   }
 
+  function resolveLotScreenPoint(lotId: number, liftY = 24): { x: number; y: number } | null {
+    if (viewMode === 'city-3d' && board3D) {
+      const projected = board3D.projectLotToScreen(lotId, liftY);
+      if (projected) return projected;
+    }
+    const r = $(`[data-lot="${lotId}"]`)?.getBoundingClientRect();
+    if (!r) return null;
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }
+
   function celebratePayday(before: number[]) {
     dismissPhase();
     payout = { before, start: performance.now() };
@@ -1992,7 +2567,7 @@ export function mountRobinTown(): void {
     animateWallets();
     const fx = get('#effects');
     fx.innerHTML = '';
-    if (!reducedMotion())
+    if (!reducedMotion()) {
       state.players.forEach((_, i) => {
         const to = $(`[data-wallet="${i}"]`)?.getBoundingClientRect();
         if (!to) return;
@@ -2000,14 +2575,14 @@ export function mountRobinTown(): void {
           .filter((l) => l.shop !== null)
           .slice(0, 5);
         sources.forEach((l, n) => {
-          const r = $(`[data-lot="${l.id}"]`)?.getBoundingClientRect();
-          if (!r) return;
+          const pt = resolveLotScreenPoint(l.id, 26);
+          if (!pt) return;
           const el = document.createElement('div');
           el.className = 'flying-note';
           el.innerHTML = sprite('life', 'game-banknote');
           fx.append(el);
-          const sx = r.x + r.width / 2,
-            sy = r.y + r.height / 2,
+          const sx = pt.x,
+            sy = pt.y,
             tx = to.x + to.width / 2,
             ty = to.y + to.height / 2;
           const anim = el.animate(
@@ -2030,6 +2605,31 @@ export function mountRobinTown(): void {
           anim.onfinish = () => el.remove();
         });
       });
+
+      groups(state, 0)
+        .slice(0, 6)
+        .forEach((grp, idx) => {
+          const anchorPt = resolveLotScreenPoint(grp.lots[0], 34);
+          if (!anchorPt) return;
+          const rawEarn = groupIncome(grp.shop, grp.size);
+          const boostedEarn = isStaked() ? Math.round(rawEarn * 1.2) : rawEarn;
+          const pop = document.createElement('div');
+          pop.className = 'payday-lot-popup';
+          pop.textContent = `+${boostedEarn} $wif`;
+          pop.style.left = `${Math.round(anchorPt.x)}px`;
+          pop.style.top = `${Math.round(anchorPt.y)}px`;
+          fx.append(pop);
+          const anim = pop.animate(
+            [
+              { transform: 'translate(-50%, 0px) scale(0.85)', opacity: 0 },
+              { offset: 0.2, transform: 'translate(-50%, -18px) scale(1.06)', opacity: 1 },
+              { transform: 'translate(-50%, -48px) scale(0.95)', opacity: 0 },
+            ],
+            { duration: 1850, delay: idx * 110, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' },
+          );
+          anim.onfinish = () => pop.remove();
+        });
+    }
     const banner = document.createElement('div');
     banner.className = 'payday-banner';
     banner.innerHTML = `<small>YEAR-END $WIF PAYDAY</small><strong>+${state.lastIncome[0]} $wif</strong><span>${isStaked() ? '1.20x $wif Staking Boost applied!' : 'Your storefronts are paying off'}</span>`;
@@ -2085,6 +2685,18 @@ export function mountRobinTown(): void {
     );
   }
 
+  function buildCurrentScoreCardPayload(): ScoreCardPayload {
+    return {
+      state,
+      stakedBoost: isStaked(),
+      walletAddress: currentRealWeb3Address(),
+      verifiedWallet: isCurrentWalletVerified(),
+      verifiedTxCount: walletStats?.me?.verifiedTxCount ?? 0,
+      streakDays: walletStats?.me?.currentStreakDays ?? 1,
+      dailyRank: walletStats?.me?.dailyRank ?? null,
+    };
+  }
+
   function settleMatchFlywheelIfNeeded(rankedOrder: number[]) {
     if (state.matchSettled) return null;
     state.matchSettled = true;
@@ -2104,10 +2716,20 @@ export function mountRobinTown(): void {
       finalNetWorthWif: state.players[0].cash,
       won: rankedOrder[0] === 0,
       burnedWif: burned,
+      entryMode: state.entryMode ?? 'casual',
+      dailySeed: state.dailySeed ?? null,
+      playerName: wallet.getState().account?.name ?? 'Trader',
     }).then((summary) => {
       if (summary) {
         walletStats = summary;
         walletStatsOffline = false;
+        if (summary.streakBonusPoints && summary.streakBonusPoints > 0) {
+          townPoints += summary.streakBonusPoints;
+          saveEconomy();
+          toast(
+            `🔥 ${summary.streakDays ?? summary.me?.currentStreakDays ?? 2}-day Harbor Streak! +${summary.streakBonusPoints} bonus Town Points!`,
+          );
+        }
       }
     });
     save();
@@ -2125,6 +2747,7 @@ export function mountRobinTown(): void {
       );
     const settlement = settleMatchFlywheelIfNeeded(ranked.map((p) => p.id));
     const swapPreview = calculatePointSwap(townPoints);
+    const scoreCardDataUrl = renderEmpireScoreCardDataUrl(buildCurrentScoreCardPayload());
 
     modal(
       winners.length > 1
@@ -2132,24 +2755,50 @@ export function mountRobinTown(): void {
         : ranked[0].id === 0
           ? 'Robin-Town is yours!'
           : `${escape(ranked[0].name)} wins the six-year crown!`,
-      `<p>All six zodiac paydays are counted on Robinhood Chain.</p>
-      ${ranked.map((p, i) => `<div class="score-row ${winners.some((w) => w.id === p.id) ? 'winner' : ''}"><span>${i + 1}</span>${token(p.id)}<span>${p.id === 0 ? 'You' : escape(p.name)}</span><strong>${money(p.cash)}</strong></div>`).join('')}
-      <div class="wif-hub-section" style="margin-top:12px">
-        <h3>$wif Flywheel Settlement</h3>
-        <p>${
-          state.entryMode === 'ranked'
-            ? `Ranked 4,000 $wif Pool settled: 200 $wif permanently burned, 200 $wif sent to Staking Vault.${settlement && settlement.rankedPayout > 0 ? ` You won +${settlement.rankedPayout.toLocaleString('en-US')} $wif!` : ''}`
-            : `You earned Town Points from your ${state.players[0].cash} $wif street empire! Total redeemable: ${townPoints} pts (+${swapPreview.netWif} $wif net, ${swapPreview.burnedWif} $wif burned).`
-        }</p>
-        <div class="wif-row-actions">
-          <button type="button" class="secondary" data-action="wif-hub">Open $wif Hub & Swap Points</button>
-          <button type="button" class="secondary" data-action="open-traders-board">🏆 Harbor Leaderboard</button>
+      `<div class="results-split-grid">
+        <div class="results-left-col">
+          <p class="results-subcopy">All six zodiac paydays counted on Robinhood Chain${state.entryMode === 'daily' && state.dailySeed ? ` · Daily Seed <code>${escape(state.dailySeed)}</code>` : ''}.</p>
+          <div class="results-podium-list">
+            ${ranked
+              .map((p, i) => {
+                const shopCount = state.lots.filter((l) => l.owner === p.id && l.shop !== null).length;
+                const annualYield = income(state, p.id, p.id === 0 && isStaked());
+                return `<div class="score-row ${winners.some((w) => w.id === p.id) ? 'winner' : ''}"><span>${i + 1}</span>${token(p.id)}<span class="score-row-name">${p.id === 0 ? 'You' : escape(p.name)}<small>${shopCount} shops · +${annualYield} $wif/yr</small></span><strong>${money(p.cash)}</strong></div>`;
+              })
+              .join('')}
+          </div>
+          <div class="wif-hub-section results-settlement-card">
+            <h3>$wif Flywheel Settlement</h3>
+            <p>${
+              state.entryMode === 'ranked'
+                ? `Ranked 4,000 $wif Pool settled: 200 $wif burned, 200 $wif to Staking Vault.${settlement && settlement.rankedPayout > 0 ? ` You won +${settlement.rankedPayout.toLocaleString('en-US')} $wif!` : ''}`
+                : `Earned Town Points from your ${state.players[0].cash} $wif empire! Redeemable: ${townPoints} pts (+${swapPreview.netWif} $wif net, ${swapPreview.burnedWif} $wif burned).`
+            }</p>
+            <div class="wif-row-actions">
+              <button type="button" class="secondary" data-action="wif-hub">Open $wif Hub</button>
+              <button type="button" class="secondary" data-action="open-traders-board">🏆 Harbor Leaderboard</button>
+            </div>
+          </div>
+        </div>
+        <div class="results-right-col">
+          ${
+            scoreCardDataUrl
+              ? `<div class="score-card-box">
+                  <img class="score-card-preview" src="${scoreCardDataUrl}" alt="Robin Town Year 6 Empire Score Card" />
+                  <div class="wif-row-actions" style="justify-content:center;margin-top:8px">
+                    <button type="button" class="primary" data-action="download-score-card">📸 Download PNG</button>
+                    <button type="button" class="secondary" data-action="share-score-x">𝕏 Share on X</button>
+                  </div>
+                </div>`
+              : ''
+          }
+          <p class="muted results-footnote">Completed ${state.trades} OTC deals · +${income(state, 0, isStaked())} $wif/yr in Year 6.</p>
         </div>
       </div>
-      <p class="muted">You completed ${state.trades} trades and earned ${income(state, 0, isStaked())} $wif/yr in Year 6.</p>
       <div class="modal-actions"><button class="secondary" data-action="close">Explore the town</button><button class="primary" data-action="new">Play again</button></div>`,
       'SIX YEARS · FINAL $WIF STANDINGS',
     );
+    get('#modal').classList.add('results-dialog');
   }
 
   function shopEntry(g: ShopGroup, index: number) {
@@ -2190,11 +2839,18 @@ export function mountRobinTown(): void {
       }
       toast('1,000 $wif buy-in locked! 4,000 $wif Ranked Arena pot is live.');
     }
+    const seedKey = selectedEntryMode === 'daily' ? getTodayHarborSeedKey() : undefined;
+    if (selectedEntryMode === 'daily' && seedKey) {
+      toast(`📅 Daily Harbor Seed ${seedKey} loaded! Same 6-year draws for every trader today.`);
+    }
     cancelAnimationFrame(cashFrame);
     payout = null;
     get('#effects').innerHTML = '';
-    state = newGame(Math.random, selectedEntryMode);
-    liveBotFeed = 'Year 1 (Snake): You, Cole, Maya & Clara pulled up stools at the table';
+    state = newGame(Math.random, selectedEntryMode, seedKey);
+    liveBotFeed =
+      selectedEntryMode === 'daily' && seedKey
+        ? `Daily Seed ${seedKey}: You, Cole, Maya & Clara opened identical harbor draws`
+        : 'Year 1 (Snake): You, Cole, Maya & Clara pulled up stools at the table';
     observedPhase = '';
     selectedLot = null;
     selectedShop = null;
@@ -2225,8 +2881,17 @@ export function mountRobinTown(): void {
         gameMenu();
         break;
       case 'select-entry':
-        selectedEntryMode = data.entryMode === 'ranked' ? 'ranked' : 'casual';
+        selectedEntryMode =
+          data.entryMode === 'ranked'
+            ? 'ranked'
+            : data.entryMode === 'daily'
+              ? 'daily'
+              : 'casual';
         renderStartMenu();
+        break;
+      case 'launch-daily-seed':
+        selectedEntryMode = 'daily';
+        startFreshSession();
         break;
       case 'resume':
         if (!assetsReady) return;
@@ -2291,13 +2956,13 @@ export function mountRobinTown(): void {
         break;
       }
       case 'reset-3d-camera':
-        cameraPreset3D = 'neighborhood';
-        board3D?.setCameraPreset('neighborhood');
+        cameraPreset3D = 'isometric';
         board3D?.resetCamera();
+        board3D?.setCameraPreset('isometric');
         $('.three-city-stage')
           ?.querySelectorAll<HTMLButtonElement>('button[data-action="set-3d-preset"]')
           .forEach((btn) => {
-            btn.classList.toggle('active', btn.dataset.preset === 'neighborhood');
+            btn.classList.toggle('active', btn.dataset.preset === 'isometric');
           });
         break;
       case 'set-3d-atmo': {
@@ -2343,12 +3008,20 @@ export function mountRobinTown(): void {
         openTradersBoard();
         break;
       case 'set-traders-tab':
-        if (data.tab === 'leaderboard' || data.tab === 'recent' || data.tab === 'verify') {
+        if (
+          data.tab === 'leaderboard' ||
+          data.tab === 'daily' ||
+          data.tab === 'recent' ||
+          data.tab === 'verify'
+        ) {
           openTradersBoard(data.tab);
         }
         break;
       case 'verify-wallet-sig':
         void verifyActiveWalletOwnership();
+        break;
+      case 'verify-onchain-tx':
+        void verifyOnChainTxHashInteractive();
         break;
       case 'refresh-wallet-stats':
         refreshWalletStats();
@@ -2368,16 +3041,39 @@ export function mountRobinTown(): void {
       case 'connect-mainnet-wif':
         void connectMetaMaskQuick();
         break;
-      case 'burn-mainnet-wif':
+      case 'burn-mainnet-wif': {
+        const burnAmt = Math.max(0.01, Number(data.amount || '0.1'));
         void wallet
-          .burnMainnetWif(0.1)
+          .burnMainnetWif(burnAmt)
           .then((tx) => {
             lastMainnetTxHash = tx.hash;
-            flywheel = { ...flywheel, totalBurned: Number((flywheel.totalBurned + 0.1).toFixed(2)) };
+            flywheel = { ...flywheel, totalBurned: Number((flywheel.totalBurned + burnAmt).toFixed(2)) };
             communityVotes += 1;
             saveEconomy();
-            toast(`Burned 0.1 $wif on Robinhood Chain! Tx: ${tx.hash.slice(0, 10)}…`);
-            refreshWalletStats();
+            toast(`Burned ${burnAmt} $wif on Robinhood Chain! Verifying on-chain receipt…`);
+            void waitAndVerifyOnChainTx({
+              address: currentRealWeb3Address(),
+              txHash: tx.hash,
+            })
+              .then((verified) => {
+                if (!verified) {
+                  refreshWalletStats();
+                  return;
+                }
+                walletStats = verified;
+                walletStatsOffline = false;
+                if (verified.bonusTownPoints > 0) townPoints += verified.bonusTownPoints;
+                saveEconomy();
+                toast(
+                  `⛓️ On-chain receipt verified: ${verified.wifMoved} $wif (+${verified.bonusTownPoints} pts)!`,
+                );
+                if (get('#modal').dataset.wifHub === 'true') openWifHub();
+                if (get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+                render();
+              })
+              .catch(() => {
+                refreshWalletStats();
+              });
             if (get('#modal').dataset.wifHub === 'true') openWifHub();
             render();
           })
@@ -2386,6 +3082,47 @@ export function mountRobinTown(): void {
             toast(msg);
           });
         break;
+      }
+      case 'patronize-mainnet-wif': {
+        void wallet
+          .patronizeMainnetWif(10)
+          .then((tx) => {
+            lastMainnetTxHash = tx.hash;
+            flywheel = {
+              ...flywheel,
+              totalStakingYield: Number((flywheel.totalStakingYield + 10).toFixed(2)),
+            };
+            saveEconomy();
+            toast('Patronized Harbor Vault with 10 $wif! Verifying Chain 4663 receipt…');
+            void waitAndVerifyOnChainTx({
+              address: currentRealWeb3Address(),
+              txHash: tx.hash,
+            })
+              .then((verified) => {
+                if (!verified) {
+                  refreshWalletStats();
+                  return;
+                }
+                walletStats = verified;
+                walletStatsOffline = false;
+                if (verified.bonusTownPoints > 0) townPoints += verified.bonusTownPoints;
+                saveEconomy();
+                toast('🏛️ 1.20x On-Chain Patron Boost unlocked on Robinhood Chain 4663!');
+                if (get('#modal').dataset.wifHub === 'true') openWifHub();
+                render();
+              })
+              .catch(() => {
+                refreshWalletStats();
+              });
+            if (get('#modal').dataset.wifHub === 'true') openWifHub();
+            render();
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'On-chain Harbor Patron tx cancelled.';
+            toast(msg);
+          });
+        break;
+      }
       case 'copy-onchain-tx':
         if (lastMainnetTxHash && navigator.clipboard) {
           void navigator.clipboard.writeText(lastMainnetTxHash).then(() => {
@@ -2412,7 +3149,7 @@ export function mountRobinTown(): void {
         });
         break;
       case 'toggle-stake':
-        if (isStaked()) {
+        if (stakedWif >= 500) {
           adjustActiveWalletBalance(500);
           stakedWif = 0;
           toast('Unstaked 500 $wif from Vault.');
@@ -2509,6 +3246,108 @@ export function mountRobinTown(): void {
         openWifHub();
         break;
       }
+      case 'refresh-open-rooms':
+        refreshOpenRooms();
+        toast('Refreshing open public multiplayer tables…');
+        break;
+      case 'quick-join-room': {
+        const code = normalizeRoomCode(data.room ?? '');
+        if (!isValidRoomCode(code)) break;
+        const wAcc = wallet.getState().account;
+        const room = new NetworkRoom({
+          roomCode: code,
+          isHost: false,
+          localPlayer: {
+            name: wAcc?.name ?? 'Trader',
+            address: wAcc?.address ?? '0x1000000000000000000000000000000000000001',
+          },
+        });
+        bindRoomSession(room, code);
+        toast(`Joined Room ${code}! Waiting for host or live board sync…`);
+        openWifHub();
+        break;
+      }
+      case 'accept-pvp-trade': {
+        if (!incomingHumanProposal) {
+          closeModal();
+          break;
+        }
+        const prop = incomingHumanProposal;
+        incomingHumanProposal = null;
+        const mySeat = getLocalRoomSeat();
+        const authState = mySeat === 0 ? state : perspectiveSwapState(state, mySeat);
+        const applied = executeAcceptedPlayerTrade(
+          authState,
+          prop.fromSeat,
+          prop.toSeat,
+          prop.give,
+          prop.take,
+        );
+        if (applied.accepted) {
+          state = mySeat === 0 ? authState : perspectiveSwapState(authState, mySeat);
+          townPoints += 15;
+          if (applied.taxAmount > 0) recordTradeTaxToVault(applied.taxAmount, 1);
+          sendCustomRoomPacket('TOWN_TRADE_RESPOND', {
+            proposalId: prop.proposalId,
+            fromSeat: prop.fromSeat,
+            accepted: true,
+            responderName: activeRoom?.getLocalPlayer()?.name || 'Neighbor',
+            taxAmount: applied.taxAmount,
+          });
+          closeModal();
+          playSound('deal');
+          toast(`✓ Deal settled with ${prop.fromName}!`);
+          changed();
+        } else {
+          sendCustomRoomPacket('TOWN_TRADE_RESPOND', {
+            proposalId: prop.proposalId,
+            fromSeat: prop.fromSeat,
+            accepted: false,
+            responderName: activeRoom?.getLocalPlayer()?.name || 'Neighbor',
+            taxAmount: 0,
+          });
+          closeModal();
+          toast('That offer is no longer available on the current board.');
+        }
+        break;
+      }
+      case 'decline-pvp-trade': {
+        if (incomingHumanProposal) {
+          const prop = incomingHumanProposal;
+          incomingHumanProposal = null;
+          sendCustomRoomPacket('TOWN_TRADE_RESPOND', {
+            proposalId: prop.proposalId,
+            fromSeat: prop.fromSeat,
+            accepted: false,
+            responderName: activeRoom?.getLocalPlayer()?.name || 'Neighbor',
+            taxAmount: 0,
+          });
+          playSound('reject');
+          toast(`Declined deal from ${prop.fromName}.`);
+        }
+        closeModal();
+        break;
+      }
+      case 'coachmark-autopick':
+        chosen = chooseSmartDraftPlots(state);
+        playSound('place');
+        render();
+        toast(`Selected ${chosen.length} connected harbor addresses! Click Keep Plots to confirm.`);
+        break;
+      case 'skip-tutorial':
+        markTutorialComplete();
+        render();
+        break;
+      case 'download-score-card': {
+        const ok = downloadEmpireScoreCard(buildCurrentScoreCardPayload());
+        toast(ok ? 'Downloaded 1200×630 Score Card PNG!' : 'Score Card preview ready above.');
+        break;
+      }
+      case 'share-score-x': {
+        const shareUrl = buildEmpireXShareUrl(buildCurrentScoreCardPayload());
+        window.open(shareUrl, '_blank', 'noopener,noreferrer');
+        break;
+      }
       case 'start-online-room': {
         if (!activeRoom) break;
         try {
@@ -2540,7 +3379,7 @@ export function mountRobinTown(): void {
         break;
       case 'guide':
         if (get('#modal').open) closeModal();
-        showPhase();
+        showPhase(true);
         break;
       case 'dismiss-phase':
         dismissPhase();
@@ -2625,6 +3464,29 @@ export function mountRobinTown(): void {
       case 'trade':
         openTrade();
         break;
+      case 'smart-trade':
+        if (state.phase !== 'trade') {
+          toast('Trading opens right after you claim your addresses.');
+        } else if (trading.openSmart) {
+          trading.openSmart();
+        } else {
+          openTrade();
+        }
+        break;
+      case 'smart-build-one': {
+        if (state.phase !== 'build') {
+          toast('Building starts right after bargaining.');
+          break;
+        }
+        const nextSmart = findNextSmartBuild(state);
+        if (!nextSmart) {
+          toast('No matching empty plots or shop tiles left to place right now.');
+          break;
+        }
+        buildPiece(nextSmart.id, nextSmart.shop);
+        focusLot(nextSmart.id);
+        break;
+      }
       case 'trade-lot':
         openTrade(Number(data.id));
         break;
@@ -2777,7 +3639,13 @@ export function mountRobinTown(): void {
         }
         modal(
           'Start a fresh six-year town?',
-          `<p>This replaces your current town progress in ${selectedEntryMode === 'ranked' ? 'Ranked 1,000 $wif Arena' : 'Casual Free Mode'}.</p><div class="modal-actions"><button class="secondary" data-action="close">Keep current town</button><button class="primary" data-action="confirm-new">Start fresh town</button></div>`,
+          `<p>This replaces your current town progress in ${
+            selectedEntryMode === 'ranked'
+              ? 'Ranked 1,000 $wif Arena'
+              : selectedEntryMode === 'daily'
+                ? `Daily Harbor Seed (${getTodayHarborSeedKey()})`
+                : 'Casual Free Mode'
+          }.</p><div class="modal-actions"><button class="secondary" data-action="close">Keep current town</button><button class="primary" data-action="confirm-new">Start fresh town</button></div>`,
         );
         break;
       case 'confirm-new':

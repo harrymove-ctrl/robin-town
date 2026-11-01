@@ -48,7 +48,7 @@ export interface TradeEvaluation {
   taxAmount?: number;
 }
 
-export type MatchEntryMode = 'casual' | 'ranked';
+export type MatchEntryMode = 'casual' | 'ranked' | 'daily';
 
 export interface GameState {
   version: 1;
@@ -64,5 +64,7 @@ export interface GameState {
   lastIncome: number[];
   trades: number;
   entryMode?: MatchEntryMode;
+  dailySeed?: string;
+  rngState?: number;
   matchSettled?: boolean;
 }

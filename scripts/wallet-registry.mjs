@@ -5,6 +5,9 @@ import crypto from 'node:crypto';
 const ROBINHOOD_MAINNET_RPC =
   process.env.ROBINHOOD_MAINNET_RPC || 'https://rpc.mainnet.chain.robinhood.com';
 const WIF_CONTRACT_MAINNET = '0x5173b8eA6923c2d40267890D45C46a3480954773';
+const DEAD_BURN_SINK_LOWER = '0x000000000000000000000000000000000000dead';
+const ERC20_TRANSFER_TOPIC0 =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 const BLOCKED_SIM_ADDRESSES = new Set([
   '0x0000000000000000000000000000000000000000',
@@ -263,7 +266,7 @@ export function verifyPersonalSign(message, signatureHex, expectedAddress) {
 }
 
 // ============================================================================
-// Persistent Harbor Wallet & Match Registry
+// Persistent Harbor Wallet, On-Chain Tx Verifier & Daily Challenge Registry
 // ============================================================================
 
 export function isValidRealWalletAddress(addr) {
@@ -274,10 +277,30 @@ export function isValidRealWalletAddress(addr) {
   return true;
 }
 
+export function isValidTxHash(hash) {
+  if (typeof hash !== 'string') return false;
+  return /^0x[0-9a-fA-F]{64}$/.test(hash.trim());
+}
+
 export function formatShortAddress(addr) {
   const clean = String(addr || '').trim();
   if (clean.length < 12) return clean;
   return `${clean.slice(0, 6)}…${clean.slice(-4)}`;
+}
+
+export function utcDateKey(date = new Date()) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function prevUtcDateKey(dateKey) {
+  const parts = String(dateKey).split('-').map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return '';
+  const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return utcDateKey(dt);
 }
 
 function buildChallengeMessage(address, nonce) {
@@ -302,6 +325,16 @@ function resolveDefaultStorePath() {
   return path.resolve(process.cwd(), '.data', 'wallets.json');
 }
 
+function hexWeiToWifNumber(hexVal) {
+  if (!hexVal || hexVal === '0x') return 0;
+  const rawHex = String(hexVal).trim().replace(/^0x/i, '');
+  if (!rawHex || !/^[0-9a-fA-F]+$/.test(rawHex)) return 0;
+  const wei = BigInt('0x' + rawHex);
+  const whole = wei / 1000000000000000000n;
+  const rem = wei % 1000000000000000000n;
+  return Number((Number(whole) + Number(rem) / 1e18).toFixed(4));
+}
+
 async function fetchMainnetWifBalance(address, rpcUrl = ROBINHOOD_MAINNET_RPC) {
   const clean = address.trim().replace(/^0x/i, '').toLowerCase().padStart(64, '0');
   const data = `0x70a08231${clean}`;
@@ -318,56 +351,98 @@ async function fetchMainnetWifBalance(address, rpcUrl = ROBINHOOD_MAINNET_RPC) {
   });
   if (!res.ok) return null;
   const json = await res.json();
-  const hexVal = json?.result;
-  if (!hexVal || hexVal === '0x') return 0;
-  const rawHex = String(hexVal).replace(/^0x/i, '');
-  if (!rawHex) return 0;
-  const wei = BigInt('0x' + rawHex);
-  const whole = wei / 1000000000000000000n;
-  const rem = wei % 1000000000000000000n;
-  return Number((Number(whole) + Number(rem) / 1e18).toFixed(4));
+  return hexWeiToWifNumber(json?.result);
+}
+
+async function fetchMainnetTxReceipt(txHash, rpcUrl = ROBINHOOD_MAINNET_RPC) {
+  const res = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_getTransactionReceipt',
+      params: [txHash],
+    }),
+    signal: AbortSignal.timeout(4500),
+  });
+  if (!res.ok) throw new Error(`Robinhood Chain RPC returned HTTP ${res.status}.`);
+  const json = await res.json();
+  if (json?.error) {
+    throw new Error(json.error.message || 'Robinhood Chain RPC error.');
+  }
+  return json?.result || null;
+}
+
+export function decodeWifTransfersFromReceipt(receipt) {
+  if (!receipt || !Array.isArray(receipt.logs)) return [];
+  const wifLower = WIF_CONTRACT_MAINNET.toLowerCase();
+  const transfers = [];
+  for (const entry of receipt.logs) {
+    if (!entry || typeof entry.address !== 'string') continue;
+    if (entry.address.trim().toLowerCase() !== wifLower) continue;
+    const topics = Array.isArray(entry.topics) ? entry.topics : [];
+    if (topics.length < 3) continue;
+    if (String(topics[0] || '').toLowerCase() !== ERC20_TRANSFER_TOPIC0) continue;
+    const rawFrom = String(topics[1] || '').replace(/^0x/i, '');
+    const rawTo = String(topics[2] || '').replace(/^0x/i, '');
+    if (rawFrom.length < 40 || rawTo.length < 40) continue;
+    const from = '0x' + rawFrom.slice(-40).toLowerCase();
+    const to = '0x' + rawTo.slice(-40).toLowerCase();
+    const amountWif = hexWeiToWifNumber(entry.data);
+    if (amountWif > 0) {
+      transfers.push({ from, to, amountWif });
+    }
+  }
+  return transfers;
+}
+
+function makeDefaultWalletRecord(norm, nowIso, chainId = 4663, source = 'eip1193') {
+  return {
+    address: norm,
+    firstSeenAt: nowIso,
+    lastSeenAt: nowIso,
+    connectCount: 0,
+    verified: false,
+    verifiedAt: null,
+    nonce: crypto.randomBytes(8).toString('hex'),
+    chainId: Number(chainId) || 4663,
+    source: String(source || 'eip1193').slice(0, 24),
+    onChainWifBalance: 0,
+    matchesPlayed: 0,
+    wins: 0,
+    bestNetWorthWif: 0,
+    totalBurnedWif: 0,
+    verifiedTxCount: 0,
+    verifiedOnChainWifMoved: 0,
+    lastVerifiedTxHash: null,
+    onChainPatronBoost: false,
+    currentStreakDays: 0,
+    bestStreakDays: 0,
+    lastPlayedDay: null,
+  };
 }
 
 export function createWalletRegistry(options = {}) {
   const storePath = options.storePath || resolveDefaultStorePath();
   const fetchBalanceFn =
     options.fetchBalanceFn !== undefined ? options.fetchBalanceFn : fetchMainnetWifBalance;
+  const fetchReceiptFn =
+    options.fetchReceiptFn !== undefined ? options.fetchReceiptFn : fetchMainnetTxReceipt;
+  const nowFn = options.nowFn || (() => new Date());
   const maxBodyBytes = 16_384;
 
-  /**
-   * @type {{
-   *   version: number,
-   *   updatedAt: string,
-   *   totalMatchesPlayed: number,
-   *   walletMatchesPlayed: number,
-   *   guestMatchesPlayed: number,
-   *   totalWifBurnedInGame: number,
-   *   wallets: Record<string, {
-   *     address: string,
-   *     firstSeenAt: string,
-   *     lastSeenAt: string,
-   *     connectCount: number,
-   *     verified: boolean,
-   *     verifiedAt: string | null,
-   *     nonce: string,
-   *     chainId: number,
-   *     source: string,
-   *     onChainWifBalance: number,
-   *     matchesPlayed: number,
-   *     wins: number,
-   *     bestNetWorthWif: number,
-   *     totalBurnedWif: number
-   *   }>
-   * }}
-   */
   let state = {
-    version: 1,
-    updatedAt: new Date().toISOString(),
+    version: 2,
+    updatedAt: nowFn().toISOString(),
     totalMatchesPlayed: 0,
     walletMatchesPlayed: 0,
     guestMatchesPlayed: 0,
     totalWifBurnedInGame: 0,
+    totalVerifiedOnChainWifMoved: 0,
     wallets: {},
+    verifiedTxs: {},
+    dailyBoards: {},
   };
 
   function loadFromDisk() {
@@ -379,15 +454,28 @@ export function createWalletRegistry(options = {}) {
             ...state,
             ...raw,
             wallets: raw.wallets && typeof raw.wallets === 'object' ? raw.wallets : {},
+            verifiedTxs:
+              raw.verifiedTxs && typeof raw.verifiedTxs === 'object' ? raw.verifiedTxs : {},
+            dailyBoards:
+              raw.dailyBoards && typeof raw.dailyBoards === 'object' ? raw.dailyBoards : {},
           };
         }
       }
     } catch {}
   }
 
+  function pruneOldDailyBoards() {
+    const keys = Object.keys(state.dailyBoards).sort();
+    while (keys.length > 14) {
+      const oldest = keys.shift();
+      if (oldest) delete state.dailyBoards[oldest];
+    }
+  }
+
   function flushToDisk() {
     try {
-      state.updatedAt = new Date().toISOString();
+      pruneOldDailyBoards();
+      state.updatedAt = nowFn().toISOString();
       const dir = path.dirname(storePath);
       fs.mkdirSync(dir, { recursive: true });
       const tmp = `${storePath}.tmp.${process.pid}.${Date.now()}`;
@@ -398,7 +486,7 @@ export function createWalletRegistry(options = {}) {
 
   loadFromDisk();
 
-  // Simple per-IP sliding window rate limiter (max 30 mutating calls per 60s)
+  // Simple per-IP sliding window rate limiter (max 45 mutating calls per 60s)
   const ipBuckets = new Map();
   function allowRate(ip) {
     const key = String(ip || 'local');
@@ -408,18 +496,46 @@ export function createWalletRegistry(options = {}) {
       ipBuckets.set(key, { windowStart: now, count: 1 });
       return true;
     }
-    if (bucket.count >= 40) return false;
+    if (bucket.count >= 45) return false;
     bucket.count += 1;
     return true;
   }
 
+  function getDailyLeaderboard(dateKey = utcDateKey(nowFn())) {
+    const dayMap = state.dailyBoards[dateKey] || {};
+    const entries = Object.values(dayMap);
+    return entries
+      .sort((a, b) => {
+        if (b.bestNetWorthWif !== a.bestNetWorthWif) return b.bestNetWorthWif - a.bestNetWorthWif;
+        if (Number(b.verified) !== Number(a.verified)) return Number(b.verified) - Number(a.verified);
+        return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+      })
+      .slice(0, 25)
+      .map((row, idx) => ({
+        rank: idx + 1,
+        label: row.label,
+        shortAddress: row.shortAddress || null,
+        verified: Boolean(row.verified),
+        verifiedTxCount: row.verifiedTxCount || 0,
+        bestNetWorthWif: row.bestNetWorthWif,
+        won: Boolean(row.won),
+        attempts: row.attempts || 1,
+        streakDays: row.streakDays || 1,
+        updatedAt: row.updatedAt,
+      }));
+  }
+
   function publicSummary(viewerAddress = null) {
+    const todaySeed = utcDateKey(nowFn());
     const entries = Object.values(state.wallets);
     const verifiedCount = entries.filter((w) => w.verified).length;
+    const totalVerifiedOnChainTxs = Object.keys(state.verifiedTxs).length;
 
     const leaderboard = [...entries]
       .sort((a, b) => {
         if (b.bestNetWorthWif !== a.bestNetWorthWif) return b.bestNetWorthWif - a.bestNetWorthWif;
+        if ((b.verifiedTxCount || 0) !== (a.verifiedTxCount || 0))
+          return (b.verifiedTxCount || 0) - (a.verifiedTxCount || 0);
         if (Number(b.verified) !== Number(a.verified)) return Number(b.verified) - Number(a.verified);
         if (b.matchesPlayed !== a.matchesPlayed) return b.matchesPlayed - a.matchesPlayed;
         return b.onChainWifBalance - a.onChainWifBalance;
@@ -428,13 +544,19 @@ export function createWalletRegistry(options = {}) {
       .map((w, idx) => ({
         rank: idx + 1,
         shortAddress: formatShortAddress(w.address),
-        verified: w.verified,
-        chainId: w.chainId,
-        onChainWifBalance: w.onChainWifBalance,
-        matchesPlayed: w.matchesPlayed,
-        wins: w.wins,
-        bestNetWorthWif: w.bestNetWorthWif,
-        totalBurnedWif: w.totalBurnedWif,
+        verified: Boolean(w.verified),
+        chainId: w.chainId || 4663,
+        onChainWifBalance: w.onChainWifBalance || 0,
+        matchesPlayed: w.matchesPlayed || 0,
+        wins: w.wins || 0,
+        bestNetWorthWif: w.bestNetWorthWif || 0,
+        totalBurnedWif: w.totalBurnedWif || 0,
+        verifiedTxCount: w.verifiedTxCount || 0,
+        verifiedOnChainWifMoved: w.verifiedOnChainWifMoved || 0,
+        lastVerifiedTxHash: w.lastVerifiedTxHash || null,
+        onChainPatronBoost: Boolean(w.onChainPatronBoost),
+        currentStreakDays: w.currentStreakDays || 0,
+        bestStreakDays: w.bestStreakDays || 0,
         lastSeenAt: w.lastSeenAt,
       }));
 
@@ -443,12 +565,15 @@ export function createWalletRegistry(options = {}) {
       .slice(0, 20)
       .map((w) => ({
         shortAddress: formatShortAddress(w.address),
-        verified: w.verified,
-        chainId: w.chainId,
-        source: w.source,
-        onChainWifBalance: w.onChainWifBalance,
-        matchesPlayed: w.matchesPlayed,
-        bestNetWorthWif: w.bestNetWorthWif,
+        verified: Boolean(w.verified),
+        chainId: w.chainId || 4663,
+        source: w.source || 'eip1193',
+        onChainWifBalance: w.onChainWifBalance || 0,
+        matchesPlayed: w.matchesPlayed || 0,
+        bestNetWorthWif: w.bestNetWorthWif || 0,
+        verifiedTxCount: w.verifiedTxCount || 0,
+        lastVerifiedTxHash: w.lastVerifiedTxHash || null,
+        currentStreakDays: w.currentStreakDays || 0,
         firstSeenAt: w.firstSeenAt,
         lastSeenAt: w.lastSeenAt,
       }));
@@ -461,17 +586,26 @@ export function createWalletRegistry(options = {}) {
         const rankIdx = [...entries]
           .sort((a, b) => b.bestNetWorthWif - a.bestNetWorthWif)
           .findIndex((w) => w.address === norm);
+        const dailyBoard = getDailyLeaderboard(todaySeed);
+        const myDaily = dailyBoard.find((d) => d.shortAddress === formatShortAddress(norm));
         me = {
           address: own.address,
           shortAddress: formatShortAddress(own.address),
-          verified: own.verified,
-          verifiedAt: own.verifiedAt,
+          verified: Boolean(own.verified),
+          verifiedAt: own.verifiedAt || null,
           rank: rankIdx >= 0 ? rankIdx + 1 : null,
-          onChainWifBalance: own.onChainWifBalance,
-          matchesPlayed: own.matchesPlayed,
-          wins: own.wins,
-          bestNetWorthWif: own.bestNetWorthWif,
-          totalBurnedWif: own.totalBurnedWif,
+          dailyRank: myDaily ? myDaily.rank : null,
+          onChainWifBalance: own.onChainWifBalance || 0,
+          matchesPlayed: own.matchesPlayed || 0,
+          wins: own.wins || 0,
+          bestNetWorthWif: own.bestNetWorthWif || 0,
+          totalBurnedWif: own.totalBurnedWif || 0,
+          verifiedTxCount: own.verifiedTxCount || 0,
+          verifiedOnChainWifMoved: own.verifiedOnChainWifMoved || 0,
+          lastVerifiedTxHash: own.lastVerifiedTxHash || null,
+          onChainPatronBoost: Boolean(own.onChainPatronBoost),
+          currentStreakDays: own.currentStreakDays || 0,
+          bestStreakDays: own.bestStreakDays || 0,
           challengeMessage: buildChallengeMessage(own.address, own.nonce),
         };
       }
@@ -480,14 +614,18 @@ export function createWalletRegistry(options = {}) {
     return {
       ok: true,
       storePersistent: storePath.startsWith('/data/'),
+      todaySeed,
       totalUniqueWallets: entries.length,
       verifiedWallets: verifiedCount,
       totalMatchesPlayed: state.totalMatchesPlayed,
       walletMatchesPlayed: state.walletMatchesPlayed,
       guestMatchesPlayed: state.guestMatchesPlayed,
       totalWifBurnedInGame: Number(state.totalWifBurnedInGame.toFixed(2)),
+      totalVerifiedOnChainTxs,
+      totalVerifiedOnChainWifMoved: Number((state.totalVerifiedOnChainWifMoved || 0).toFixed(4)),
       leaderboard,
       recentWallets,
+      dailyLeaderboard: getDailyLeaderboard(todaySeed),
       me,
     };
   }
@@ -497,29 +635,17 @@ export function createWalletRegistry(options = {}) {
       throw new Error('Invalid or simulated wallet address.');
     }
     const norm = address.trim().toLowerCase();
-    const nowIso = new Date().toISOString();
+    const nowIso = nowFn().toISOString();
     const existing = state.wallets[norm];
     const isFirstConnect = !existing;
 
-    const record = existing || {
-      address: norm,
-      firstSeenAt: nowIso,
-      lastSeenAt: nowIso,
-      connectCount: 0,
-      verified: false,
-      verifiedAt: null,
-      nonce: crypto.randomBytes(8).toString('hex'),
-      chainId: Number(chainId) || 4663,
-      source: String(source || 'eip1193').slice(0, 24),
-      onChainWifBalance: 0,
-      matchesPlayed: 0,
-      wins: 0,
-      bestNetWorthWif: 0,
-      totalBurnedWif: 0,
+    const record = {
+      ...makeDefaultWalletRecord(norm, nowIso, chainId, source),
+      ...(existing || {}),
     };
 
     record.lastSeenAt = nowIso;
-    record.connectCount += 1;
+    record.connectCount = (record.connectCount || 0) + 1;
     if (chainId) record.chainId = Number(chainId) || 4663;
     if (source) record.source = String(source).slice(0, 24);
     state.wallets[norm] = record;
@@ -556,8 +682,8 @@ export function createWalletRegistry(options = {}) {
     }
     const firstTimeVerified = !record.verified;
     record.verified = true;
-    record.verifiedAt = record.verifiedAt || new Date().toISOString();
-    record.lastSeenAt = new Date().toISOString();
+    record.verifiedAt = record.verifiedAt || nowFn().toISOString();
+    record.lastSeenAt = nowFn().toISOString();
     record.nonce = crypto.randomBytes(8).toString('hex');
     flushToDisk();
     return {
@@ -568,51 +694,218 @@ export function createWalletRegistry(options = {}) {
     };
   }
 
+  async function verifyOnChainWifTx({ address = null, txHash }) {
+    const cleanHash = String(txHash || '').trim().toLowerCase();
+    if (!isValidTxHash(cleanHash)) {
+      throw new Error('Enter a valid 66-character 0x transaction hash.');
+    }
+    if (state.verifiedTxs[cleanHash]) {
+      throw new Error('This transaction hash is already verified in the Harbor Registry.');
+    }
+    if (!fetchReceiptFn) {
+      throw new Error('On-chain RPC receipt verifier is unavailable.');
+    }
+
+    const receipt = await fetchReceiptFn(cleanHash);
+    if (!receipt) {
+      throw new Error(
+        'Transaction receipt not found yet on Robinhood Chain (4663). Wait a few seconds and retry.',
+      );
+    }
+    const statusHex = String(receipt.status || '').toLowerCase();
+    if (statusHex !== '0x1' && statusHex !== '1') {
+      throw new Error('Transaction did not succeed on Robinhood Chain (status != 0x1).');
+    }
+
+    const transfers = decodeWifTransfersFromReceipt(receipt);
+    if (transfers.length === 0) {
+      throw new Error(
+        `No official World is Flat ($wif) Transfer logs (${WIF_CONTRACT_MAINNET.slice(0, 8)}…) found in this transaction.`,
+      );
+    }
+
+    let targetAddr = null;
+    if (address && isValidRealWalletAddress(address)) {
+      targetAddr = address.trim().toLowerCase();
+      const txSender = String(receipt.from || '').trim().toLowerCase();
+      const matchesWallet =
+        txSender === targetAddr || transfers.some((t) => t.from === targetAddr);
+      if (!matchesWallet) {
+        throw new Error(
+          `This $wif transaction was not sent by ${formatShortAddress(targetAddr)}.`,
+        );
+      }
+    } else {
+      const candidate =
+        transfers.find((t) => isValidRealWalletAddress(t.from))?.from ||
+        String(receipt.from || '').trim().toLowerCase();
+      if (!isValidRealWalletAddress(candidate)) {
+        throw new Error('Could not resolve a valid sender wallet address from receipt.');
+      }
+      targetAddr = candidate;
+    }
+
+    const walletTransfers = transfers.filter((t) => t.from === targetAddr);
+    const relevant = walletTransfers.length > 0 ? walletTransfers : transfers;
+    const wifMoved = Number(relevant.reduce((acc, t) => acc + t.amountWif, 0).toFixed(4));
+    const wifBurned = Number(
+      relevant
+        .filter((t) => t.to === DEAD_BURN_SINK_LOWER)
+        .reduce((acc, t) => acc + t.amountWif, 0)
+        .toFixed(4),
+    );
+
+    const nowIso = nowFn().toISOString();
+    const record = {
+      ...makeDefaultWalletRecord(targetAddr, nowIso, 4663, 'onchain-tx'),
+      ...(state.wallets[targetAddr] || {}),
+    };
+    record.lastSeenAt = nowIso;
+    record.connectCount = Math.max(1, record.connectCount || 0);
+    record.verified = true;
+    record.verifiedAt = record.verifiedAt || nowIso;
+    record.verifiedTxCount = (record.verifiedTxCount || 0) + 1;
+    record.verifiedOnChainWifMoved = Number(
+      ((record.verifiedOnChainWifMoved || 0) + wifMoved).toFixed(4),
+    );
+    record.lastVerifiedTxHash = cleanHash;
+    record.totalBurnedWif = Number(((record.totalBurnedWif || 0) + wifBurned).toFixed(4));
+    if (record.verifiedOnChainWifMoved >= 1) {
+      record.onChainPatronBoost = true;
+    }
+
+    if (fetchBalanceFn) {
+      try {
+        const bal = await fetchBalanceFn(targetAddr);
+        if (typeof bal === 'number' && Number.isFinite(bal) && bal >= 0) {
+          record.onChainWifBalance = bal;
+        }
+      } catch {}
+    }
+
+    state.wallets[targetAddr] = record;
+    state.verifiedTxs[cleanHash] = {
+      address: targetAddr,
+      wifMoved,
+      wifBurned,
+      verifiedAt: nowIso,
+    };
+    state.totalVerifiedOnChainWifMoved = Number(
+      ((state.totalVerifiedOnChainWifMoved || 0) + wifMoved).toFixed(4),
+    );
+    if (wifBurned > 0) {
+      state.totalWifBurnedInGame = Number((state.totalWifBurnedInGame + wifBurned).toFixed(2));
+    }
+
+    flushToDisk();
+    return {
+      ...publicSummary(targetAddr),
+      txVerified: true,
+      txHash: cleanHash,
+      verifiedAddress: targetAddr,
+      wifMoved,
+      wifBurned,
+      bonusTownPoints: 150,
+      onChainPatronBoost: Boolean(record.onChainPatronBoost),
+    };
+  }
+
   function recordMatch({
     address,
     finalNetWorthWif = 0,
     won = false,
     burnedWif = 0,
+    entryMode = 'casual',
+    dailySeed = null,
+    playerName = null,
   }) {
     const safeWorth = Math.max(0, Math.min(1_000_000, Math.round(Number(finalNetWorthWif) || 0)));
     const safeBurn = Math.max(0, Math.min(100_000, Number(burnedWif) || 0));
+    const nowDate = nowFn();
+    const nowIso = nowDate.toISOString();
+    const todayKey = utcDateKey(nowDate);
 
     state.totalMatchesPlayed += 1;
     state.totalWifBurnedInGame = Number((state.totalWifBurnedInGame + safeBurn).toFixed(2));
 
     let norm = null;
+    let streakMultiplier = 1;
+    let streakDays = 1;
+    let streakBonusPoints = 0;
+
     if (address && isValidRealWalletAddress(address)) {
       norm = address.trim().toLowerCase();
       state.walletMatchesPlayed += 1;
-      const nowIso = new Date().toISOString();
-      const rec = state.wallets[norm] || {
-        address: norm,
-        firstSeenAt: nowIso,
-        lastSeenAt: nowIso,
-        connectCount: 1,
-        verified: false,
-        verifiedAt: null,
-        nonce: crypto.randomBytes(8).toString('hex'),
-        chainId: 4663,
-        source: 'eip1193',
-        onChainWifBalance: 0,
-        matchesPlayed: 0,
-        wins: 0,
-        bestNetWorthWif: 0,
-        totalBurnedWif: 0,
+      const rec = {
+        ...makeDefaultWalletRecord(norm, nowIso, 4663, 'eip1193'),
+        ...(state.wallets[norm] || {}),
       };
+      rec.connectCount = Math.max(1, rec.connectCount || 0);
       rec.lastSeenAt = nowIso;
-      rec.matchesPlayed += 1;
-      if (won) rec.wins += 1;
-      if (safeWorth > rec.bestNetWorthWif) rec.bestNetWorthWif = safeWorth;
-      rec.totalBurnedWif = Number((rec.totalBurnedWif + safeBurn).toFixed(2));
+      rec.matchesPlayed = (rec.matchesPlayed || 0) + 1;
+      if (won) rec.wins = (rec.wins || 0) + 1;
+      if (safeWorth > (rec.bestNetWorthWif || 0)) rec.bestNetWorthWif = safeWorth;
+      rec.totalBurnedWif = Number(((rec.totalBurnedWif || 0) + safeBurn).toFixed(2));
+
+      if (rec.lastPlayedDay === todayKey) {
+        rec.currentStreakDays = Math.max(1, rec.currentStreakDays || 1);
+      } else if (rec.lastPlayedDay === prevUtcDateKey(todayKey)) {
+        rec.currentStreakDays = (rec.currentStreakDays || 0) + 1;
+      } else {
+        rec.currentStreakDays = 1;
+      }
+      rec.bestStreakDays = Math.max(rec.bestStreakDays || 0, rec.currentStreakDays);
+      rec.lastPlayedDay = todayKey;
+
+      streakDays = rec.currentStreakDays;
+      streakMultiplier = Number(
+        (1 + Math.min(0.5, Math.max(0, streakDays - 1) * 0.1)).toFixed(2),
+      );
+      if (streakDays > 1) {
+        streakBonusPoints = Math.round((streakMultiplier - 1) * Math.max(60, safeWorth));
+      }
+
       state.wallets[norm] = rec;
     } else {
       state.guestMatchesPlayed += 1;
     }
 
+    const isDaily = entryMode === 'daily' || (dailySeed && String(dailySeed) === todayKey);
+    if (isDaily) {
+      const seedKey = dailySeed && /^\d{4}-\d{2}-\d{2}$/.test(String(dailySeed))
+        ? String(dailySeed)
+        : todayKey;
+      if (!state.dailyBoards[seedKey]) {
+        state.dailyBoards[seedKey] = {};
+      }
+      const board = state.dailyBoards[seedKey];
+      const cleanName = String(playerName || 'Guest Trader')
+        .replace(/[^a-zA-Z0-9 _.-]/g, '')
+        .trim()
+        .slice(0, 20);
+      const entryKey = norm || `guest:${cleanName.toLowerCase() || 'trader'}`;
+      const prev = board[entryKey];
+      const rec = norm ? state.wallets[norm] : null;
+      board[entryKey] = {
+        label: norm ? formatShortAddress(norm) : cleanName || 'Guest Trader',
+        shortAddress: norm ? formatShortAddress(norm) : null,
+        verified: Boolean(rec?.verified),
+        verifiedTxCount: rec?.verifiedTxCount || 0,
+        bestNetWorthWif: prev ? Math.max(prev.bestNetWorthWif, safeWorth) : safeWorth,
+        won: Boolean(prev?.won || won),
+        attempts: (prev?.attempts || 0) + 1,
+        streakDays: rec?.currentStreakDays || 1,
+        updatedAt: nowIso,
+      };
+    }
+
     flushToDisk();
-    return publicSummary(norm);
+    return {
+      ...publicSummary(norm),
+      streakDays,
+      streakMultiplier,
+      streakBonusPoints,
+    };
   }
 
   function readJsonBody(req) {
@@ -668,6 +961,22 @@ export function createWalletRegistry(options = {}) {
       return true;
     }
 
+    if (req.method === 'GET' && parsed.pathname === '/api/wallets/daily') {
+      const dateParam =
+        parsed.searchParams.get('date') ||
+        parsed.searchParams.get('seed') ||
+        utcDateKey(nowFn());
+      const rows = getDailyLeaderboard(dateParam);
+      sendJson(res, 200, {
+        ok: true,
+        date: dateParam,
+        seed: dateParam,
+        dailyLeaderboard: rows,
+        leaderboard: rows,
+      });
+      return true;
+    }
+
     const clientIp =
       String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
       req.socket?.remoteAddress ||
@@ -693,7 +1002,23 @@ export function createWalletRegistry(options = {}) {
       readJsonBody(req)
         .then((body) => verifyWalletSignature(body))
         .then((out) => sendJson(res, 200, out))
-        .catch((err) => sendJson(res, 400, { ok: false, error: err.message || 'Verification failed' }));
+        .catch((err) =>
+          sendJson(res, 400, { ok: false, error: err.message || 'Verification failed' }),
+        );
+      return true;
+    }
+
+    if (req.method === 'POST' && parsed.pathname === '/api/wallets/tx') {
+      if (!allowRate(clientIp)) {
+        sendJson(res, 429, { ok: false, error: 'Too many requests, try again shortly.' });
+        return true;
+      }
+      readJsonBody(req)
+        .then((body) => verifyOnChainWifTx(body))
+        .then((out) => sendJson(res, 200, out))
+        .catch((err) =>
+          sendJson(res, 400, { ok: false, error: err.message || 'Tx verification failed' }),
+        );
       return true;
     }
 
@@ -716,8 +1041,10 @@ export function createWalletRegistry(options = {}) {
   return {
     storePath,
     publicSummary,
+    getDailyLeaderboard,
     recordConnect,
     verifyWalletSignature,
+    verifyOnChainWifTx,
     recordMatch,
     flushToDisk,
     handleRequest,

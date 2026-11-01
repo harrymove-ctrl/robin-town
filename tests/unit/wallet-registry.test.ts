@@ -8,6 +8,12 @@ import http from 'node:http';
 import { keccak256, recoverPersonalSignAddress, verifyPersonalSign, signPersonalMessage, isValidRealWalletAddress, createWalletRegistry } from '../../scripts/wallet-registry.mjs';
 // @ts-expect-error ESM relay module shared with production server
 import { createMultiplayerRelay } from '../../scripts/ws-relay.mjs';
+import {
+  claimPlots,
+  executeAcceptedPlayerTrade,
+  newDailyGame,
+  perspectiveSwapState,
+} from '../../src/town/engine.js';
 
 describe('Harbor Wallet Registry & EIP-191 personal_sign Verification', () => {
   it('computes official Keccak-256 vectors and verifies secp256k1 personal_sign signatures', () => {
@@ -208,5 +214,200 @@ describe('Harbor Wallet Registry & EIP-191 personal_sign Verification', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('verifies Chain 4663 ERC-20 $wif Transfer receipts, unlocks Patron Boost, prevents tx replay, and tracks multi-day streaks + Daily Seed', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robin-tx-streaks-'));
+    const storePath = path.join(tmpDir, 'wallets.json');
+    let fakeNowMs = Date.parse('2026-11-01T10:00:00Z');
+
+    const sender = '0x14791697260e4c9a71f18484c9f997b308e59325';
+    const burnDead = '0x000000000000000000000000000000000000dead';
+    const validTxHash = '0x' + 'ab'.repeat(32);
+    const nonWifTxHash = '0x' + 'cd'.repeat(32);
+
+    // 12.5 $wif = 12_500_000_000_000_000_000 wei
+    const weiHex = '0x' + (125n * 10n ** 17n).toString(16).padStart(64, '0');
+    const transferTopic0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    const padTopicAddr = (a: string) => '0x' + a.slice(2).toLowerCase().padStart(64, '0');
+
+    const relay = createMultiplayerRelay({
+      walletRegistryOptions: {
+        storePath,
+        nowFn: () => new Date(fakeNowMs),
+        fetchBalanceFn: async () => 500,
+        fetchReceiptFn: async (hash: string) => {
+          if (hash === validTxHash) {
+            return {
+              status: '0x1',
+              from: sender,
+              to: '0x5173b8ea6923c2d40267890d45c46a3480954773',
+              logs: [
+                {
+                  address: '0x5173b8eA6923c2d40267890D45C46a3480954773',
+                  topics: [transferTopic0, padTopicAddr(sender), padTopicAddr(burnDead)],
+                  data: weiHex,
+                },
+              ],
+            };
+          }
+          if (hash === nonWifTxHash) {
+            return {
+              status: '0x1',
+              from: sender,
+              to: sender,
+              logs: [],
+            };
+          }
+          return null;
+        },
+      },
+    });
+
+    const server = http.createServer((req, res) => {
+      if (!relay.handleApiRequest(req, res)) {
+        res.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const base = `http://127.0.0.1:${port}`;
+
+    try {
+      const txRes = await fetch(`${base}/api/wallets/tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: sender, txHash: validTxHash }),
+      });
+      assert.equal(txRes.status, 200);
+      const txJson = (await txRes.json()) as {
+        wifMoved: number;
+        wifBurned: number;
+        bonusTownPoints: number;
+        onChainPatronBoost: boolean;
+        me: { verifiedTxCount: number; onChainPatronBoost: boolean };
+      };
+      assert.equal(txJson.wifMoved, 12.5);
+      assert.equal(txJson.wifBurned, 12.5);
+      assert.equal(txJson.bonusTownPoints, 150);
+      assert.equal(txJson.onChainPatronBoost, true);
+      assert.equal(txJson.me.verifiedTxCount, 1);
+
+      // Replay of identical txHash must be rejected with 400
+      const replayRes = await fetch(`${base}/api/wallets/tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: sender, txHash: validTxHash }),
+      });
+      assert.equal(replayRes.status, 400);
+
+      // Receipt with zero $wif Transfer events must be rejected with 400
+      const noWifRes = await fetch(`${base}/api/wallets/tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: sender, txHash: nonWifTxHash }),
+      });
+      assert.equal(noWifRes.status, 400);
+
+      // Day 1 Daily Seed match
+      const m1 = await fetch(`${base}/api/wallets/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: sender,
+          finalNetWorthWif: 720,
+          won: true,
+          burnedWif: 0,
+          entryMode: 'daily',
+          dailySeed: '2026-11-01',
+        }),
+      });
+      assert.equal(m1.status, 200);
+      const m1Json = (await m1.json()) as { streakDays: number; streakBonusPoints: number };
+      assert.equal(m1Json.streakDays, 1);
+      assert.equal(m1Json.streakBonusPoints, 0);
+
+      // Advance clock +24h to 2026-11-02 -> consecutive streakDays becomes 2 (+30 bonus pts)
+      fakeNowMs = Date.parse('2026-11-02T10:00:00Z');
+      const m2 = await fetch(`${base}/api/wallets/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: sender,
+          finalNetWorthWif: 890,
+          won: true,
+          burnedWif: 0,
+          entryMode: 'daily',
+          dailySeed: '2026-11-02',
+        }),
+      });
+      const m2Json = (await m2.json()) as {
+        streakDays: number;
+        streakBonusPoints: number;
+        dailyLeaderboard: Array<{ bestNetWorthWif: number }>;
+      };
+      assert.equal(m2Json.streakDays, 2);
+      assert.equal(m2Json.streakBonusPoints, 89);
+      assert.equal(m2Json.dailyLeaderboard[0].bestNetWorthWif, 890);
+
+      const dailyRes = await fetch(`${base}/api/wallets/daily?seed=2026-11-01`);
+      const dailyJson = (await dailyRes.json()) as {
+        seed: string;
+        leaderboard: Array<{ bestNetWorthWif: number }>;
+      };
+      assert.equal(dailyJson.seed, '2026-11-01');
+      assert.equal(dailyJson.leaderboard[0].bestNetWorthWif, 720);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('guarantees deterministic Daily Harbor Seed draws and symmetric PvP perspectiveSwapState + executeAcceptedPlayerTrade', () => {
+    const runA = newDailyGame('2026-11-01');
+    const runB = newDailyGame('2026-11-01');
+    const runOtherDay = newDailyGame('2026-11-02');
+
+    assert.deepEqual(runA.pending, runB.pending);
+    assert.deepEqual(runA.players.map((p) => p.tiles), runB.players.map((p) => p.tiles));
+    assert.notDeepEqual(runA.pending, runOtherDay.pending);
+
+    // Even when claiming the exact same 5 plots, bots draft identically on the same seed
+    claimPlots(runA, runA.pending.slice(0, runA.draftCount));
+    claimPlots(runB, runB.pending.slice(0, runB.draftCount));
+    assert.deepEqual(
+      runA.lots.map((l) => l.owner),
+      runB.lots.map((l) => l.owner),
+    );
+
+    // Perspective swap for Seat 2 is an exact involution
+    const seat2View = perspectiveSwapState(runA, 2);
+    assert.equal(seat2View.players[0].cash, runA.players[2].cash);
+    const restored = perspectiveSwapState(seat2View, 2);
+    assert.deepEqual(restored.lots, runA.lots);
+    assert.deepEqual(
+      restored.players.map((p) => ({ cash: p.cash, tiles: p.tiles })),
+      runA.players.map((p) => ({ cash: p.cash, tiles: p.tiles })),
+    );
+
+    // Settle a live human-to-human trade between Seat 0 and Seat 2 (100 $wif -> 1% = 1 $wif vault tax)
+    runA.players[0].cash = 200;
+    const seat0Lot = runA.lots.find((l) => l.owner === 0)!.id;
+    const seat2Lot = runA.lots.find((l) => l.owner === 2)!.id;
+    const cash0Before = runA.players[0].cash;
+    const cash2Before = runA.players[2].cash;
+    const res = executeAcceptedPlayerTrade(
+      runA,
+      0,
+      2,
+      { cash: 100, lots: [seat0Lot], tiles: [0, 0, 0, 0, 0, 0] },
+      { cash: 0, lots: [seat2Lot], tiles: [0, 0, 0, 0, 0, 0] },
+    );
+    assert.equal(res.accepted, true);
+    assert.equal(res.taxAmount, 1);
+    assert.equal(runA.lots[seat0Lot].owner, 2);
+    assert.equal(runA.lots[seat2Lot].owner, 0);
+    assert.equal(runA.players[0].cash, cash0Before - 100);
+    assert.equal(runA.players[2].cash, cash2Before + 99);
   });
 });

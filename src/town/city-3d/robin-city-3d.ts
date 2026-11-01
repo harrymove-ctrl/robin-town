@@ -487,6 +487,31 @@ export class RobinCity3DRenderer {
     }
   }
 
+  public projectLotToScreen(
+    lotId: number,
+    liftY = 26,
+  ): { x: number; y: number } | null {
+    if (!this.worldBuilt || lotId < 0 || lotId >= PLOT_LAYOUT.length) {
+      return null;
+    }
+    const rect = this.getViewportRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return null;
+    }
+    const plot = PLOT_LAYOUT[lotId];
+    const [wx, , wz] = boardRectToWorld(plot.x, plot.y, CELL_SIZE, CELL_SIZE, 0);
+    const vec = new THREE.Vector3(wx, liftY, wz);
+    this.camera.updateMatrixWorld(true);
+    vec.project(this.camera);
+    if (vec.z < -1 || vec.z > 1) {
+      return null;
+    }
+    return {
+      x: rect.left + (vec.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-vec.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
   public pickLotAtClientPoint(clientX: number, clientY: number): number | null {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY) || !this.worldBuilt) {
       return null;
@@ -845,7 +870,7 @@ export class RobinCity3DRenderer {
       case 'isometric':
         return portrait
           ? THREE.MathUtils.clamp(fitRadius * 0.56, 720, 820)
-          : THREE.MathUtils.clamp(fitRadius * 1.04, MIN_RADIUS, MAX_RADIUS);
+          : THREE.MathUtils.clamp(fitRadius * 0.90, MIN_RADIUS, MAX_RADIUS);
       case 'topdown':
         return portrait
           ? THREE.MathUtils.clamp(fitRadius * 0.86, 840, 1280)

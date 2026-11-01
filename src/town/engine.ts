@@ -57,6 +57,40 @@ export const KEEP = [5, 4, 3, 2, 2, 2];
 export const COMPLETE = [0, 0, 0, 50, 80, 110, 140];
 export const INCOMPLETE = [0, 10, 20, 40, 60, 80];
 
+export function getTodayHarborSeedKey(now: Date = new Date()): string {
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function hashHarborSeed(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h === 0 ? 0x6d2b79f5 : h >>> 0;
+}
+
+function stepStateRng(state: GameState): number {
+  let t = ((state.rngState ?? 0x6d2b79f5) + 0x6d2b79f5) >>> 0;
+  state.rngState = t;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function resolveRng(state: GameState, provided?: RandomSource): RandomSource {
+  if (provided && provided !== Math.random) {
+    return provided;
+  }
+  if (typeof state.rngState === 'number' && Number.isFinite(state.rngState)) {
+    return () => stepStateRng(state);
+  }
+  return Math.random;
+}
+
 export function shuffle<T>(items: readonly T[], rng: RandomSource = Math.random): T[] {
   return items
     .map((value) => ({ key: rng(), value }))
@@ -117,7 +151,15 @@ export function holdings(state: GameState, player: number): Lot[] {
 export function newGame(
   rng: RandomSource = Math.random,
   entryMode: MatchEntryMode = 'casual',
+  dailySeed?: string,
 ): GameState {
+  const resolvedDailySeed =
+    entryMode === 'daily' ? dailySeed || getTodayHarborSeedKey() : dailySeed;
+  const initialRngState =
+    resolvedDailySeed && rng === Math.random
+      ? hashHarborSeed(`robin-town-daily:${resolvedDailySeed}`)
+      : undefined;
+
   const state: GameState = {
     version: 1,
     boardRevision: BOARD_REVISION,
@@ -130,21 +172,30 @@ export function newGame(
       tiles: [0, 0, 0, 0, 0, 0],
     })),
     lots: Array.from({ length: 72 }, (_, id) => ({ id, owner: null, shop: null })),
-    bag: shuffle(
-      Array.from({ length: 120 }, (_, index) => index % 6),
-      rng,
-    ),
+    bag: [],
     pending: [],
     draftCount: 0,
     logs: [],
     lastIncome: [],
     trades: 0,
     entryMode,
+    dailySeed: resolvedDailySeed,
+    rngState: initialRngState,
     matchSettled: false,
   };
 
+  const activeRng = resolveRng(state, rng);
+  state.bag = shuffle(
+    Array.from({ length: 120 }, (_, index) => index % 6),
+    activeRng,
+  );
+
   startYear(state, rng);
   return state;
+}
+
+export function newDailyGame(seedKey: string = getTodayHarborSeedKey()): GameState {
+  return newGame(Math.random, 'daily', seedKey);
 }
 
 const LEGACY_PLAYER_NAMES: Record<string, string> = {
@@ -239,13 +290,14 @@ function botDraft(state: GameState, player: number, count: number, rng: RandomSo
 }
 
 export function startYear(state: GameState, rng: RandomSource = Math.random): void {
+  const activeRng = resolveRng(state, rng);
   state.phase = 'receive';
   state.lastIncome = [];
   const count = KEEP[state.year - 1];
   state.draftCount = count;
   state.pending = shuffle(
     state.lots.filter((lot) => lot.owner === null).map((lot) => lot.id),
-    rng,
+    activeRng,
   ).slice(0, count + 2);
 
   for (let player = 0; player < state.players.length; player++) {
@@ -263,6 +315,7 @@ export function claimPlots(
   ids: number[],
   rng: RandomSource = Math.random,
 ): number[] {
+  const activeRng = resolveRng(state, rng);
   if (state.phase !== 'receive') {
     throw Error('You can choose addresses only at the start of a year.');
   }
@@ -280,7 +333,7 @@ export function claimPlots(
   state.pending = [];
 
   for (let player = 1; player < state.players.length; player++) {
-    botDraft(state, player, state.draftCount, rng);
+    botDraft(state, player, state.draftCount, activeRng);
   }
 
   state.phase = 'trade';
@@ -774,6 +827,92 @@ export function rankings(state: GameState): Player[] {
   );
 }
 
+/**
+ * Symmetric seat-perspective mapper (0 <-> seat) for real-time cross-device multiplayer.
+ * Ensures every connected human peer views their own seat as player 0 ("You") locally.
+ */
+export function perspectiveSwapState(state: GameState, seat: number): GameState {
+  const cloned = JSON.parse(JSON.stringify(state)) as GameState;
+  if (!Number.isInteger(seat) || seat <= 0 || seat >= cloned.players.length) {
+    return cloned;
+  }
+  const mapIdx = (idx: number | null): number | null => {
+    if (idx === null) return null;
+    if (idx === 0) return seat;
+    if (idx === seat) return 0;
+    return idx;
+  };
+  const p0 = cloned.players[0];
+  const pk = cloned.players[seat];
+  cloned.players[0] = { ...pk, id: 0 };
+  cloned.players[seat] = { ...p0, id: seat };
+  for (const lot of cloned.lots) {
+    lot.owner = mapIdx(lot.owner);
+  }
+  if (cloned.lastIncome.length > seat) {
+    const inc0 = cloned.lastIncome[0];
+    cloned.lastIncome[0] = cloned.lastIncome[seat];
+    cloned.lastIncome[seat] = inc0;
+  }
+  return cloned;
+}
+
+/**
+ * Executes a mutually accepted human-to-human OTC trade between any two seats.
+ */
+export function executeAcceptedPlayerTrade(
+  state: GameState,
+  fromSeat: number,
+  toSeat: number,
+  give: OfferSide,
+  take: OfferSide,
+): { accepted: boolean; taxAmount: number } {
+  if (state.phase !== 'trade') {
+    throw Error('Deals are available only during the Trade phase.');
+  }
+  const pFrom = state.players[fromSeat];
+  const pTo = state.players[toSeat];
+  if (!pFrom || !pTo || fromSeat === toSeat) {
+    throw Error('Invalid trading seats.');
+  }
+  if (give.cash < 0 || give.cash > pFrom.cash || take.cash < 0 || take.cash > pTo.cash) {
+    throw Error('Insufficient $wif cash for trade.');
+  }
+  for (let s = 0; s < 6; s++) {
+    if ((give.tiles[s] || 0) > pFrom.tiles[s] || (take.tiles[s] || 0) > pTo.tiles[s]) {
+      throw Error('Shop tile counts changed before settlement.');
+    }
+  }
+  if (
+    give.lots.some((id) => state.lots[id]?.owner !== fromSeat) ||
+    take.lots.some((id) => state.lots[id]?.owner !== toSeat)
+  ) {
+    throw Error('Plot ownership changed before settlement.');
+  }
+
+  const giveTax = calculateTradeTax(give.cash);
+  const takeTax = calculateTradeTax(take.cash);
+  pFrom.cash += takeTax.netCash - give.cash;
+  pTo.cash += giveTax.netCash - take.cash;
+
+  for (let s = 0; s < 6; s++) {
+    const g = give.tiles[s] || 0;
+    const t = take.tiles[s] || 0;
+    pFrom.tiles[s] += t - g;
+    pTo.tiles[s] += g - t;
+  }
+  for (const id of give.lots) state.lots[id].owner = toSeat;
+  for (const id of take.lots) state.lots[id].owner = fromSeat;
+  state.trades++;
+
+  const totalTax = giveTax.taxAmount + takeTax.taxAmount;
+  log(
+    state,
+    `Live PvP Deal ${state.trades}: ${pFrom.name} and ${pTo.name} settled an OTC swap.`,
+  );
+  return { accepted: true, taxAmount: totalTax };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -849,6 +988,9 @@ export function validSave(value: unknown): value is GameState {
     isNonnegativeInteger(value.draftCount) &&
     value.draftCount >= 1 &&
     value.draftCount <= 6 &&
-    isNonnegativeInteger(value.trades)
+    isNonnegativeInteger(value.trades) &&
+    (value.dailySeed === undefined || typeof value.dailySeed === 'string') &&
+    (value.rngState === undefined ||
+      (typeof value.rngState === 'number' && Number.isFinite(value.rngState)))
   );
 }

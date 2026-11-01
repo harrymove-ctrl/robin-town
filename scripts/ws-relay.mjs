@@ -127,7 +127,7 @@ export async function getLiveOnChainWifProof() {
 }
 
 export function createMultiplayerRelay(options = {}) {
-  /** @type {Map<string, { code: string, peers: Map<string, import('node:net').Socket>, lastSyncText: string | null, updatedAt: number }>} */
+  /** @type {Map<string, { code: string, peers: Map<string, import('node:net').Socket>, lastSyncText: string | null, lastTownSyncText: string | null, status: string, hostName: string, updatedAt: number }>} */
   const rooms = new Map();
   const walletRegistry = createWalletRegistry(options.walletRegistryOptions || {});
 
@@ -158,7 +158,15 @@ export function createMultiplayerRelay(options = {}) {
       for (const [code, room] of rooms) {
         if (room.peers.size > 0) {
           connectedClients += room.peers.size;
-          activeRooms.push({ code, players: room.peers.size, updatedAt: room.updatedAt });
+          activeRooms.push({
+            code,
+            players: room.peers.size,
+            maxPlayers: 4,
+            status: room.status || 'lobby',
+            hostName: room.hostName || 'Harbor Host',
+            joinable: room.peers.size < 4,
+            updatedAt: room.updatedAt,
+          });
         }
       }
       res.writeHead(200, {
@@ -261,6 +269,9 @@ export function createMultiplayerRelay(options = {}) {
         code: roomCode,
         peers: new Map(),
         lastSyncText: null,
+        lastTownSyncText: null,
+        status: 'lobby',
+        hostName: 'Harbor Host',
         updatedAt: Date.now(),
       };
       rooms.set(roomCode, room);
@@ -274,10 +285,17 @@ export function createMultiplayerRelay(options = {}) {
     room.updatedAt = Date.now();
 
     // Replay latest cached authoritative state to newly connected non-host peers
-    if (room.lastSyncText && parsedUrl.searchParams.get('host') !== '1') {
-      try {
-        socket.write(encodeWsText(room.lastSyncText));
-      } catch {}
+    if (parsedUrl.searchParams.get('host') !== '1') {
+      if (room.lastSyncText) {
+        try {
+          socket.write(encodeWsText(room.lastSyncText));
+        } catch {}
+      }
+      if (room.lastTownSyncText) {
+        try {
+          socket.write(encodeWsText(room.lastTownSyncText));
+        } catch {}
+      }
     }
 
     let recvBuf = head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0);
@@ -370,6 +388,21 @@ export function createMultiplayerRelay(options = {}) {
             parsed.type === 'GAME_STATE_SYNC'
           ) {
             currentRoom.lastSyncText = text;
+            const rs = parsed.payload?.roomState;
+            if (rs && typeof rs.status === 'string') {
+              currentRoom.status = rs.status;
+              const hostPlayer = Array.isArray(rs.players)
+                ? rs.players.find((p) => p && p.isHost)
+                : null;
+              if (hostPlayer?.name) {
+                currentRoom.hostName = String(hostPlayer.name).slice(0, 24);
+              }
+            } else if (parsed.type === 'MATCH_STARTED') {
+              currentRoom.status = 'playing';
+            }
+          } else if (parsed.type === 'TOWN_STATE_SYNC') {
+            currentRoom.lastTownSyncText = text;
+            currentRoom.status = 'playing';
           }
 
           const outboundFrame = encodeWsText(text);

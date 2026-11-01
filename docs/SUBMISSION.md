@@ -10,11 +10,12 @@
 * **Official World is Flat (`$wif`) Token Contract (Robinhood Chain Mainnet `4663`)**: [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) (`World is Flat / WIF`, `18` decimals)
 * **Verified Dead Burn Address (`113,917.82+ $wif` Burned On-Chain)**: [`0x000000000000000000000000000000000000dEaD`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773?tab=holders)
 * **Live On-Chain Telemetry API**: [https://robin-town-production.up.railway.app/api/onchain-wif](https://robin-town-production.up.railway.app/api/onchain-wif)
+* **Live Harbor Wallet & Daily Seed Registry API**: [https://robin-town-production.up.railway.app/api/wallets](https://robin-town-production.up.railway.app/api/wallets) · [/api/wallets/daily](https://robin-town-production.up.railway.app/api/wallets/daily)
 * **Live Multiplayer Rooms API**: [https://robin-town-production.up.railway.app/api/rooms](https://robin-town-production.up.railway.app/api/rooms)
+* **Smart Contract (`RobinTownHarborVault.sol`)**: [`contracts/RobinTownHarborVault.sol`](../contracts/RobinTownHarborVault.sol) (`stakeWif`, `unstakeWif`, `patronizeDistrict`, `enterRankedHarbor`)
 * **Hackathon**: Robinhood Chain Hackathon: Build with `$wif` (`10,000 USDG` Winner Takes All)
-* **Submissions Close**: 2 Nov 2026, 17:30 UTC
-* **Round One Voting Closes**: 4 Nov 2026, 17:30 UTC
-* **Final Voting Closes**: 6 Nov 2026, 17:30 UTC
+* **Submissions Close**: 14 Nov 2026
+* **Final Voting Window**: 14 Nov to 16 Nov 2026
 
 ## Ready-to-Paste Hackathon Submission Description
 
@@ -41,19 +42,20 @@ Players can toggle seamlessly with zero state loss between an illustrated `1100x
 - [ ] Confirm final team roster (up to 4 members) and the team lead receiving wallet address on the hackathon submission form for the `10,000 USDG` prize
 
 ### 2. Live Deployment and Cross-Device Multiplayer Relay
-- [x] Deploy production Docker build (`scripts/serve-prod.mjs` + `scripts/ws-relay.mjs` + `dist/`) to Railway at `https://robin-town-production.up.railway.app`
-- [x] Ship cross-device RFC 6455 WebSocket multiplayer rooms (`/ws`, `/api/rooms`, and `?room=CODE6X` shareable invite links) paired with `BroadcastChannel` in `src/network/room.ts`
+- [x] Deploy production Docker build (`scripts/serve-prod.mjs` + `scripts/ws-relay.mjs` + `scripts/wallet-registry.mjs` + `dist/`) to Railway at `https://robin-town-production.up.railway.app` with persistent `/data/wallets.json` volume
+- [x] Ship cross-device RFC 6455 WebSocket multiplayer rooms (`/ws`, `/api/rooms` 1-click public lobby browser, `TOWN_STATE_SYNC` reconnect replay, live human-to-human `TOWN_TRADE_PROPOSE` OTC bargaining, and `?room=CODE6X` shareable invite links) paired with `BroadcastChannel` in `src/network/room.ts`
 
 ### 3. On-Chain `$wif` Contract and Wallet Verification
-- [x] Verify live Robinhood Chain Mainnet (`https://rpc.mainnet.chain.robinhood.com`, Chain ID `4663`) and Testnet (`https://rpc.testnet.chain.robinhood.com`, Chain ID `46630`) RPC endpoints plus official `$wif` ERC-20 contract `0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`
-- [x] Wire ERC-20 `$wif` ABI calldata encoders (`balanceOf`, `transfer`, `approve`, `burn`) and live `/api/onchain-wif` RPC burn proof (`4,600,000.60 $wif` burned on `0x000000000000000000000000000000000000dEaD`) into `src/tokenomics/wallet.ts` and the `$wif` Hub
+- [x] Verify live Robinhood Chain Mainnet (`https://rpc.mainnet.chain.robinhood.com`, Chain ID `4663`) RPC endpoints plus official `World is Flat` (`$wif`) ERC-20 contract `0x5173b8eA6923c2d40267890D45C46a3480954773` and `contracts/RobinTownHarborVault.sol`
+- [x] Wire ERC-20 `$wif` ABI calldata encoders (`balanceOf`, `transfer`, `approve`, `burn`), gasless EIP-191 `personal_sign` verification (`POST /api/wallets/verify`), on-chain `eth_getTransactionReceipt` `$wif` Transfer log verifier (`POST /api/wallets/tx`), and live `/api/onchain-wif` RPC burn proof (`113,917.82+ $wif` burned on `0x000000000000000000000000000000000000dEaD`) into `src/tokenomics/wallet.ts` and the `$wif` Hub
 
-### 4. Visual Polish, 3D Harbor Diorama, and Automated QA
-- [x] Ship complete 3D Harbor Diorama (`Street`, `Iso`, `2D Match`, `Top` camera presets + `Day`, `Sunset`, `Night` atmospheres + connected multi-tile cluster plinths + shoreline boats)
-- [x] Pass all `926` unit, integration, WebSocket relay, ERC-20 calldata, and Playwright browser tests (`npm run verify:assets`, `npm run typecheck`, `npm test`, `npm run build`)
+### 4. Visual Polish, Daily Seed, 3D Harbor Diorama, and Automated QA
+- [x] Ship complete 3D Harbor Diorama (`Street`, `Iso`, `2D Match`, `Top` camera presets + `Day`, `Sunset`, `Night` atmospheres + 3D hover lot yield tooltip + 3D payday banknote & `+WIF` popups + lazy Three.js code-splitting down to `87 kB` initial gzipped JS)
+- [x] Ship deterministic `Daily Harbor Seed` mode (`📅 Daily Seed`), multi-day Harbor Streaks (`1.1x` to `1.5x` bonus Town Points), Year-1 interactive 3-step coachmark, and `1200x630` Year-6 Empire Score Card PNG + X share export (`src/town/score-card.ts`)
+- [x] Pass all `934` unit, integration, WebSocket relay, ERC-20 receipt verification, Daily Seed determinism, and Playwright browser tests (`npm run verify:assets`, `npm run typecheck`, `npm test`, `npm run build`)
 - [x] Embed deterministic high-resolution `Day`, `Sunset`, `Night`, and `Iso` 3D Harbor Diorama screenshots in `docs/screenshots/` and `README.md`
 
-### 5. Demo Videos and Final Submission Form (Before 2 Nov 2026, 17:30 UTC)
+### 5. Demo Videos and Final Submission Form (Before 14 Nov 2026)
 - [x] Render and master 1080p @ 30fps Hackathon Submission Video (`docs/video/exports/robin-town-hackathon-master.mp4`, `3:20`) and X Launch Video (`docs/video/exports/robin-town-x-launch.mp4`, `0:44`)
-- [ ] Upload demo video and submit the live Railway URL, GitHub repository link, and `$wif` flywheel write-up on the Robinhood Chain Hackathon portal before **2 Nov 2026, 17:30 UTC**
-- [ ] Share the X Launch Video (`0:44`) and playable Railway room link for Round One `$wif` community voting (2 Nov to 4 Nov 2026)
+- [ ] Submit the live Railway URL, GitHub repository link, verified Chain `4663` `$wif` transaction hashes, and `$wif` flywheel write-up on `worldisflat.fun` before **14 Nov 2026**
+- [ ] Share playable Daily Seed links and Year-6 Empire Score Cards on X and `worldisflat.fun/build` Updates ahead of Final Voting (**14 Nov to 16 Nov 2026**)

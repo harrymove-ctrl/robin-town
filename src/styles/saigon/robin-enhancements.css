@@ -19,7 +19,9 @@
 #start-screen .start-panel {
   position: relative;
   z-index: 2;
-  max-width: min(680px, 94vw);
+  width: min(720px, 94vw) !important;
+  max-width: min(720px, 94vw) !important;
+  box-sizing: border-box;
 }
 
 .robin-kicker-badges {
@@ -64,6 +66,9 @@
   flex-direction: column;
   gap: 3px;
   padding: 9px 11px;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   border-radius: 10px;
   border: 2px solid #c9b78b;
   background: #fbf5e4;
@@ -84,11 +89,15 @@
 }
 
 .entry-mode-card strong {
-  font-size: 13px;
+  font-size: 12.5px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 3px 5px;
+  min-width: 0;
   color: #143627;
+  white-space: normal;
 }
 
 .entry-mode-card small {
@@ -98,12 +107,14 @@
 }
 
 .entry-tag {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 9.5px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: #1f8a58;
   color: #fff;
   font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .entry-mode-card[data-entry-mode="ranked"] .entry-tag {
@@ -497,12 +508,33 @@
   color: #1f1706;
 }
 
-.bot-live-feed {
+.stage-top-stack {
   position: absolute;
   top: 10px;
   left: 12px;
+  right: 118px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.stage-top-stack .coachmark-layer {
+  width: 100%;
+  pointer-events: none;
+}
+
+.stage-top-stack .coachmark-layer:empty {
+  display: none;
+}
+
+.bot-live-feed {
+  position: relative;
   z-index: 6;
-  max-width: calc(100% - 132px);
+  max-width: 100%;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -621,7 +653,13 @@
   }
 }
 
-@media (max-width: 1420px) and (min-width: 681px) {
+@media (min-width: 1321px) {
+  .robin-hud-utilities .view-toggle-btn {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1320px) and (min-width: 681px) {
   .robin-hud-utilities .view-mode-segmented {
     display: none;
   }
@@ -1436,10 +1474,15 @@ body[data-view-mode="city-3d"] .camera-hint {
   }
 
   /* Compact Mini Tear-Off Calendar on Top-Right */
-  .bot-live-feed {
+  .stage-top-stack {
     top: 6px;
     left: 6px;
-    max-width: calc(100% - 74px);
+    right: 70px;
+    gap: 5px;
+  }
+
+  .bot-live-feed {
+    max-width: 100%;
     padding: 3px 8px;
     gap: 5px;
     font-size: 10px;
@@ -1854,6 +1897,9 @@ button.robin-chain-pill.traders-live-pill:hover {
   color: #bdf7d6;
   font-variant-numeric: tabular-nums;
   margin-right: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .metamask-addr-chip.verified {
@@ -2046,4 +2092,548 @@ button.robin-chain-pill.traders-live-pill:hover {
     font-size: 9.5px;
     padding: 2px 6px;
   }
+}
+
+/* v1.2 Daily Seed, Year-1 Coachmark, 3D Hover Tooltip, On-Chain Tx Verifier & Score Card */
+.entry-mode-grid.entry-mode-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .entry-mode-grid.entry-mode-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.entry-tag.daily,
+.entry-mode-card[data-entry-mode="daily"] .entry-tag {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.coachmark-banner {
+  position: relative;
+  z-index: 6;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  max-width: min(780px, 100%);
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(16, 48, 35, 0.96), rgba(38, 30, 11, 0.95));
+  border: 1.5px solid #eec353;
+  color: #f7f3e6;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.36);
+  box-sizing: border-box;
+}
+
+.coachmark-step {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eec353;
+  color: #1c1606;
+  white-space: nowrap;
+}
+
+.coachmark-copy {
+  flex: 1 1 220px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #f6efe0;
+}
+
+.coachmark-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.coachmark-btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  background: #2ca56d;
+  color: #0b2217;
+  font-size: 11.5px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.coachmark-btn:hover {
+  background: #48c78e;
+}
+
+.coachmark-btn.secondary {
+  background: rgba(255, 248, 231, 0.14);
+  color: #f7f3e6;
+  border: 1px solid rgba(238, 195, 83, 0.55);
+}
+
+.coachmark-btn.secondary:hover {
+  background: rgba(238, 195, 83, 0.25);
+}
+
+.coachmark-skip {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.city-hover-tooltip {
+  position: absolute;
+  bottom: 58px;
+  top: auto;
+  left: 14px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: min(300px, 80vw);
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: rgba(12, 31, 23, 0.94);
+  border: 1px solid #489e73;
+  color: #f7f4e8;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.42);
+}
+
+.city-hover-tooltip[hidden] {
+  display: none !important;
+}
+
+.city-hover-tooltip small {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8bf5b5;
+}
+
+.city-hover-tooltip strong {
+  font-size: 12.5px;
+  color: #ffea9f;
+}
+
+.city-hover-tooltip span {
+  font-size: 11px;
+  color: #d2e8dc;
+}
+
+.payday-lot-popup {
+  position: fixed;
+  z-index: 60;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f6d069, #d99b26);
+  border: 1.5px solid #fff6cc;
+  color: #1d1505;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.score-card-box {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #10291e;
+  border: 1.5px solid #3c7d5e;
+  text-align: center;
+}
+
+.score-card-preview {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+  border: 1px solid #d4a638;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38);
+}
+
+.tx-verify-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tx-hash-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1.5px solid #bfa97a;
+  background: #fffcf4;
+  color: #162e22;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  box-sizing: border-box;
+}
+
+.open-rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.open-room-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f5ecd6;
+  border: 1px solid #cbb484;
+  font-size: 12px;
+  color: #1c3125;
+}
+
+.streak-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.streak-pill.patron {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #14532d;
+}
+
+.trader-tx-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #132a20;
+  color: #8bf5b5;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.trader-tx-link:hover {
+  text-decoration: underline;
+  color: #ffea9f;
+}
+
+
+/* ============================================================================
+   v1.2 Gameplay Ergonomics, Smart OTC Bargaining & Above-the-Fold Score Card
+   ============================================================================ */
+
+/* Non-colliding top toast so CTAs, 3D toolbar, and Action Belt stay clickable */
+#toast {
+  top: 74px !important;
+  bottom: auto !important;
+  pointer-events: none !important;
+  z-index: 95;
+}
+
+/* Phase Belt Smart Assistants & Connected Draft Slips */
+.smart-phase-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1.5px solid #eec353 !important;
+  background: linear-gradient(135deg, #214e39, #362a0d) !important;
+  color: #ffea9f !important;
+  font-weight: 800 !important;
+  font-size: 12px !important;
+  padding: 7px 11px !important;
+  border-radius: 9px !important;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.smart-phase-btn:hover {
+  border-color: #fff3bd !important;
+  background: linear-gradient(135deg, #2b644a, #483812) !important;
+}
+
+.address-slip {
+  position: relative;
+}
+
+.address-slip.synergy-slip {
+  box-shadow: 0 0 0 1.5px #eec353, 0 3px 8px rgba(238, 195, 83, 0.28);
+}
+
+.address-slip .draft-synergy {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  color: #ffd966;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+}
+
+/* Marginal Yield Badge on Shop Rack Pieces */
+.shop-piece {
+  position: relative;
+}
+
+.shop-piece .piece-delta-badge {
+  position: absolute;
+  top: 5px;
+  right: 30px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #14532d;
+  border: 1px solid #4ade80;
+  color: #bbf7d0;
+  font-size: 9.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* OTC Bargaining: 1-Click Win-Win Smart Deal Bar & Live Neighbor Reaction Meter */
+.smart-deal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 6px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #163d2c, #2f260d);
+  border: 1.5px solid #eec353;
+  color: #f8f3e6;
+}
+
+.smart-deal-tag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eec353;
+  color: #1f1706;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.smart-deal-copy {
+  flex: 1 1 220px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #f6efe0;
+}
+
+.smart-deal-copy strong {
+  color: #ffea9f;
+}
+
+.smart-deal-btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 11px;
+  background: #2ca56d;
+  color: #0b2217;
+  font-size: 11.5px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.smart-deal-btn:hover {
+  background: #48c78e;
+}
+
+.deal-meter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 10px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.35;
+  border: 1.5px solid #cbb689;
+  background: #f7efda;
+  color: #1d3528;
+}
+
+.deal-meter > span:nth-child(2) {
+  flex: 1 1 200px;
+}
+
+.deal-meter.accepted {
+  background: #e6f7ed;
+  border-color: #1f8a58;
+  color: #103b25;
+}
+
+.deal-meter.close {
+  background: #fef6dc;
+  border-color: #d99b26;
+  color: #4a3208;
+}
+
+.deal-meter.wide {
+  background: #faefe6;
+  border-color: #c97a4b;
+  color: #4a2410;
+}
+
+.deal-meter-sweeten {
+  border: 0;
+  border-radius: 7px;
+  padding: 4px 9px;
+  background: #d99b26;
+  color: #1c1304;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.deal-meter-sweeten:hover {
+  background: #eec353;
+}
+
+.deal-meter-clear {
+  border: 1px solid rgba(29, 53, 40, 0.28);
+  border-radius: 7px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.65);
+  color: #243b2e;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.trade-dialog .stash-slot.synergy-fit {
+  border-color: #d99b26 !important;
+  box-shadow: inset 0 0 0 1px rgba(238, 195, 83, 0.55);
+  background: #fff9e6;
+}
+
+.trade-dialog .plot-slot.synergy-adj {
+  border-color: #1f8a58 !important;
+  box-shadow: 0 0 0 1.5px rgba(31, 138, 88, 0.45);
+  background: #eaf8ef;
+}
+
+/* 2-Column Year-6 Final Standings + Score Card Modal (100% Above the Fold on Desktop) */
+dialog#modal.results-dialog {
+  width: min(920px, 95vw);
+  max-width: 920px;
+  max-height: 92vh;
+  padding: 16px 22px 18px;
+}
+
+dialog#modal.results-dialog h2 {
+  margin-bottom: 6px;
+  font-size: clamp(20px, 2.3vw, 25px);
+}
+
+.results-split-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (min-width: 780px) {
+  .results-split-grid {
+    grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+    gap: 16px;
+  }
+}
+
+.results-subcopy {
+  margin: 0 0 8px !important;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.results-podium-list .score-row {
+  padding: 6px 10px;
+  margin-bottom: 5px;
+}
+
+.score-row-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.score-row-name small {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #556b5d;
+  font-variant-numeric: tabular-nums;
+}
+
+.results-settlement-card {
+  margin-top: 8px !important;
+  margin-bottom: 0 !important;
+  padding: 10px 12px !important;
+}
+
+.results-right-col .score-card-box {
+  margin-top: 0;
+  padding: 9px;
+}
+
+.results-right-col .score-card-preview {
+  max-height: 232px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.results-footnote {
+  margin: 6px 0 0 !important;
+  font-size: 11.5px !important;
+  text-align: center;
+}
+
+dialog#modal.results-dialog .modal-actions {
+  margin-top: 10px;
 }
