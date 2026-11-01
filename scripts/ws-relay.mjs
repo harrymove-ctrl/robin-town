@@ -7,8 +7,13 @@ const ROOM_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export const ROBINHOOD_MAINNET_RPC = 'https://rpc.mainnet.chain.robinhood.com';
 export const ROBINHOOD_TESTNET_RPC = 'https://rpc.testnet.chain.robinhood.com';
-export const WIF_CONTRACT_MAINNET = '0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B';
+export const WIF_CONTRACT_MAINNET = '0x5173b8eA6923c2d40267890D45C46a3480954773';
 export const DEAD_BURN_SINK = '0x000000000000000000000000000000000000dEaD';
+export const WORLD_IS_FLAT_URL = 'https://worldisflat.fun';
+export const WORLD_IS_FLAT_BUILD_URL = 'https://worldisflat.fun/build';
+export const WORLD_IS_FLAT_FAIR_URL = 'https://worldisflat.fun/fair/';
+export const WIF_PONS_LAUNCHPAD_URL =
+  'https://www.ponsfamily.com/launchpad/0x5173b8eA6923c2d40267890D45C46a3480954773';
 
 export function encodeWsFrame(opcode, payloadBuffer) {
   const len = payloadBuffer.length;
@@ -86,6 +91,10 @@ export async function getLiveOnChainWifProof() {
     ),
   ]);
 
+  const supplyFloat = hexWeiToFloat(String(totalSupplyHex));
+  const deadFloat = hexWeiToFloat(String(deadBalHex));
+  const supplyBurnedFloat = Math.max(0, 1_000_000_000 - supplyFloat);
+
   const snapshot = {
     ok: true,
     fetchedAt: new Date(now).toISOString(),
@@ -95,14 +104,20 @@ export async function getLiveOnChainWifProof() {
     testnetRpc: ROBINHOOD_TESTNET_RPC,
     explorerUrl: `https://robinhoodchain.blockscout.com/token/${WIF_CONTRACT_MAINNET}`,
     burnAddressUrl: `https://robinhoodchain.blockscout.com/address/${DEAD_BURN_SINK}`,
+    worldIsFlatUrl: WORLD_IS_FLAT_URL,
+    hackathonUrl: WORLD_IS_FLAT_BUILD_URL,
+    fairUrl: WORLD_IS_FLAT_FAIR_URL,
+    ponsTradeUrl: WIF_PONS_LAUNCHPAD_URL,
     contractAddress: WIF_CONTRACT_MAINNET,
-    tokenName: 'RobinWifHat',
+    tokenName: 'World is Flat',
     tokenSymbol: 'WIF',
     decimals: 18,
     mainnetBlockNumber: parseInt(String(mainnetBlockHex), 16) || 0,
     testnetBlockNumber: parseInt(String(testnetBlockHex), 16) || 0,
-    totalSupplyWif: Math.round(hexWeiToFloat(String(totalSupplyHex))),
-    burnedDeadBalanceWif: Number(hexWeiToFloat(String(deadBalHex)).toFixed(2)),
+    totalSupplyWif: Math.round(supplyFloat),
+    burnedDeadBalanceWif: Number((deadFloat + supplyBurnedFloat).toFixed(2)),
+    deadSinkBalanceWif: Number(deadFloat.toFixed(2)),
+    supplyBurnedWif: Number(supplyBurnedFloat.toFixed(2)),
   };
 
   cachedOnChainSnapshot = snapshot;

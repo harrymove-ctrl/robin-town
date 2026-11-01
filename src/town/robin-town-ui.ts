@@ -55,8 +55,13 @@ import {
   ROBINHOOD_CHAIN_ID,
   ROBINHOOD_CHAIN_NAME,
   ROBINHOOD_MAINNET_CHAIN_ID,
+  ROBINHOOD_MAINNET_EXPLORER_URL,
   WIF_BLOCKSCOUT_TOKEN_URL,
+  WIF_PONS_LAUNCHPAD_URL,
   WIF_TOKEN_CONTRACT_ADDRESS,
+  WORLD_IS_FLAT_BUILD_URL,
+  WORLD_IS_FLAT_FAIR_URL,
+  WORLD_IS_FLAT_URL,
   WalletAdapter,
   fetchLiveOnChainWifProof,
   type OnChainWifProof,
@@ -143,6 +148,7 @@ export function mountRobinTown(): void {
   let townPoints = 180;
   let stakedWif = 0;
   let communityVotes = 0;
+  let lastMainnetTxHash: string | null = null;
   let simBalanceOverrides: Record<string, number> = {};
   let selectedEntryMode: MatchEntryMode = state.entryMode ?? 'casual';
 
@@ -1407,8 +1413,14 @@ export function mountRobinTown(): void {
       </div>
 
       <section class="wif-hub-section">
-        <h3>1. Dual-Mode Wallet & Official $wif ERC-20 (${ROBINHOOD_CHAIN_NAME} · Chain ID ${ROBINHOOD_CHAIN_ID})</h3>
-        <p>Play immediately with pre-funded accounts (0 $wif required to enter) or connect an EIP-1193 wallet with ERC-20 <code>$wif</code> (<a href="${WIF_BLOCKSCOUT_TOKEN_URL}" target="_blank" rel="noopener"><code>${WIF_TOKEN_CONTRACT_ADDRESS.slice(0, 8)}…${WIF_TOKEN_CONTRACT_ADDRESS.slice(-4)}</code></a> on Mainnet Chain ID ${ROBINHOOD_MAINNET_CHAIN_ID}).</p>
+        <h3>1. Official World is Flat ($wif) Wallet · Robinhood Chain Mainnet (${ROBINHOOD_MAINNET_CHAIN_ID})</h3>
+        <p>Play immediately with pre-funded accounts (0 $wif required to enter) or connect MetaMask / Rabby on <strong>Robinhood Chain Mainnet (${ROBINHOOD_MAINNET_CHAIN_ID})</strong> with official <strong>World is Flat</strong> ERC-20 <code>$wif</code> (<a href="${WIF_BLOCKSCOUT_TOKEN_URL}" target="_blank" rel="noopener"><code>${WIF_TOKEN_CONTRACT_ADDRESS.slice(0, 8)}…${WIF_TOKEN_CONTRACT_ADDRESS.slice(-4)}</code></a>).</p>
+        <div class="wif-row-actions" style="margin-bottom:8px">
+          <a class="robin-chain-pill" href="${WORLD_IS_FLAT_URL}" target="_blank" rel="noopener" style="text-decoration:none;font-size:11px">🌐 worldisflat.fun</a>
+          <a class="robin-chain-pill" href="${WORLD_IS_FLAT_BUILD_URL}" target="_blank" rel="noopener" style="text-decoration:none;font-size:11px">🗳️ Vote with $wif (/build)</a>
+          <a class="robin-chain-pill" href="${WORLD_IS_FLAT_FAIR_URL}" target="_blank" rel="noopener" style="text-decoration:none;font-size:11px">⚖️ World is Fair (/fair)</a>
+          <a class="robin-chain-pill" href="${WIF_PONS_LAUNCHPAD_URL}" target="_blank" rel="noopener" style="text-decoration:none;font-size:11px">💱 Trade $wif on Pons</a>
+        </div>
         <div class="wif-row-actions" style="margin-bottom:8px">
           ${simAccounts
             .map(
@@ -1418,14 +1430,24 @@ export function mountRobinTown(): void {
             .join('')}
         </div>
         <div class="wif-row-actions">
-          <button type="button" class="secondary" data-action="connect-web3">${wState.mode === 'web3' && wState.status === 'connected' ? `Connected: ${activeAddr.slice(0, 8)}…` : 'Connect Web3 Wallet (Chain 46631)'}</button>
+          <button type="button" class="primary" data-action="connect-mainnet-wif">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_MAINNET_CHAIN_ID ? `Mainnet 4663: ${activeAddr.slice(0, 8)}…` : 'Connect Robinhood Chain (4663)'}</button>
+          <button type="button" class="secondary" data-action="burn-mainnet-wif">🔥 Burn 0.1 $wif On-Chain (4663)</button>
+          <button type="button" class="secondary" data-action="connect-web3">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_CHAIN_ID ? `Testnet: ${activeAddr.slice(0, 8)}…` : `Testnet (${ROBINHOOD_CHAIN_ID})`}</button>
           <span class="muted" style="font-size:12px">Active Balance: <strong>${activeBal.toLocaleString('en-US')} $wif</strong></span>
           ${
             onChainProof
-              ? `<span class="robin-chain-pill" style="font-size:11px">● On-Chain Block #${onChainProof.mainnetBlockNumber.toLocaleString('en-US')} · <a href="${BURN_EXPLORER_URL}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">${Math.round(onChainProof.burnedDeadBalanceWif).toLocaleString('en-US')} $wif burned on 0x…dEaD</a></span>`
+              ? `<span class="robin-chain-pill" style="font-size:11px">● Block #${onChainProof.mainnetBlockNumber.toLocaleString('en-US')} · <a href="${BURN_EXPLORER_URL}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">${Math.round(onChainProof.burnedDeadBalanceWif).toLocaleString('en-US')} $wif burned on-chain</a></span>`
               : `<button type="button" class="artbook-link" data-action="refresh-onchain" style="font-size:11px">Verify live Robinhood Chain RPC</button>`
           }
         </div>
+        ${
+          lastMainnetTxHash
+            ? `<div class="wif-row-actions" style="margin-top:8px">
+                <span class="robin-chain-pill" style="font-size:11px">✓ On-Chain $wif Burn Tx: <a href="${ROBINHOOD_MAINNET_EXPLORER_URL}/tx/${lastMainnetTxHash}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline"><code>${lastMainnetTxHash.slice(0, 12)}…${lastMainnetTxHash.slice(-6)}</code></a></span>
+                <button type="button" class="secondary" data-action="copy-onchain-tx" style="font-size:11px">Copy Tx Hash</button>
+              </div>`
+            : ''
+        }
       </section>
 
       <section class="wif-hub-section">
@@ -1978,6 +2000,44 @@ export function mountRobinTown(): void {
             saveEconomy();
             openWifHub();
             render();
+          });
+        }
+        break;
+      case 'connect-mainnet-wif':
+        void wallet
+          .connectMainnetWif()
+          .then((acc) => {
+            toast(`Connected to Robinhood Chain Mainnet (4663) · ${acc.balance} $wif`);
+            saveEconomy();
+            if (get('#modal').dataset.wifHub === 'true') openWifHub();
+            render();
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'Wallet connection declined.';
+            toast(msg);
+          });
+        break;
+      case 'burn-mainnet-wif':
+        void wallet
+          .burnMainnetWif(0.1)
+          .then((tx) => {
+            lastMainnetTxHash = tx.hash;
+            flywheel = { ...flywheel, totalBurned: Number((flywheel.totalBurned + 0.1).toFixed(2)) };
+            communityVotes += 1;
+            saveEconomy();
+            toast(`Burned 0.1 $wif on Robinhood Chain! Tx: ${tx.hash.slice(0, 10)}…`);
+            if (get('#modal').dataset.wifHub === 'true') openWifHub();
+            render();
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'On-chain $wif burn cancelled.';
+            toast(msg);
+          });
+        break;
+      case 'copy-onchain-tx':
+        if (lastMainnetTxHash && navigator.clipboard) {
+          void navigator.clipboard.writeText(lastMainnetTxHash).then(() => {
+            toast(`Copied tx hash ${lastMainnetTxHash!.slice(0, 12)}…`);
           });
         }
         break;

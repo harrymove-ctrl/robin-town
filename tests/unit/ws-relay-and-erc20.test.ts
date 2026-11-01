@@ -41,7 +41,7 @@ describe('Cross-Device RFC 6455 WebSocket Relay & $wif ERC-20 Contract Integrati
 
   it('executes Web3 ERC-20 balanceOf, transferErc20, and approveErc20 against WIF_TOKEN_CONTRACT_ADDRESS', async () => {
     assert.equal(ROBINHOOD_MAINNET_CHAIN_ID, 4663);
-    assert.equal(WIF_TOKEN_CONTRACT_ADDRESS, '0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B');
+    assert.equal(WIF_TOKEN_CONTRACT_ADDRESS, '0x5173b8eA6923c2d40267890D45C46a3480954773');
 
     const sentCalls: Array<{ method: string; params: unknown }> = [];
     const mockProvider: EIP1193Provider = {

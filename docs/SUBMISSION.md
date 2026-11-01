@@ -7,8 +7,8 @@
 * **Hackathon Master Demo Video (`3:20`, 1080p)**: [https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-hackathon-master.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-hackathon-master.mp4) (local file: `docs/video/exports/robin-town-hackathon-master.mp4`)
 * **Raylight 3D Mobile & `$wif` Economy Intro (`0:34`, 1080p)**: [https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-intro.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-intro.mp4) (local file: `docs/video/exports/robin-town-intro.mp4`)
 * **X Launch Cut (`0:44`, 1080p)**: [https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-x-launch.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-x-launch.mp4) (local file: `docs/video/exports/robin-town-x-launch.mp4`)
-* **Verified `$wif` Token Contract (Robinhood Chain)**: [`0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`](https://robinhoodchain.blockscout.com/token/0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B) (`RobinWifHat / WIF`, `18` decimals)
-* **Verified Dead Burn Address (`4,600,000.60+ $wif` Burned On-Chain)**: [`0x000000000000000000000000000000000000dEaD`](https://robinhoodchain.blockscout.com/token/0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B?tab=holders)
+* **Official World is Flat (`$wif`) Token Contract (Robinhood Chain Mainnet `4663`)**: [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) (`World is Flat / WIF`, `18` decimals)
+* **Verified Dead Burn Address (`113,917.82+ $wif` Burned On-Chain)**: [`0x000000000000000000000000000000000000dEaD`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773?tab=holders)
 * **Live On-Chain Telemetry API**: [https://robin-town-production.up.railway.app/api/onchain-wif](https://robin-town-production.up.railway.app/api/onchain-wif)
 * **Live Multiplayer Rooms API**: [https://robin-town-production.up.railway.app/api/rooms](https://robin-town-production.up.railway.app/api/rooms)
 * **Hackathon**: Robinhood Chain Hackathon: Build with `$wif` (`10,000 USDG` Winner Takes All)
@@ -31,7 +31,7 @@ Players can toggle seamlessly with zero state loss between an illustrated `1100x
 2. **Ranked `1,000 $wif` Arena + 5% Match Pool Burn**: Competitive 4-player lobbies escrow `4,000 $wif`, distributing **90%** (`3,600 $wif`) to the top-3 podium (`50%` 1st, `25%` 2nd, `15%` 3rd), permanently burning **5%** (`200 $wif`) to `0x000000000000000000000000000000000000dEaD`, and routing **5%** (`200 $wif`) into the neighborhood Staking Vault.
 3. **1.20x `$wif` Staking Yield Multiplier**: Staking `500 $wif` in the Vault multiplies every annual storefront payday by **1.20x**, rewarding committed `$wif` holders every game year.
 4. **1% OTC Bargaining Cash Micro-Fee**: Every settled `$wif` cash transfer at the OTC Bargaining Table routes a **1% micro-fee** into the Staking Vault so active dealmaking continuously refills community yield.
-5. **Community Vote Burn & Live On-Chain Verification**: Players can burn `100 $wif` on neighborhood governance votes and verify the live `RobinWifHat` (`$wif`) ERC-20 contract (`0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`), Robinhood Chain Mainnet and Testnet block heights, and the `4,600,000.60+ $wif` on-chain burn balance directly inside the `$wif` Hub.
+5. **Community Vote Burn & Live On-Chain Verification**: Players can burn `$wif` on neighborhood governance votes (including 1-click on-chain ERC-20 `$wif` burn on Robinhood Chain Mainnet `4663`) and verify the official `World is Flat` (`$wif`) ERC-20 contract (`0x5173b8eA6923c2d40267890D45C46a3480954773`), Robinhood Chain Mainnet block heights, and the `113,917.82+ $wif` on-chain burn balance directly inside the `$wif` Hub.
 
 ## Completed Engineering & Submission Checklist
 
