@@ -1,0 +1,518 @@
+/* A woven mat for the pieces, a paper calendar at the edge, and room for the town. */
+.game-hud-bottom {
+  background: #b5a06a url('/assets/saigon/ui/chieu-mat-v9.png') repeat;
+  background-size: 96px 96px;
+  border-top: 4px solid #804a36;
+  box-shadow:
+    0 -1px #dfc589,
+    0 -4px 12px #152e2755;
+}
+.action-belt {
+  min-height: 72px;
+  padding: 4px 12px;
+  gap: 10px;
+  background: linear-gradient(90deg, #73513233, transparent 30%);
+}
+.game-shell .tile-rack {
+  background: #b5a06a url('/assets/saigon/ui/chieu-mat-v9.png') repeat;
+  background-size: 96px 96px;
+  border-bottom: 2px solid #7a6342;
+}
+.game-shell .rack-label > span,
+.game-shell .ledger-shortcut {
+  color: #293c29;
+  text-shadow: 0 1px #e8d7a4;
+}
+.game-shell .phase-heading small {
+  color: #294332;
+  font-weight: 800;
+  text-shadow: 0 1px #e5d3a0;
+}
+.game-shell .phase-heading h2 {
+  color: #203d2e;
+  text-shadow: 0 1px #eadcaf;
+}
+.game-shell .replay-guide {
+  color: #283c29;
+  border-color: #6f7850;
+}
+.game-shell .payday-preview {
+  color: #2d432d;
+}
+.game-shell .payday-preview b {
+  color: #193929;
+}
+.game-shell .phase-actions .primary:disabled {
+  opacity: 1;
+  background: #b6aa81;
+  color: #59593d;
+  border-color: #d3c698;
+  box-shadow: 0 2px #716346;
+}
+.game-shell .address-strip {
+  gap: 3px;
+  padding: 2px 0;
+  max-width: 405px;
+  justify-content: flex-start;
+}
+.game-shell .address-slip,
+.game-shell .address-slip:nth-child(n) {
+  display: block;
+  isolation: isolate;
+  width: 58px;
+  min-width: 58px;
+  height: 58px;
+  min-height: 58px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  transform: none;
+  color: #3a4930;
+  font-size: 20px;
+}
+.game-shell .address-slip .draft-ground {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 1px #574b3155);
+}
+.draft-address {
+  position: absolute;
+  left: 31.25%;
+  top: 25%;
+  width: 42.2%;
+  height: 31.25%;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-family: var(--font-book);
+  font-weight: 700;
+  z-index: 1;
+}
+.draft-district {
+  position: absolute;
+  left: 20%;
+  bottom: 19%;
+  font: 7px var(--font-ui);
+  font-weight: 700;
+  line-height: 1;
+  color: #f5e9bd;
+  background: #36513e;
+  padding: 1px 2px;
+  z-index: 1;
+}
+.game-shell .address-slip .draft-stool {
+  position: absolute;
+  inset: auto 0 0 auto;
+  width: 27px;
+  height: 27px;
+  z-index: 2;
+  transform: none;
+  filter: drop-shadow(1px 2px #294831);
+}
+.game-shell .address-slip.selected {
+  background: none;
+  border: 0;
+  color: #153e2a;
+  box-shadow: none;
+}
+.game-shell .address-slip.selected .draft-ground {
+  filter: sepia(0.3) saturate(1.6) hue-rotate(35deg) drop-shadow(0 2px #345432);
+}
+.game-shell .address-slip.selected:after {
+  display: none;
+}
+.game-shell .address-slip:focus-visible {
+  outline: 2px solid #173d2b;
+  outline-offset: -3px;
+}
+.game-shell .address-slip:active {
+  transform: translateY(2px);
+}
+/* Explicit columns prevent names and cash from occupying the same space. */
+.game-shell .pocket-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+.game-shell .wallet {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  justify-items: end;
+  gap: 0;
+}
+.game-shell .wallet strong {
+  min-width: 0;
+}
+.game-shell .pocket-token b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hand-total {
+  display: none;
+}
+/* The full paper leaf remains visible at the map edge. */
+.game-shell .calendar.paper-calendar {
+  right: 0;
+  top: 0;
+  width: 104px;
+  height: 139px;
+  padding: 0;
+  margin: 0;
+  filter: drop-shadow(-2px 3px 2px #17362955);
+}
+.calendar-sheet {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: top center;
+  background: url('/assets/saigon/ui/calendar-paper-v9.png') center/100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+.calendar-date {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: #953c2d;
+  text-shadow: none;
+  border-radius: 0;
+}
+.calendar-heading {
+  position: absolute;
+  top: 21%;
+  left: 15%;
+  right: 13%;
+  font: 700 10px var(--font-ui);
+  letter-spacing: 1px;
+  color: #fff0bb;
+}
+.calendar-caption {
+  position: absolute;
+  top: 34%;
+  left: 22%;
+  right: 18%;
+  font: 700 9px/11px var(--font-ui);
+  letter-spacing: 1px;
+  color: #725638;
+}
+.calendar-digit {
+  position: absolute;
+  top: 42%;
+  left: 22%;
+  right: 18%;
+  font: 700 29px/1 var(--font-book);
+  color: #a13c2d;
+}
+.calendar-animal {
+  position: absolute;
+  top: 63%;
+  left: 20%;
+  right: 16%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  font: 700 11px/16px var(--font-book);
+  color: #544c30;
+}
+.calendar-animal img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.calendar-footnote {
+  position: absolute;
+  top: 75%;
+  left: 17%;
+  right: 15%;
+  font: 700 7px/9px var(--font-ui);
+  color: #756245;
+}
+.calendar-date:focus-visible {
+  outline: 2px solid #ffe498;
+  outline-offset: -2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .game-shell .map-viewport {
+    background: #203f34;
+  }
+}
+/* These sprites face right; their crossing routes travel toward the left. */
+.crossing-one span,
+.crossing-two span,
+.crossing-three span {
+  transform: scale(-0.75, 0.75);
+  transform-origin: center bottom;
+}
+/* Phones and short landscape windows use two small rails, not desktop panels. */
+@media (max-width: 900px), (max-height: 520px) {
+  .game-hud-top {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-rows: 44px;
+    gap: 5px;
+    padding: 3px 5px;
+    border-bottom-width: 2px;
+  }
+  .game-hud-top .game-brand {
+    display: none;
+  }
+  .game-hud-top .hud-menu {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: center;
+    min-width: 44px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    font-size: 21px;
+    border-radius: 5px;
+  }
+  .hud-menu small {
+    display: none;
+  }
+  .game-shell .player-rail {
+    grid-row: 1;
+    grid-column: 1;
+    gap: 4px;
+    height: 44px;
+  }
+  .game-shell .player-pocket {
+    position: relative;
+    height: 44px;
+    min-height: 44px;
+    border-top-width: 2px;
+    box-shadow: 0 1px #061b13;
+  }
+  .game-shell .pocket-main {
+    height: 42px;
+    min-height: 42px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 18px 20px;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    padding: 1px 2px;
+  }
+  .game-shell .pocket-token {
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+  }
+  .game-shell .pocket-token img {
+    width: 16px;
+    height: 16px;
+  }
+  .game-shell .pocket-token b {
+    font-size: 11px;
+    line-height: 18px;
+    letter-spacing: 0.1px;
+  }
+  .game-shell .wallet {
+    width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    line-height: 18px;
+  }
+  .game-shell .wallet strong {
+    font-size: 13px;
+    line-height: 18px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+  }
+  .game-shell .wallet small,
+  .game-shell .pocket-inventory {
+    display: none;
+  }
+  .game-shell .hand-total {
+    display: inline;
+    font: 10px/18px var(--font-ui);
+    color: #becba4;
+    white-space: nowrap;
+  }
+  .action-belt,
+  .game-shell .action-belt {
+    min-height: 52px;
+    height: 52px;
+    padding: 2px 5px;
+    gap: 5px;
+  }
+  .belt-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    height: 44px;
+    padding: 2px;
+    font-size: 17px;
+    border-radius: 5px;
+  }
+  .belt-button small {
+    font-size: 10px;
+    line-height: 12px;
+    margin-top: 1px;
+  }
+  .belt-button[data-action='businesses'] {
+    display: none;
+  }
+  .game-shell .turn-scroll {
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+  }
+  .game-shell .phase-heading,
+  .game-shell .camera-hint,
+  .game-shell .payday-preview {
+    display: none;
+  }
+  .game-shell .phase-actions {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .game-shell .phase-actions button {
+    min-height: 44px;
+    font-size: 12px;
+    padding: 7px 9px;
+  }
+  .game-shell .claim-tools {
+    flex: 1;
+    gap: 5px;
+    min-width: 0;
+    width: 100%;
+  }
+  .game-shell .address-strip {
+    flex: 1;
+    max-width: none;
+    min-width: 0;
+    gap: 2px;
+    padding: 0;
+  }
+  .game-shell .address-slip,
+  .game-shell .address-slip:nth-child(n) {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0;
+    font-size: 17px;
+  }
+  .game-shell .address-slip .draft-stool {
+    width: 23px;
+    height: 23px;
+  }
+  .draft-district {
+    font-size: 6px;
+  }
+  .game-shell .claim-tools > .primary {
+    flex: none;
+    min-width: 78px;
+    margin: 0;
+    padding: 7px 8px;
+  }
+  .game-shell .tile-rack {
+    padding: 3px 5px 4px;
+  }
+  .game-shell .rack-label {
+    display: none;
+  }
+  .game-shell .shop-tray {
+    gap: 5px;
+    padding: 2px 1px 4px;
+  }
+  .game-shell .shop-piece {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    grid-template-rows: 1fr 1fr;
+    flex: 0 0 118px;
+    width: 118px;
+    min-width: 118px;
+    height: 49px;
+    min-height: 49px;
+    padding: 3px;
+    gap: 0 3px;
+    box-shadow: 0 2px #4a3b22;
+    border-width: 1px;
+    text-align: left;
+    align-items: center;
+  }
+  .game-shell .shop-piece > img {
+    grid-row: 1/3;
+    width: 34px;
+    height: 38px;
+    margin: 0;
+  }
+  .game-shell .shop-piece > strong {
+    font-size: 11px;
+    line-height: 16px;
+    align-self: end;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .game-shell .shop-piece .shop-requirement {
+    display: block;
+    font-size: 10px;
+    line-height: 15px;
+    align-self: start;
+    margin: 0;
+  }
+  .game-shell .shop-piece .requirement-tail,
+  .game-shell .shop-piece .shop-payout {
+    display: none;
+  }
+  .game-shell .piece-count {
+    font-size: 10px;
+    line-height: 15px;
+    min-width: 16px;
+    padding: 0 2px;
+    top: -3px;
+    right: -1px;
+  }
+  .game-shell .plot-inspector {
+    bottom: 5px;
+    max-height: calc(100% - 10px);
+  }
+  #toast {
+    bottom: calc(env(safe-area-inset-bottom) + 62px);
+  }
+}
+@media (max-width: 360px) {
+  .game-shell .hand-total {
+    display: none;
+  }
+  .game-shell .wallet strong {
+    font-size: 12px;
+  }
+  .game-shell .pocket-token b {
+    font-size: 10px;
+  }
+  .game-shell .address-slip,
+  .game-shell .address-slip:nth-child(n) {
+    width: 44px;
+    min-width: 44px;
+    font-size: 16px;
+  }
+}

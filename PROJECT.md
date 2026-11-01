@@ -12,7 +12,7 @@ The robin-town application is structured as a high-performance web game with a c
 * Dual-Mode Wallet Adapter: Instant off-chain simulation with 4 pre-funded local accounts (10,000 $wif each) and browser local storage persistence, combined with standard Web3 EIP-1193 provider integration supporting ERC-20 contract calls (`balanceOf`, `transfer`, `approve`, `burn`) on Robinhood Chain Testnet (Chain ID 46631).
 * Networking Layer: Authoritative host multiplayer synchronization supporting 6-character room codes, monotonic state sequencing, deterministic AI bot autofill, heartbeat-based host failover, targeted `SYNC_REQUEST` re-synchronization, and pluggable WebSocket transport relays.
 * Pixel Art Asset Pipeline: Standalone programmatic sprite generator producing 32x32 native and 96x96 HD pixel sprites for shops, avatars, board terrain, and UI tokens, with Aseprite fallback compatibility and zero-404 asset verification.
-* Automated Verification Pyramid: Multi-tier testing hierarchy containing 517 tests across 137 test suites covering unit rules, boundary analysis, pairwise interactions, multi-epoch match simulations, and adversarial stress testing.
+* Automated Verification Pyramid: Multi-tier testing hierarchy containing 916 tests across 217 test suites covering unit rules, boundary analysis, pairwise interactions, multi-epoch match simulations, adversarial stress testing, and multi-viewport Playwright browser verification.
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -84,44 +84,55 @@ Every feature from user requirements (R1 through R5), specialist surveys, and ha
 | 9 | Multiplayer Room Sessions | Network | Room creation and joining by room code with authoritative host state relay | M4 | Completed |
 | 10 | Web Game Application Shell | UI/UX | Playable web UI with canvas board view, camera zoom, trade desk modal, and audio | M5 | Completed |
 | 11 | Single-Player Match Loop | Engine | End-to-end playable single-player match against Sherwood, Apex, and Luna | M5 | Completed |
-| 12 | 5-Tier Verification Suite | QA | Automated test pyramid passing 517 tests across Tiers 1 to 5 with 100% green exit code | Final | Completed |
-| 13 | Building Capacity Parity | Engine | Enforce `canBuildShop` rules inside `canPlace` and `buildTile` rejecting invalid expansions | M-ENG-1 | Planned |
-| 14 | Trade Cluster Recalculation | Engine | Recalculate `lot.isComplete` flags immediately upon exchanging occupied parcels | M-ENG-2 | Planned |
-| 15 | Proactive Bot Trade Offers | Engine | AI bots proactively propose deals during trade phase via `incomingOffers` queue | M-ENG-3 | Planned |
-| 16 | Canonical Pure Reducer | Engine | Export `gameReducer(state, action)` and delegate network room action transitions | M-ENG-4 | Planned |
-| 17 | Stock Token Bridge Alignment | Engine | Rename Category 5 to Stock Token Bridge (Validator Citadel) and add rules modal | M-ENG-5 | Planned |
-| 18 | 3D Board Precision Hardening | 3D UI | Align coordinates, fix parcel 71 raycast hit, add horizontal plane guards, lerp fix | D1 | Planned |
-| 19 | Diorama Look Contract | 3D UI | Implement `PixelPost` 64-color palette snap, 8x8 Bayer dither, and inked contours | D2 | Planned |
-| 20 | SolaceUI Exposure Grid | 3D UI | WebGL2 exposure-grid shader background pass with Robinhood financial palette | D3 | Planned |
-| 21 | Apple Carousel Navigator | 3D UI | Infinite autoplay property browser with spring physics and 3D camera focusing | D4 | Planned |
-| 22 | iPod Classic Controller | 3D UI | Tangible click wheel controller with angular gesture tracking and tactile audio ticks | D5 | Planned |
-| 23 | Audio & Visual Optimization | 3D UI | Instanced parcel mesh (draw calls from 72 to 1), procedural audio expansion, visual QA | D6 | Planned |
-| 24 | Trade Tax 50/50 Split & Wagering | Tokenomics | Split trade tax 50% burn / 50% vault, continuous staking curve, round prediction wagers | M4-A | Planned |
-| 25 | ERC-20 Encoding & Persistence | Wallet | 4-byte EVM method selectors on Robinhood Chain 46631 and localStorage balance storage | M4-B | Planned |
-| 26 | Multiplayer SYNC_REQUEST & Relay | Network | Explicit SYNC_REQUEST packet handler, optimistic action queuing, WebSocket relay | M4-C | Planned |
-| 27 | Synthetic Latency Verification | QA | Extend Tier 5 with `LaggyMemoryTransport` test suite validating network resilience | M6 | Planned |
+| 12 | 5-Tier Verification Suite | QA | Automated test pyramid passing 916 tests across 217 suites with 100% green exit code | Final | Completed |
+| 13 | Building Capacity Parity | Engine | Enforce `canBuildShop` rules inside `canPlace` and `buildTile` rejecting invalid expansions | M-ENG-1 | Completed |
+| 14 | Trade Cluster Recalculation | Engine | Recalculate `lot.isComplete` flags immediately upon exchanging occupied parcels | M-ENG-2 | Completed |
+| 15 | Proactive Bot Trade Offers | Engine | AI bots proactively propose deals during trade phase via `incomingOffers` queue | M-ENG-3 | Completed |
+| 16 | Canonical Pure Reducer | Engine | Export `gameReducer(state, action)` and delegate network room action transitions | M-ENG-4 | Completed |
+| 17 | Stock Token Bridge Alignment | Engine | Rename Category 5 to Stock Token Bridge (Validator Citadel) and add rules modal | M-ENG-5 | Completed |
+| 18 | 3D Board Precision Hardening | 3D UI | Align coordinates, fix parcel 71 raycast hit, add horizontal plane guards, lerp fix | D1 | Completed |
+| 19 | Diorama Look Contract | 3D UI | Implement `PixelPost` 64-color palette snap, 8x8 Bayer dither, and inked contours | D2 | Completed |
+| 20 | SolaceUI Exposure Grid | 3D UI | WebGL2 exposure-grid shader background pass with Robinhood financial palette | D3 | Completed |
+| 21 | Apple Carousel Navigator | 3D UI | Infinite autoplay property browser with spring physics and 3D camera focusing | D4 | Completed |
+| 22 | iPod Classic Controller | 3D UI | Tangible click wheel controller with angular gesture tracking and tactile audio ticks | D5 | Completed |
+| 23 | Audio & Visual Optimization | 3D UI | Instanced parcel mesh (draw calls from 72 to 1), procedural audio expansion, visual QA | D6 | Completed |
+| 24 | Trade Tax 50/50 Split & Wagering | Tokenomics | Split trade tax 50% burn / 50% vault, continuous staking curve, round prediction wagers | M4-A | Completed |
+| 25 | ERC-20 Encoding & Persistence | Wallet | 4-byte EVM method selectors on Robinhood Chain 46631 and localStorage balance storage | M4-B | Completed |
+| 26 | Multiplayer SYNC_REQUEST & Relay | Network | Explicit SYNC_REQUEST packet handler, optimistic action queuing, WebSocket relay | M4-C | Completed |
+| 27 | Synthetic Latency Verification | QA | Extend Tier 5 with `LaggyMemoryTransport` test suite validating network resilience | M6 | Completed |
+| 28 | Living Town Environment Mesh | 3D UI | Procedural asphalt streets, markings, sidewalks, street lamps, trees, canal water, animated boats, moving traffic, background houses | M10 | Completed |
+| 29 | Distinctive 3D Lot Models | 3D UI | Vacant foundation walls and signposts, claimed awnings and stools, shophouse glowing signs and gardens, completed golden banners | M10 | Completed |
+| 30 | Default Living View & Instant Toggle | 3D UI | Default `city-3d` mode with 1-click toggle to 2D tabletop board preserving complete state | M10 | Completed |
+| 31 | 3 to 6 Players Scaling | Engine | Parameterized parcel schedules ([6,5,4,3,3,3], [5,4,3,2,2,2], [4,3,2,2,2,1], [3,3,2,2,1,1]), tile draws, 2 new bot personas, dynamic loops | M11 | Completed |
+| 32 | Community Governance Voting Burns | Tokenomics | Implement governance voting burn mechanic according to Robinhood Chain hackathon specs | M12 | Completed |
+| 33 | Headless Playwright Browser Verification | QA | Multi-viewport headless Chromium verification at Desktop (1440x900) and Mobile (390x844) with zero errors | M13 | Verified |
+| 34 | Workspace Parity & Synchronization | QA | Full synchronization between /Volumes/Dev/china-town and /Volumes/Dev/china-town via rsync | M13 | Verified |
 
 ## Master Milestones Delivery Roadmap
 
-| Milestone ID | Track | Milestone Name | Scope and Deliverables | Dependencies |
-|---|---|---|---|---|
-| M1 to M5 | Baseline | Foundations & Core Game | Core engine, tokenomics, pixel art, wallet, and single-player loop | None |
-| Final | Baseline | Initial 5-Tier Verification | 517 tests passing across unit and E2E suites | M1 to M5 |
-| M-ENG-1 | Engine | Capacity Validation Parity | Delegate `canPlace` to `canBuildShop` in `engine.ts` | Baseline |
-| M-ENG-2 | Engine | Cluster Recalculation | Update `isComplete` immediately in `executeTrade` | M-ENG-1 |
-| M-ENG-3 | Engine | Proactive Bot Offers | Populate `incomingOffers` during trade phase using `bot.ts` | M-ENG-2 |
-| M-ENG-4 | Engine | Canonical Pure Reducer | Export `gameReducer` and refactor `room.ts` to call it | M-ENG-3 |
-| M-ENG-5 | Engine | Stock Token Thematic Alignment | Rename Category 5, add in-game rules and payout modal | M-ENG-4 |
-| D1 | 3D UI/UX | 3D Board Precision Hardening | Coordinate alignment, top-face raycasting, app shell mounting | Baseline |
-| D2 | 3D UI/UX | Diorama Look Contract | `PixelPost` 64-color palette snap, Bayer dither, inked contours | D1 |
-| D3 | 3D UI/UX | SolaceUI Exposure Grid | WebGL2 exposure-grid shader background pass | D2 |
-| D4 | 3D UI/UX | Apple Carousel Navigator | Infinite autoplay property browser with 3D camera pan | D1 |
-| D5 | 3D UI/UX | iPod Classic Controller | Angular click wheel controller with procedural haptic ticks | D4, M-ENG-3 |
-| D6 | 3D UI/UX | Audio & Visual Optimization | `InstancedMesh` parcel draw call reduction, audio expansion | D2, D3, D5 |
-| M4-A | Tokenomics | Flywheel Polish & Wagering | 50/50 trade tax burn split, continuous staking, wagering engine | Baseline |
-| M4-B | Wallet | ERC-20 & Storage Persistence | ABI method selectors on Robinhood Chain 46631, localStorage | M4-A |
-| M4-C | Network | SYNC_REQUEST & WebSocket | Targeted state snapshot resync, WebSocket transport relay | M-ENG-4, M4-B |
-| M6 | QA | Hardening & Build Gate | `LaggyMemoryTransport` suite, full build and test pass | All Tracks |
+| Milestone ID | Track | Milestone Name | Scope and Deliverables | Dependencies | Status |
+|---|---|---|---|---|---|
+| M1 to M5 | Baseline | Foundations & Core Game | Core engine, tokenomics, pixel art, wallet, and single-player loop | None | Completed |
+| Final | Baseline | Initial 5-Tier Verification | 517 tests passing across unit and E2E suites | M1 to M5 | Completed |
+| M-ENG-1 | Engine | Capacity Validation Parity | Delegate `canPlace` to `canBuildShop` in `engine.ts` | Baseline | Completed |
+| M-ENG-2 | Engine | Cluster Recalculation | Update `isComplete` immediately in `executeTrade` | M-ENG-1 | Completed |
+| M-ENG-3 | Engine | Proactive Bot Offers | Populate `incomingOffers` during trade phase using `bot.ts` | M-ENG-2 | Completed |
+| M-ENG-4 | Engine | Canonical Pure Reducer | Export `gameReducer` and refactor `room.ts` to call it | M-ENG-3 | Completed |
+| M-ENG-5 | Engine | Stock Token Thematic Alignment | Rename Category 5, add in-game rules and payout modal | M-ENG-4 | Completed |
+| D1 | 3D UI/UX | 3D Board Precision Hardening | Coordinate alignment, top-face raycasting, app shell mounting | Baseline | Completed |
+| D2 | 3D UI/UX | Diorama Look Contract | `PixelPost` 64-color palette snap, Bayer dither, inked contours | D1 | Completed |
+| D3 | 3D UI/UX | SolaceUI Exposure Grid | WebGL2 exposure-grid shader background pass | D2 | Completed |
+| D4 | 3D UI/UX | Apple Carousel Navigator | Infinite autoplay property browser with 3D camera pan | D1 | Completed |
+| D5 | 3D UI/UX | iPod Classic Controller | Angular click wheel controller with procedural haptic ticks | D4, M-ENG-3 | Completed |
+| D6 | 3D UI/UX | Audio & Visual Optimization | `InstancedMesh` parcel draw call reduction, audio expansion | D2, D3, D5 | Completed |
+| M4-A | Tokenomics | Flywheel Polish & Wagering | 50/50 trade tax burn split, continuous staking, wagering engine | Baseline | Completed |
+| M4-B | Wallet | ERC-20 & Storage Persistence | ABI method selectors on Robinhood Chain 46631, localStorage | M4-A | Completed |
+| M4-C | Network | SYNC_REQUEST & WebSocket | Targeted state snapshot resync, WebSocket transport relay | M-ENG-4, M4-B | Completed |
+| M6 | QA | Hardening & Build Gate | `LaggyMemoryTransport` suite, full build and test pass | All Tracks | Completed |
+| M10 | 3D UI/UX | 3D Living Town Diorama & Architecture | Streets, canal, boats, traffic, trees, houses, 4 lot models, default view toggle | Baseline (M1 to M9) | Completed |
+| M11 | Engine | Authentic Chinatown Gameplay & Scaling | Capacity validation, trade cluster recalculation, proactive offers, 3 to 6 player scaling | M10 | Completed |
+| M12 | Web3 / UI | Web3 Flywheel, Governance & UI Polish | Governance voting burn, flywheel polish, Apple Carousel, iPod dock, SolaceUI | M11 | Completed |
+| M13 | QA | E2E QA, Playwright & Workspace Sync | 916-test suite pass, 69/69 assets, build, Playwright desktop/mobile, rsync sync | M12 | Verified |
 
 ## Interface Contracts
 
@@ -283,11 +294,12 @@ export interface DioramaQA {
 │       ├── 3D_UI_UX_EXECUTION_PLAN.md
 │       └── TOKENOMICS_MULTIPLAYER_EXECUTION_PLAN.md
 ├── public/                       # Static web assets
-│   ├── assets/                   # 65 verified pixel art sprites, textures, and audio
+│   ├── assets/                   # 69 verified pixel art sprites, textures, and audio
 │   └── favicon.svg               # Web favicon
 ├── scripts/                      # Build, verification, and stress scripts
 │   ├── generate-assets.ts        # Programmatic pixel art generator
 │   ├── verify-assets.ts          # Zero-404 asset verification gate
+│   ├── verify-browser-e2e.ts     # Multi-viewport headless Playwright verification
 │   └── stress-board-3d.ts        # 25-test empirical 3D board stress test
 ├── src/                          # TypeScript source code
 │   ├── engine/                   # Pure deterministic game logic

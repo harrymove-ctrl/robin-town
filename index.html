@@ -6,10 +6,10 @@
       name="viewport"
       content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0b0f19" />
+    <meta name="theme-color" content="#15382b" />
     <meta
       name="description"
-      content="robin-town: Chinatown negotiation board game adapted for Robinhood Chain with $wif tokenomics flywheel and original pixel art."
+      content="Pull up a stool on Robinhood Chain. Trade street plots, bargain with neighbors, open neighborhood shops, and put $wif to work in a six-year trading board game."
     />
     <meta name="application-name" content="Robin Town" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,11 +17,57 @@
     <meta name="apple-mobile-web-app-title" content="Robin Town" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
-    <title>robin-town: Negotiate, Trade, and Build</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Robin Town · Build with $wif on Robinhood Chain</title>
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Robin Town" />
+    <meta property="og:title" content="Robin Town · Pull up a stool & build with $wif" />
+    <meta
+      property="og:description"
+      content="Make a deal. Open a shop. Put $wif to work across six years on Robinhood Chain."
+    />
+    <meta property="og:image" content="/assets/saigon/saigon-town-og-v8.png?v=en2" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/assets/saigon/icons/app-icon-192-v8.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/assets/saigon/icons/app-icon-180-v8.png" sizes="180x180" />
+    <link
+      rel="preload"
+      href="/assets/saigon/city/saigon-city-board-v6.png"
+      as="image"
+      fetchpriority="high"
+    />
+    <link
+      rel="preload"
+      href="/assets/saigon/fonts/be-vietnam-regular.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/assets/saigon/fonts/be-vietnam-bold.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="preload" href="/assets/saigon/fonts/bungee.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/assets/saigon/fonts/lora.ttf" as="font" type="font/ttf" crossorigin />
   </head>
   <body>
-    <div id="app"></div>
+    <main id="app"></main>
+    <section id="start-screen" class="start-screen" aria-label="Robin Town · Menu">
+      <div class="start-panel">
+        <h1 class="start-logo">ROBIN<span>TOWN</span></h1>
+        <p role="status">Opening the neighborhood…</p>
+        <noscript>Please enable JavaScript to play Robin Town.</noscript>
+      </div>
+    </section>
+    <dialog id="modal"></dialog>
+    <div id="phase-cue" role="status" aria-live="polite"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="effects" aria-hidden="true"></div>
+    <div id="drag-piece" aria-hidden="true"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

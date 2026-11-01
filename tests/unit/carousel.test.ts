@@ -134,7 +134,7 @@ describe('AppleCarousel Infinite Autoplay Component (Milestone M7)', () => {
     setupMockDocument();
   });
 
-  it('renders infinite clone track with 4 leading and 4 trailing clones', () => {
+  it('renders infinite clone track with 2 leading and 2 trailing clones', () => {
     const container = new MockElement('div') as unknown as HTMLElement;
     const carousel = new AppleCarousel({
       container,
@@ -144,25 +144,25 @@ describe('AppleCarousel Infinite Autoplay Component (Milestone M7)', () => {
     carousel.mount();
 
     assert.equal(carousel.getRealCardCount(), 6);
-    // cloneCount = Math.min(4, 6) = 4, so clone cards count is 4 * 2 = 8
-    assert.equal(carousel.getCloneCardCount(), 8);
+    // cloneCount = Math.min(2, 6) = 2, so clone cards count is 2 * 2 = 4
+    assert.equal(carousel.getCloneCardCount(), 4);
 
     const cards = carousel.getCardElements();
-    assert.equal(cards.length, 6 + 8, 'Total rendered cards must equal real count + 2 * cloneCount');
+    assert.equal(cards.length, 6 + 4, 'Total rendered cards must equal real count + 2 * cloneCount');
 
     // Verify leading clones have data-clone attribute
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       assert.equal(cards[i].getAttribute('data-clone'), 'true');
       assert.ok(cards[i].hasAttribute('inert'), 'Clone cards must have inert attribute');
     }
 
     // Verify real cards in the middle
-    for (let i = 4; i < 10; i++) {
+    for (let i = 2; i < 8; i++) {
       assert.equal(cards[i].hasAttribute('data-clone'), false);
     }
 
     // Verify trailing clones at the end
-    for (let i = 10; i < 14; i++) {
+    for (let i = 8; i < 10; i++) {
       assert.equal(cards[i].getAttribute('data-clone'), 'true');
       assert.ok(cards[i].hasAttribute('inert'), 'Trailing clone cards must have inert attribute');
     }

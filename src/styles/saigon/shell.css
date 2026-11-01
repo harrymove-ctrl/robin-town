@@ -1,0 +1,1451 @@
+/* One game surface. The board moves; the HUD stays within thumb reach. */
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body {
+  padding: 0;
+  background: #123d32;
+  font-size: 16px;
+}
+body:before {
+  display: none;
+}
+body > .game-top {
+  display: none;
+}
+#app {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+.game-shell {
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: #203f34;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+.game-hud-top {
+  z-index: 12;
+  display: grid;
+  grid-template-columns: 154px minmax(0, 1fr) 52px;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 16px;
+  background: linear-gradient(#253d30f5, #142d25f5);
+  border-bottom: 3px solid #a17b45;
+  box-shadow: 0 4px 16px #08191088;
+}
+.game-brand {
+  color: #f1d191;
+  font-family: 'Lora', Georgia, serif;
+  font-weight: 900;
+  font-size: 24px;
+  line-height: 0.96;
+  letter-spacing: 1px;
+  text-shadow: 0 3px #091c15;
+}
+.game-brand span {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 6px;
+  margin: 7px 0 0;
+}
+.hud-menu,
+.belt-button {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 7px;
+  color: #ffe2a0;
+  background: linear-gradient(#4d6342, #263c2d);
+  border: 2px solid #af8c52;
+  border-radius: 8px;
+  box-shadow: 0 3px #0b1d15;
+  line-height: 1.15;
+  cursor: pointer;
+}
+.hud-menu {
+  font-size: 23px;
+}
+.hud-menu small,
+.belt-button small {
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+.game-shell .player-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  width: 100%;
+}
+.game-shell .player-pocket {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--player-color), #182b22 45%);
+  border-top: 3px solid var(--player-color);
+  background: #0c281de6;
+  box-shadow: 0 3px #061b13;
+  border-radius: 4px;
+  padding: 0;
+}
+.game-shell .pocket-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 42px;
+  padding: 4px 8px;
+  gap: 5px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.game-shell .pocket-token {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.game-shell .pocket-token img {
+  position: static;
+  width: 26px;
+  height: 26px;
+}
+.game-shell .pocket-token b {
+  font-size: 14px;
+  color: #f8e7bf;
+}
+.game-shell .wallet strong {
+  font-size: 18px;
+  color: #fff0c9;
+  white-space: nowrap;
+}
+.game-shell .wallet small {
+  font-size: 12px;
+  color: #c3d3ad;
+}
+.game-shell .pocket-inventory {
+  height: 28px;
+  min-height: 0;
+  padding: 0 7px 3px;
+  gap: 1px;
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  background: transparent;
+  border: 0;
+}
+.game-shell .pocket-inventory > button {
+  flex: 0 1 30px;
+  min-width: 0;
+  width: 30px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  position: relative;
+}
+.game-shell .pocket-inventory img {
+  width: 26px;
+  height: 26px;
+}
+.game-shell .pocket-inventory b {
+  font-size: 12px;
+  right: 0;
+  bottom: 0;
+  background: #162a20;
+  color: #ffe3a1;
+}
+.game-shell .pocket-inventory > span {
+  font-size: 12px;
+}
+.game-shell .pocket-inventory .inventory-more {
+  font-size: 18px;
+  color: #e9cd91;
+  margin-left: auto;
+}
+.game-shell .play-stage {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+.game-shell .board-area,
+.game-shell .board-frame {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  background: #8e977a;
+}
+.game-shell .map-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  background: #8e977a;
+  touch-action: none;
+  overflow: hidden;
+}
+.game-shell .game-world {
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  box-shadow: 0 0 60px #19332980;
+  transition: none;
+}
+.district-navigation {
+  position: absolute;
+  z-index: 7;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  max-width: calc(100% - 140px);
+  gap: 4px;
+  padding: 4px;
+  background: #16362eef;
+  border: 1px solid #caa66d;
+  border-radius: 6px;
+  box-shadow: 0 3px 8px #071c1566;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+}
+.district-navigation button {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: #f4dcab;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.district-navigation button.active {
+  background: #d1b476;
+  color: #18362b;
+  border-color: #f5dfab;
+}
+.district-navigation button b {
+  display: inline-grid;
+  place-items: center;
+  margin-left: 5px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #275841;
+  color: #ffe7b1;
+  font-size: 12px;
+}
+.camera-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  z-index: 6;
+  pointer-events: none;
+  color: #f7e3b6;
+  background: #173a2ad9;
+  padding: 4px 9px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.game-shell .calendar {
+  position: absolute;
+  right: 10px;
+  top: 7px;
+  z-index: 8;
+  margin: 0;
+  width: 110px;
+  height: 110px;
+}
+.game-shell .year-wheel {
+  width: 110px;
+  height: 110px;
+}
+.game-shell .year-center strong {
+  font-size: 24px;
+}
+.game-shell .year-center small {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.game-shell .year-center > span {
+  font-size: 11px;
+}
+.game-shell .year-node {
+  width: 25px;
+  height: 25px;
+  font-size: 10px;
+  padding: 0;
+}
+.game-shell .year-node small {
+  display: none;
+}
+.game-shell .year-pointer {
+  inset: 4px;
+}
+.game-shell .year-pointer span {
+  width: 12px;
+  height: 12px;
+}
+.year-open {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+.year-open:focus-visible {
+  outline: 3px solid #fff0b7;
+}
+.game-shell .year-node {
+  pointer-events: none;
+}
+.game-hud-bottom {
+  position: relative;
+  z-index: 11;
+  min-width: 0;
+  background: linear-gradient(#83603a, #4a321f);
+  border-top: 3px solid #d2ad6c;
+  box-shadow: 0 -5px 20px #152e2777;
+}
+.action-belt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  min-height: 78px;
+}
+.belt-button {
+  width: 62px;
+  flex-shrink: 0;
+  font-size: 21px;
+}
+.belt-button.active {
+  background: #c6a768;
+  color: #213c2d;
+  transform: translateY(-2px);
+}
+.game-shell .turn-scroll {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  color: #f8e5bb;
+}
+.game-shell .turn-scroll:before,
+.game-shell .turn-scroll:after {
+  display: none;
+}
+.game-shell .phase-heading {
+  gap: 8px;
+  min-width: 0;
+}
+.game-shell .phase-medal {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #402a16;
+  background: #edcf8a;
+  border: 1px solid #d4ac67;
+}
+.game-shell .phase-heading small {
+  font-size: 12px;
+  color: #dbc391;
+}
+.game-shell .phase-heading h2 {
+  font-family: inherit;
+  font-size: 16px;
+  color: #fff1cc;
+  line-height: 1.25;
+  margin: 2px 0 0;
+}
+.game-shell .replay-guide {
+  color: #ead6a5;
+  font-size: 14px;
+  min-width: 30px;
+  min-height: 36px;
+}
+.game-shell .turn-scroll > p {
+  display: none;
+}
+.game-shell .phase-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.game-shell .phase-actions button {
+  white-space: nowrap;
+  font-size: 14px;
+  min-height: 44px;
+  padding: 9px 14px;
+}
+.game-shell .primary {
+  background: linear-gradient(#f6da88, #d7ae52);
+  color: #35290f;
+  border: 1px solid #fff0b7;
+  box-shadow: 0 3px #3d2a13;
+}
+.game-shell .secondary {
+  color: #ffe4ad;
+  background: #3d4c32;
+  border: 1px solid #c7a164;
+  box-shadow: 0 3px #2f2417;
+}
+.game-shell .payday-preview {
+  font-size: 13px;
+  color: #ebd4a3;
+}
+.game-shell .payday-preview b {
+  color: #fff4c9;
+}
+.game-shell .claim-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-shell .counter-stack {
+  width: 35px;
+  min-width: 35px;
+  height: 40px;
+}
+.game-shell .counter-stack img {
+  width: 27px;
+  height: 27px;
+}
+.game-shell .address-strip {
+  display: flex;
+  gap: 4px;
+  max-width: 325px;
+  overflow-x: auto;
+  padding: 4px 2px;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+.game-shell .address-slip {
+  min-width: 37px;
+  min-height: 42px;
+  font-size: 18px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.rack-drawer {
+  display: none;
+}
+.rack-drawer.open {
+  display: block;
+  animation: rack-rise 0.2s ease-out;
+}
+.game-shell .tile-rack {
+  display: block;
+  border: 0;
+  border-bottom: 1px solid #b59360;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 7px 14px 9px;
+  max-width: none;
+  background: linear-gradient(#493724, #705134);
+}
+.game-shell .rack-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0 5px;
+}
+.game-shell .rack-label > span {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #f1d7a4;
+}
+.game-shell .ledger-shortcut {
+  font-size: 12px;
+}
+.game-shell .rack-hint {
+  display: none;
+}
+.game-shell .shop-tray {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+  padding: 3px 3px 6px;
+}
+.game-shell .shop-piece {
+  position: relative;
+  flex: 1 0 142px;
+  max-width: 230px;
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 0 5px;
+  height: 86px;
+  min-height: 86px;
+  padding: 7px 8px 5px;
+  transform: none;
+  touch-action: pan-x;
+  box-shadow: 0 4px #352719;
+  background: #e2d2a3;
+  border: 2px solid #a49366;
+  border-radius: 3px;
+  text-align: left;
+  color: #2c3927;
+}
+.game-shell .shop-piece:hover {
+  transform: translateY(-2px);
+}
+.game-shell .shop-piece.active {
+  border-color: #ffe6a0;
+  outline: 2px solid #65caa4;
+  background: #f4e5b7;
+  transform: translateY(-2px);
+}
+.game-shell .shop-piece > img {
+  width: 54px;
+  height: 60px;
+  grid-row: 1/4;
+  align-self: center;
+  transform: none;
+  margin: 0;
+}
+.game-shell .shop-piece > strong {
+  font-size: 15px;
+  line-height: 1.2;
+  align-self: end;
+  padding-right: 15px;
+  color: #253a29;
+}
+.game-shell .shop-requirement {
+  font-size: 12px;
+  line-height: 1.25;
+  color: #3d482d;
+  white-space: normal;
+}
+.game-shell .shop-payout {
+  font-size: 14px;
+  line-height: 1.2;
+  color: #33492b;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.game-shell .shop-payout em {
+  font-size: 12px;
+}
+.game-shell .piece-count {
+  top: -5px;
+  right: -3px;
+  font-size: 14px;
+  padding: 1px 5px;
+  min-width: 24px;
+  line-height: 22px;
+}
+.game-shell .piece-count small {
+  display: none;
+}
+.game-shell .plot-inspector {
+  position: absolute;
+  z-index: 10;
+  bottom: 29px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  width: max-content;
+  min-width: min(330px, calc(100% - 24px));
+  max-height: calc(100% - 75px);
+  overflow-y: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  box-shadow:
+    0 5px #382b18,
+    0 10px 30px #13291fb3;
+  border: 2px solid #cfab6e;
+  background: #ecdbaf;
+}
+.game-shell .plot-inspector strong {
+  font-size: 16px;
+}
+.game-shell .plot-inspector small {
+  font-size: 13px;
+  white-space: normal;
+}
+.game-shell .inspector-address {
+  font-size: 26px;
+}
+.game-shell .plot-inspector .close {
+  min-width: 40px;
+  min-height: 40px;
+}
+.game-shell .quick-build > div {
+  display: flex;
+  max-width: 650px;
+  gap: 5px;
+  overflow-x: auto;
+  touch-action: pan-x;
+  padding-bottom: 6px;
+}
+.game-shell .quick-build button {
+  min-width: 85px;
+  min-height: 80px;
+}
+.game-shell .quick-build button strong {
+  font-size: 13px;
+}
+.game-shell .quick-build button small {
+  font-size: 12px;
+}
+dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(920px, calc(100% - 24px));
+  max-height: calc(var(--available-height, 100dvh) - 24px);
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid #af874b;
+  border-radius: 7px;
+  background: #eddbaf;
+  box-shadow:
+    0 0 0 3px #362b1c,
+    0 18px 90px #071e1de8;
+}
+dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog::backdrop {
+  background: #071f20aa;
+  backdrop-filter: blur(3px);
+}
+dialog .modal-header {
+  flex: none;
+  padding: 15px 20px 13px;
+  align-items: center;
+  position: relative;
+  background: #d6bc86;
+  border-bottom: 2px solid #b2955e;
+}
+dialog .modal-header h2 {
+  font-size: 26px;
+  line-height: 1.2;
+}
+dialog .modal-header .eyebrow {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+dialog .modal-header > .close {
+  min-width: 44px;
+  min-height: 44px;
+  align-self: flex-start;
+  background: #6b4d2d;
+  color: #fff0c9;
+  border: 1px solid #b9975d;
+  border-radius: 4px;
+}
+dialog .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 18px 20px 22px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+dialog .modal-body :is(button, input, select) {
+  touch-action: manipulation;
+}
+dialog input[type='number'] {
+  font-size: 16px;
+  min-height: 40px;
+}
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.menu-grid button {
+  min-height: 62px;
+  border: 2px solid #947345;
+  box-shadow: 0 3px #715332;
+  background: #263e30;
+  color: #ffe4ac;
+  font-size: 16px;
+  border-radius: 4px;
+}
+.menu-grid button small {
+  display: block;
+  font-size: 12px;
+  color: #c3d1ab;
+}
+.menu-footnote {
+  margin-top: 20px !important;
+  font-size: 14px;
+  color: #614e31;
+}
+.year-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.year-list button {
+  min-height: 90px;
+  background: #dfcb96;
+  border: 1px solid #a88c56;
+  color: #4c3c23;
+  border-radius: 4px;
+  padding: 7px;
+}
+.year-list button.current {
+  background: #284a36;
+  color: #f4dc9f;
+  border: 2px solid #d6b359;
+}
+.year-list img {
+  display: block;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 4px;
+}
+.year-list span {
+  display: block;
+  font-size: 14px;
+}
+dialog.trade-dialog {
+  width: min(1040px, calc(100% - 24px));
+}
+.trade-dialog .barter-bottom {
+  position: sticky;
+  bottom: -22px;
+  background: #e7d1a0;
+  border-top: 2px solid #a28c61;
+  padding: 10px 0;
+  margin-bottom: -22px;
+  z-index: 4;
+}
+.trade-dialog .barter-bottom button {
+  min-height: 44px;
+  font-size: 14px;
+}
+.trade-dialog .cash-stepper input {
+  font-size: 16px;
+  min-height: 40px;
+}
+.trade-dialog .stash-slot strong {
+  font-size: 13px;
+}
+.trade-dialog .stash-label {
+  font-size: 12px;
+}
+.trade-dialog .barter-plots button {
+  min-height: 38px;
+}
+.trade-dialog .barter-side {
+  min-width: 0;
+}
+#phase-cue {
+  z-index: 30;
+}
+#phase-cue .phase-announcement {
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+}
+#toast {
+  z-index: 100;
+  bottom: calc(env(safe-area-inset-bottom) + 102px);
+  max-width: calc(100% - 30px);
+  font-size: 14px;
+}
+#effects {
+  z-index: 35;
+}
+body.notebook-open #app {
+  overflow-y: auto;
+  padding: 22px 24px 80px;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  background: #123d32;
+}
+body.notebook-open .game-top {
+  display: none;
+}
+.research {
+  max-width: 1100px;
+  margin: auto;
+}
+.research-back {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  min-height: 44px;
+  background: #e3c27f;
+  color: #283729;
+  border: 2px solid #947345;
+  padding: 9px 18px;
+  margin-bottom: 20px;
+}
+@keyframes rack-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 900px) {
+  .game-hud-top {
+    grid-template-columns: 100px minmax(0, 1fr) 44px;
+    gap: 8px;
+    padding: 7px 10px;
+  }
+  .game-brand {
+    font-size: 19px;
+  }
+  .game-brand span {
+    font-size: 11px;
+    letter-spacing: 4px;
+  }
+  .game-shell .pocket-token img {
+    width: 21px;
+    height: 21px;
+  }
+  .game-shell .pocket-token b {
+    font-size: 12px;
+  }
+  .game-shell .wallet strong {
+    font-size: 15px;
+  }
+  .game-shell .wallet small {
+    display: none;
+  }
+  .game-shell .pocket-main {
+    padding: 5px;
+    gap: 3px;
+  }
+  .game-shell .pocket-inventory {
+    padding: 0 3px 3px;
+  }
+  .game-shell .phase-heading h2 {
+    display: none;
+  }
+  .game-shell .phase-heading small {
+    font-size: 14px;
+  }
+  .action-belt {
+    gap: 7px;
+    padding: 7px 9px;
+  }
+  .game-shell .turn-scroll {
+    gap: 8px;
+  }
+  .game-shell .address-strip {
+    max-width: 250px;
+  }
+  .game-shell .phase-actions button {
+    padding: 9px 10px;
+  }
+  .game-shell .replay-guide {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .game-hud-top {
+    grid-template-columns: 1fr 44px;
+    grid-template-rows: 32px 53px;
+    gap: 5px 8px;
+    padding: 4px 8px 6px;
+  }
+  .game-brand {
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.2px;
+  }
+  .game-brand span {
+    display: inline;
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: 2px;
+  }
+  .hud-menu {
+    min-height: 32px;
+    height: 32px;
+    min-width: 40px;
+    font-size: 19px;
+    padding: 0;
+  }
+  .hud-menu small {
+    display: none;
+  }
+  .game-shell .player-rail {
+    grid-row: 2;
+    grid-column: 1/3;
+    gap: 5px;
+  }
+  .game-shell .pocket-main {
+    min-height: 48px;
+    height: 48px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    padding: 2px;
+  }
+  .game-shell .pocket-token img {
+    width: 18px;
+    height: 18px;
+  }
+  .game-shell .pocket-token b {
+    font-size: 12px;
+    line-height: 20px;
+  }
+  .game-shell .wallet strong {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .game-shell .pocket-inventory {
+    display: none;
+  }
+  .game-shell .pocket-token {
+    gap: 2px;
+  }
+  .hand-glance {
+    font-size: 12px;
+    color: #c8d9ab;
+    font-weight: 400;
+  }
+  .district-navigation {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 96px);
+    gap: 2px;
+    padding: 2px;
+  }
+  .district-navigation button {
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .game-shell .calendar {
+    width: 78px;
+    height: 78px;
+    right: 7px;
+    top: 5px;
+  }
+  .game-shell .year-wheel {
+    width: 78px;
+    height: 78px;
+  }
+  .game-shell .year-center strong {
+    font-size: 19px;
+  }
+  .game-shell .year-center small {
+    font-size: 8px;
+  }
+  .game-shell .year-center > span {
+    font-size: 9px;
+  }
+  .game-shell .year-node {
+    width: 18px;
+    height: 18px;
+    font-size: 8px;
+  }
+  .game-shell .year-pointer span {
+    width: 9px;
+    height: 9px;
+  }
+  .game-shell .year-pointer {
+    inset: 3px;
+  }
+  .action-belt {
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    min-height: 99px;
+  }
+  .belt-button {
+    width: 45px;
+    min-width: 45px;
+    min-height: 52px;
+    padding: 5px;
+    font-size: 19px;
+  }
+  .belt-button small {
+    font-size: 12px;
+  }
+  .game-shell .turn-scroll {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .game-shell .phase-heading {
+    justify-content: center;
+    gap: 5px;
+  }
+  .game-shell .phase-medal {
+    width: 21px;
+    height: 21px;
+    font-size: 11px;
+  }
+  .game-shell .phase-heading small {
+    font-size: 13px;
+  }
+  .game-shell .phase-actions {
+    justify-content: center;
+    gap: 5px;
+  }
+  .game-shell .phase-actions button {
+    font-size: 13px;
+    min-height: 42px;
+    padding: 8px 9px;
+  }
+  .game-shell .claim-tools {
+    gap: 5px;
+    width: 100%;
+    justify-content: center;
+  }
+  .game-shell .counter-stack {
+    display: none;
+  }
+  .game-shell .address-strip {
+    flex: 1;
+    min-width: 0;
+    max-width: 180px;
+    gap: 3px;
+  }
+  .game-shell .address-slip {
+    min-width: 32px;
+    min-height: 39px;
+    font-size: 16px;
+  }
+  .game-shell .payday-preview {
+    display: none;
+  }
+  .game-shell .tile-rack {
+    padding: 5px 8px 6px;
+  }
+  .game-shell .rack-label {
+    padding: 0 2px 3px;
+  }
+  .game-shell .rack-label > span {
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  .game-shell .ledger-shortcut {
+    display: none;
+  }
+  .game-shell .shop-tray {
+    gap: 6px;
+    padding: 2px 3px 5px;
+  }
+  .game-shell .shop-piece {
+    flex: 0 0 155px;
+    height: 81px;
+    min-height: 81px;
+    grid-template-columns: 48px 1fr;
+    padding: 5px;
+    gap: 0 4px;
+  }
+  .game-shell .shop-piece > img {
+    width: 48px;
+    height: 54px;
+  }
+  .game-shell .shop-piece > strong {
+    font-size: 14px;
+  }
+  .game-shell .shop-requirement {
+    font-size: 12px;
+  }
+  .game-shell .shop-payout {
+    font-size: 13px;
+  }
+  .camera-hint {
+    font-size: 12px;
+    bottom: 5px;
+    left: 8px;
+  }
+  .game-shell .plot-inspector {
+    bottom: 27px;
+    min-width: 0;
+    width: calc(100% - 20px);
+    max-width: none;
+    padding: 8px;
+    max-height: calc(100% - 73px);
+  }
+  .game-shell .inspector-top {
+    gap: 8px;
+  }
+  .game-shell .plot-inspector strong {
+    font-size: 14px;
+  }
+  .game-shell .plot-inspector small {
+    font-size: 12px;
+  }
+  .game-shell .quick-build button {
+    min-width: 83px;
+  }
+  .game-shell .plot-inspector .primary {
+    font-size: 13px;
+    padding: 7px;
+  }
+  dialog,
+  dialog.trade-dialog {
+    width: calc(100% - 12px);
+    max-height: calc(var(--available-height, 100dvh) - 12px);
+    border-width: 2px;
+    border-radius: 6px;
+  }
+  dialog .modal-header,
+  .trade-dialog .modal-header {
+    padding: 10px 12px;
+    min-height: 60px;
+  }
+  dialog .modal-header h2,
+  .trade-dialog .modal-header h2 {
+    font-size: 21px;
+  }
+  dialog .modal-header .eyebrow {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  dialog .modal-body,
+  .trade-dialog .modal-body {
+    padding: 12px 12px 18px;
+    font-size: 16px;
+  }
+  .trade-dialog .barter-people > button {
+    min-height: 48px;
+  }
+  .trade-dialog .barter-people strong {
+    font-size: 14px;
+  }
+  .trade-dialog .barter-people span {
+    font-size: 12px;
+  }
+  .trade-dialog .bargain-dialogue p {
+    font-size: 14px;
+  }
+  .trade-dialog .barter-owner {
+    font-size: 14px;
+  }
+  .trade-dialog .barter-owner small {
+    font-size: 12px;
+  }
+  .trade-dialog .barter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .trade-dialog .stash-slot {
+    min-width: 0;
+    min-height: 70px;
+  }
+  .trade-dialog .stash-slot strong {
+    font-size: 12px;
+  }
+  .trade-dialog .stash-slot img {
+    width: 44px;
+    height: 44px;
+  }
+  .trade-dialog .cash-stepper {
+    display: flex;
+    gap: 4px;
+  }
+  .trade-dialog .cash-stepper input {
+    width: 52px;
+    font-size: 16px;
+  }
+  .trade-dialog .cash-stepper button {
+    min-width: 32px;
+    min-height: 40px;
+    font-size: 14px;
+  }
+  .trade-dialog .barter-bottom {
+    bottom: -18px;
+    margin-bottom: -18px;
+    padding: 8px 0;
+    gap: 6px;
+  }
+  .trade-dialog .barter-bottom > span {
+    font-size: 12px;
+  }
+  .trade-dialog .barter-bottom button {
+    font-size: 14px;
+  }
+  .trade-dialog .barter-plots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-height: 145px;
+    touch-action: pan-y;
+  }
+  .trade-dialog .barter-plots button {
+    min-height: 40px;
+    font-size: 14px;
+  }
+  .trade-dialog .stash-label {
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  .menu-grid {
+    gap: 8px;
+  }
+  .menu-grid button {
+    font-size: 14px;
+  }
+  .phase-announcement p {
+    font-size: 16px !important;
+  }
+  .phase-announcement h2 {
+    font-size: 30px !important;
+  }
+  #toast {
+    bottom: calc(env(safe-area-inset-bottom) + 111px);
+  }
+  @media (max-height: 520px) and (min-width: 601px) {
+    .game-hud-top {
+      padding: 3px 8px;
+      grid-template-columns: 92px minmax(0, 1fr) 40px;
+    }
+    .game-shell .pocket-inventory {
+      display: none;
+    }
+    .game-shell .pocket-main {
+      min-height: 36px;
+    }
+    .game-brand {
+      font-size: 17px;
+    }
+    .game-brand span {
+      font-size: 10px;
+      margin-top: 3px;
+    }
+    .hud-menu {
+      min-height: 36px;
+      height: 36px;
+      padding: 0;
+    }
+    .hud-menu small {
+      display: none;
+    }
+    .action-belt {
+      min-height: 56px;
+      padding: 4px 8px;
+    }
+    .belt-button {
+      min-height: 42px;
+      height: 42px;
+      width: 50px;
+      padding: 3px;
+      font-size: 16px;
+    }
+    .belt-button small {
+      font-size: 11px;
+    }
+    .game-shell .calendar {
+      width: 75px;
+      height: 75px;
+      top: 5px;
+    }
+    .game-shell .year-wheel {
+      width: 75px;
+      height: 75px;
+    }
+    .game-shell .year-node {
+      display: none;
+    }
+    .game-shell .year-center strong {
+      font-size: 22px;
+    }
+    .game-shell .year-center small {
+      font-size: 9px;
+    }
+    .district-navigation {
+      max-width: calc(100% - 106px);
+      top: 6px;
+    }
+    .district-navigation button {
+      min-height: 30px;
+      padding: 3px 8px;
+    }
+    .game-shell .tile-rack {
+      padding: 3px 9px;
+    }
+    .game-shell .rack-label {
+      display: none;
+    }
+    .game-shell .shop-piece {
+      height: 62px;
+      min-height: 62px;
+      flex-basis: 145px;
+      grid-template-columns: 42px 1fr;
+    }
+    .game-shell .shop-piece > img {
+      width: 42px;
+      height: 48px;
+    }
+    .game-shell .shop-piece > strong {
+      font-size: 13px;
+    }
+    .game-shell .shop-requirement {
+      font-size: 12px;
+    }
+    .game-shell .shop-payout {
+      font-size: 12px;
+    }
+    .game-shell .plot-inspector {
+      max-height: calc(100% - 48px);
+    }
+    #toast {
+      bottom: 70px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rack-drawer.open {
+      animation: none;
+    }
+    .game-shell .shop-piece:hover {
+      transform: none;
+    }
+  }
+  .game-shell .player-pocket {
+    min-height: 0;
+  }
+  .game-shell .claim-tools,
+  .game-shell .address-strip {
+    flex-wrap: nowrap;
+  }
+  .game-shell .shop-piece .shop-requirement {
+    min-height: 0;
+    border: 0;
+    margin: 1px 0;
+    padding: 0;
+  }
+  dialog[open] {
+    top: var(--dialog-center, 50dvh);
+    bottom: auto;
+    transform: translateY(-50%);
+    margin: 0 auto;
+    max-height: calc(var(--available-height, 100dvh) - 24px);
+    overflow: hidden;
+  }
+  dialog {
+    max-width: calc(100% - 24px);
+  }
+  .menu-grid button[aria-pressed='true'] {
+    background: #a4b873;
+    color: #173b2a;
+    border-color: #5c7b42;
+  }
+  dialog .modal-body,
+  .game-shell .plot-inspector {
+    touch-action: pan-x pan-y;
+  }
+  .offer-tray {
+    touch-action: pan-x;
+    overscroll-behavior: contain;
+  }
+  .game-shell .map-viewport {
+    overflow: clip;
+  }
+  @media (max-width: 600px) {
+    .game-hud-top {
+      grid-template-rows: 30px 64px;
+    }
+    .game-shell .pocket-main {
+      height: 39px;
+      min-height: 39px;
+    }
+    .game-shell .pocket-inventory {
+      display: flex;
+      height: 22px;
+      min-height: 0;
+      justify-content: center;
+      padding: 0 2px 1px;
+      gap: 1px;
+    }
+    .game-shell .pocket-inventory > button {
+      height: 21px;
+      flex: 0 0 24px;
+      width: 24px;
+    }
+    .game-shell .pocket-inventory img {
+      width: 23px;
+      height: 23px;
+    }
+    .game-shell .pocket-inventory > button:nth-child(n + 3):not(.inventory-more) {
+      display: none;
+    }
+    .game-shell .pocket-inventory .inventory-more {
+      flex: 0 0 19px;
+      width: 19px;
+      margin: 0;
+      font-size: 17px;
+    }
+    .game-shell .pocket-inventory > span {
+      font-size: 12px;
+      line-height: 18px;
+    }
+    dialog[open] {
+      max-height: calc(var(--available-height, 100dvh) - 12px);
+      max-width: calc(100% - 12px);
+    }
+  }
+  @media (max-height: 520px) and (min-width: 601px) {
+    .game-shell .shop-requirement {
+      white-space: nowrap;
+    }
+    .game-shell .requirement-tail {
+      display: none;
+    }
+    .game-shell .shop-piece {
+      justify-items: start;
+    }
+    .game-shell .shop-piece > strong {
+      white-space: nowrap;
+    }
+  }
+
+  /* Close the phone-layout group explicitly instead of relying on end-of-file recovery. */
+}

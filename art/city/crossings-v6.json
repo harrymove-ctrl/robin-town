@@ -1,0 +1,221 @@
+{
+  "coordinateSystem": "1100 x 730 board pixels. Pedestrian coordinates indicate feet / ground contact.",
+  "crossings": [
+    {
+      "id": "park",
+      "center": [
+        110.7,
+        417
+      ],
+      "roadWidth": 23,
+      "vehicleTangent": [
+        0.1,
+        1.0
+      ],
+      "pedestrianNormal": [
+        -1.0,
+        0.1
+      ],
+      "pedestrianStart": [
+        131.1,
+        415.01
+      ],
+      "pedestrianEnd": [
+        90.3,
+        418.99
+      ]
+    },
+    {
+      "id": "tan-dinh-south",
+      "center": [
+        336.8,
+        305
+      ],
+      "roadWidth": 22,
+      "vehicleTangent": [
+        -0.15,
+        0.99
+      ],
+      "pedestrianNormal": [
+        -0.99,
+        -0.15
+      ],
+      "pedestrianStart": [
+        356.59,
+        307.92
+      ],
+      "pedestrianEnd": [
+        317.01,
+        302.08
+      ]
+    },
+    {
+      "id": "market-west",
+      "center": [
+        362,
+        331.3
+      ],
+      "roadWidth": 33,
+      "vehicleTangent": [
+        1.0,
+        0.01
+      ],
+      "pedestrianNormal": [
+        -0.01,
+        1.0
+      ],
+      "pedestrianStart": [
+        362.28,
+        305.8
+      ],
+      "pedestrianEnd": [
+        361.72,
+        356.8
+      ]
+    },
+    {
+      "id": "garden-east",
+      "center": [
+        397,
+        374.5
+      ],
+      "roadWidth": 22,
+      "vehicleTangent": [
+        0.14,
+        0.99
+      ],
+      "pedestrianNormal": [
+        -0.99,
+        0.14
+      ],
+      "pedestrianStart": [
+        416.79,
+        371.64
+      ],
+      "pedestrianEnd": [
+        377.21,
+        377.36
+      ]
+    },
+    {
+      "id": "river-market-north",
+      "center": [
+        687.4,
+        318
+      ],
+      "roadWidth": 24,
+      "vehicleTangent": [
+        -0.11,
+        0.99
+      ],
+      "pedestrianNormal": [
+        -0.99,
+        -0.11
+      ],
+      "pedestrianStart": [
+        708.27,
+        320.37
+      ],
+      "pedestrianEnd": [
+        666.53,
+        315.63
+      ]
+    },
+    {
+      "id": "binh-thanh-east",
+      "center": [
+        729.4,
+        390
+      ],
+      "roadWidth": 24,
+      "vehicleTangent": [
+        0.01,
+        1.0
+      ],
+      "pedestrianNormal": [
+        -1.0,
+        0.01
+      ],
+      "pedestrianStart": [
+        750.4,
+        389.78
+      ],
+      "pedestrianEnd": [
+        708.4,
+        390.22
+      ]
+    },
+    {
+      "id": "riverside-north",
+      "center": [
+        1041.7,
+        376
+      ],
+      "roadWidth": 19,
+      "vehicleTangent": [
+        0.16,
+        0.99
+      ],
+      "pedestrianNormal": [
+        -0.99,
+        0.16
+      ],
+      "pedestrianStart": [
+        1059.95,
+        372.99
+      ],
+      "pedestrianEnd": [
+        1023.45,
+        379.01
+      ]
+    },
+    {
+      "id": "riverside-west",
+      "center": [
+        1007,
+        393.8
+      ],
+      "roadWidth": 33,
+      "vehicleTangent": [
+        0.98,
+        0.22
+      ],
+      "pedestrianNormal": [
+        -0.22,
+        0.98
+      ],
+      "pedestrianStart": [
+        1012.51,
+        368.9
+      ],
+      "pedestrianEnd": [
+        1001.49,
+        418.7
+      ]
+    },
+    {
+      "id": "south-market",
+      "center": [
+        710,
+        687.8
+      ],
+      "roadWidth": 23,
+      "vehicleTangent": [
+        1.0,
+        -0.03
+      ],
+      "pedestrianNormal": [
+        0.03,
+        1.0
+      ],
+      "pedestrianStart": [
+        709.4,
+        667.31
+      ],
+      "pedestrianEnd": [
+        710.6,
+        708.29
+      ]
+    }
+  ]
+}

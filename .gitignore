@@ -5,3 +5,9 @@ dist/
 *.log
 .env
 .env.*
+video/node_modules/
+video/out/
+video/.remotion/
+video/public/clips/*.mp4
+video/public/audio/*.wav
+docs/video/exports/*.mp4

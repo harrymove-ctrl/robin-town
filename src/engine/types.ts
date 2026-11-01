@@ -94,6 +94,7 @@ export interface GameState {
   logs: string[];
   lastIncome: number[];
   trades: number;
+  incomingOffers?: TradeOffer[];
 }
 
 export type GameAction =

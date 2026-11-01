@@ -1,0 +1,15 @@
+{
+  "chieu-mat-tile": {"width": 96, "height": 96, "repeat": "both", "opaque": true},
+  "mini-vacant-plot": {
+    "width": 64, "height": 64,
+    "numberRect": {"x": 20, "y": 16, "width": 27, "height": 20},
+    "numberCenter": {"x": 33.5, "y": 26},
+    "numberCenterPercent": {"left": 52.34375, "top": 40.625}
+  },
+  "tear-off-calendar": {
+    "width": 96, "height": 128,
+    "textRect": {"x": 20, "y": 43, "width": 58, "height": 61},
+    "textCenter": {"x": 49, "y": 73.5},
+    "textCenterPercent": {"left": 51.0416667, "top": 57.421875}
+  }
+}

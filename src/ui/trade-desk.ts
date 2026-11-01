@@ -123,7 +123,7 @@ export class TradeDeskController {
       throw new Error('OTC Liquidity Desk is available only during the Trade phase.');
     }
     this.deskState.isOpen = true;
-    if (partnerId !== undefined && partnerId >= 1 && partnerId <= 3) {
+    if (partnerId !== undefined && partnerId >= 1 && partnerId < this.state.players.length) {
       this.deskState.partnerId = partnerId;
     }
     this.deskState.give = emptyOffer();
@@ -141,7 +141,7 @@ export class TradeDeskController {
   }
 
   public setPartner(partnerId: number): void {
-    if (partnerId < 1 || partnerId > 3 || partnerId === this.deskState.proposerId) {
+    if (partnerId < 1 || partnerId >= this.state.players.length || partnerId === this.deskState.proposerId) {
       throw new Error(`Invalid counterparty ID: ${partnerId}`);
     }
     this.deskState.partnerId = partnerId;
@@ -400,14 +400,17 @@ export class TradeDeskModal {
 
         <!-- Counterparty Selector Tabs -->
         <nav class="partner-selector-tabs" aria-label="Trading Counterparties">
-          ${[1, 2, 3].map((id) => {
+          ${Array.from({ length: this.controller.getGameState().players.length - 1 }, (_, i) => i + 1).map((id) => {
             const p = getBotPersonality(id);
+            const opponentPlayer = this.controller.getGameState().players[id];
+            const name = opponentPlayer?.name ?? p.name;
+            const avatar = opponentPlayer?.avatar ?? p.avatar;
             const isActive = id === state.partnerId;
             return `
               <button class="partner-tab ${isActive ? 'active' : ''}" data-partner-id="${id}">
-                <img src="assets/avatars/${p.avatar}" class="avatar-sprite pixel-art" alt="${p.name}" />
+                <img src="assets/avatars/${avatar}" class="avatar-sprite pixel-art" alt="${name}" />
                 <div class="partner-tab-info">
-                  <span class="partner-name">${p.name}</span>
+                  <span class="partner-name">${name}</span>
                   <span class="partner-tag">${p.title} (${p.profitMargin}x)</span>
                 </div>
               </button>
@@ -727,9 +730,12 @@ export class TradeDeskModal {
         this.controller.applyCounteroffer();
         this.render();
       }
-    } else if (e.key === '1' || e.key === '2' || e.key === '3') {
-      this.controller.setPartner(parseInt(e.key, 10));
-      this.render();
+    } else {
+      const keyNum = parseInt(e.key, 10);
+      if (!Number.isNaN(keyNum) && keyNum >= 1 && keyNum < this.controller.getGameState().players.length) {
+        this.controller.setPartner(keyNum);
+        this.render();
+      }
     }
   }
 

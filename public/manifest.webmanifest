@@ -1,0 +1,22 @@
+{
+  "name": "Robin Town",
+  "short_name": "Robin Town",
+  "description": "Six-year Chinatown negotiation board game with original English Aseprite art and a $wif flywheel on Robinhood Chain.",
+  "lang": "en",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#15382b",
+  "theme_color": "#15382b",
+  "icons": [
+    {
+      "src": "/assets/saigon/icons/app-icon-192-v8.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/saigon/icons/app-icon-512-v8.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

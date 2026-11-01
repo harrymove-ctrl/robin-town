@@ -5,12 +5,16 @@
  * Orchestrates the full single-player match loop across 6 years and 5 phases
  * against Sherwood, Apex, and Luna. Wires parcel drafting, bilateral OTC trading,
  * protocol deployment, 1.20x staking yield harvest, and Year 6 final settlement.
- * Manages dual-mode wallet, multiplayer rooms, camera, board renderer, and procedural audio.
+ * Manages dual-mode wallet, multiplayer rooms, camera, board renderer,
+ * 3D Three.js scene, Apple Carousel, iPod Classic controller, SolaceUI exposure-grid shader,
+ * and deflationary $wif economic flywheel.
  */
 
 import {
   BOARD_HEIGHT,
   BOARD_WIDTH,
+  DISTRICT_BLOCKS,
+  LOT_DEFINITIONS,
   TOTAL_LOTS,
   canBuildShop,
   findAllClusters,
@@ -28,6 +32,7 @@ import {
   collectIncome,
   createGame,
   draftPlots,
+  groupIncome,
   nextYear,
   rankings,
   startYear,
@@ -35,11 +40,17 @@ import {
 import type { GameConfig, GamePhase, GameState, Player } from './engine/types';
 import {
   BURN_ADDRESS,
+  applyMatchPayouts,
+  applyPointSwap,
+  applyTradeTax,
   calculateMatchPayouts,
   calculatePointSwap,
   calculateStakingBoost,
+  createInitialFlywheelState,
+  type FlywheelState,
   type MatchPoolResult,
   type PointSwapResult,
+  type TradeTaxResult,
 } from './tokenomics/flywheel';
 import {
   DEFAULT_SIMULATED_ACCOUNTS,
@@ -58,13 +69,33 @@ import {
 } from './network/room';
 import { AudioSynthesizer, getAudioSynthesizer } from './ui/audio';
 import { BoardRenderer, type BoardRenderState } from './ui/board';
+import {
+  ThreeBoardRenderer,
+  isWebGLAvailable,
+  type Board3DRenderer,
+} from './ui/board-3d';
 import { CameraController } from './ui/camera';
+import { AppleCarousel, type CarouselItem } from './ui/carousel';
+import {
+  ExposureGrid,
+  type ExposureGridPhase,
+  type ExposureGridRenderer,
+} from './ui/exposure-grid';
+import {
+  SolaceBackground,
+  type SolacePhase,
+} from './ui/solace-background';
+import {
+  WalletFlywheelController,
+  WalletFlywheelModal,
+} from './ui/wallet-flywheel-modal';
 import {
   HudManager,
   type DrawerViewModel,
   type PlayerRibbonViewModel,
   type TopBarViewModel,
 } from './ui/hud';
+import { IPodController, type iPodAction } from './ui/ipod-controller';
 import { TradeDeskController, TradeDeskModal } from './ui/trade-desk';
 
 export interface FinalSettlementResult {
@@ -88,19 +119,33 @@ export class RobinTownApp {
   private container: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private bgCanvas: HTMLCanvasElement | null = null;
 
   // Domain controllers
   private state: GameState;
   private camera: CameraController;
   private boardRenderer: BoardRenderer;
+  private board3DRenderer: ThreeBoardRenderer | null = null;
+  private carousel: AppleCarousel | null = null;
+  private ipodController: IPodController | null = null;
+  private exposureGrid: ExposureGrid | null = null;
   private tradeDeskController: TradeDeskController;
   private tradeDeskModal: TradeDeskModal | null = null;
   private hudManager: HudManager | null = null;
   private audio: AudioSynthesizer;
   private walletAdapter: WalletAdapter;
   private networkRoom: NetworkRoom | null = null;
+  private solaceBackground: SolaceBackground | null = null;
+  private walletFlywheelController: WalletFlywheelController | null = null;
+  private walletFlywheelModal: WalletFlywheelModal | null = null;
 
-  // Active interaction state
+  // Economic flywheel state
+  private flywheelState: FlywheelState;
+  private hasSettledMatchPool = false;
+
+  // Visual mode and selection state
+  private renderMode: '2d' | '3d' = '3d';
+  private isSelectingLot = false;
   private selectedDraftLots: number[] = [];
   private selectedShopType: number | null = null;
   private selectedLotId: number | null = null;
@@ -109,16 +154,20 @@ export class RobinTownApp {
   private isWalletModalOpen = false;
   private isSettlementModalOpen = false;
   private isRoomModalOpen = false;
+  private isPointSwapModalOpen = false;
   private roomCodeInput = '';
 
-  // Animation frame ID
+  // Animation and event listeners
   private animFrameId: number | null = null;
+  private handleResizeBound = () => this.handleResize();
+  private handleKeyDownBound = (e: KeyboardEvent) => this.handleKeyDown(e);
 
   constructor(container: HTMLElement | null = null, config: RobinTownAppConfig = {}) {
     this.container = container;
     this.isStaked = config.isStaked ?? true;
     this.audio = config.audio ?? getAudioSynthesizer();
     this.walletAdapter = new WalletAdapter({ mode: 'simulation' });
+    this.flywheelState = createInitialFlywheelState();
 
     // Initialize core game state
     this.state = createGame(config.gameConfig || {
@@ -138,15 +187,23 @@ export class RobinTownApp {
     this.camera = new CameraController();
     this.boardRenderer = new BoardRenderer(this.camera);
 
-    // Initialize TradeDeskController
+    // Initialize TradeDeskController with flywheel state binding
     this.tradeDeskController = new TradeDeskController(this.state, {
+      flywheelState: this.flywheelState,
       onAudioTrigger: (cue) => {
         if (cue === 'deal-stamp') this.audio.playDealStamp();
         else if (cue === 'coin-chime') this.audio.playCoinChime();
         else if (cue === 'error-buzzer') this.audio.playErrorBuzzer();
         else if (cue === 'click') this.audio.playClick();
       },
-      onTradeExecuted: () => {
+      onTradeExecuted: (offer, evaluation, taxResult) => {
+        if (taxResult) {
+          this.flywheelState = applyTradeTax(this.flywheelState, taxResult);
+        }
+        this.syncCarouselDeeds();
+        if (this.board3DRenderer) {
+          this.board3DRenderer.render(this.state, this.selectedLotId);
+        }
         this.renderAll();
       },
     });
@@ -168,6 +225,22 @@ export class RobinTownApp {
     return this.boardRenderer;
   }
 
+  public getBoard3DRenderer(): ThreeBoardRenderer | null {
+    return this.board3DRenderer;
+  }
+
+  public getCarousel(): AppleCarousel | null {
+    return this.carousel;
+  }
+
+  public getIPodController(): IPodController | null {
+    return this.ipodController;
+  }
+
+  public getExposureGrid(): ExposureGrid | null {
+    return this.exposureGrid;
+  }
+
   public getTradeDeskController(): TradeDeskController {
     return this.tradeDeskController;
   }
@@ -176,8 +249,41 @@ export class RobinTownApp {
     return this.walletAdapter;
   }
 
+  public getFlywheelState(): Readonly<FlywheelState> {
+    return this.flywheelState;
+  }
+
+  public getRenderMode(): '2d' | '3d' {
+    return this.renderMode;
+  }
+
   public getAudio(): AudioSynthesizer {
     return this.audio;
+  }
+
+  /**
+   * Toggles between 3D Diorama and 2D Tactical View.
+   */
+  public toggleRenderMode(): '2d' | '3d' {
+    this.renderMode = this.renderMode === '3d' ? '2d' : '3d';
+    if (this.canvas) {
+      this.canvas.style.display = this.renderMode === '2d' ? 'block' : 'none';
+    }
+    if (this.renderMode === '2d') {
+      this.board3DRenderer?.pause();
+    } else {
+      this.board3DRenderer?.resume();
+    }
+    if (typeof document !== 'undefined' && document.body?.dataset) {
+      document.body.dataset.viewMode = this.renderMode === '3d' ? 'city-3d' : '2d';
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('robin_town_view_mode', this.renderMode === '3d' ? 'city-3d' : '2d');
+      }
+    } catch {}
+    this.renderAll();
+    return this.renderMode;
   }
 
   /**
@@ -187,24 +293,109 @@ export class RobinTownApp {
     this.container = container;
     this.container.innerHTML = `
       <div class="robin-town-shell">
+        <canvas id="bg-canvas"></canvas>
         <div id="hud-container" class="hud-container"></div>
-        <div id="board-container" class="board-container">
-          <canvas id="game-board-canvas" class="board-canvas pixel-art"></canvas>
+        <div class="diorama-workspace">
+          <div class="main-viewport">
+            <div id="board-container" class="board-container">
+              <canvas id="game-board-canvas" class="board-canvas pixel-art"></canvas>
+            </div>
+            <div id="deed-carousel-container" class="deed-carousel-container"></div>
+          </div>
+          <aside id="controller-container" class="controller-container"></aside>
         </div>
         <div id="trade-desk-container" class="trade-desk-container"></div>
         <div id="modal-overlay-container" class="modal-overlay-container"></div>
       </div>
     `;
 
+    // 1. Mount SolaceUI ExposureGrid shader background on #bg-canvas
+    this.bgCanvas = this.container.querySelector('#bg-canvas') as HTMLCanvasElement;
+    if (this.bgCanvas) {
+      this.exposureGrid = new ExposureGrid({
+        canvas: this.bgCanvas,
+        phaseTheme: this.state.phase as ExposureGridPhase,
+      });
+      this.exposureGrid.mount();
+      this.solaceBackground = new SolaceBackground({
+        canvas: this.bgCanvas,
+        phase: 'default',
+        intensity: 0.85,
+      });
+      this.solaceBackground.mount();
+    }
+
+    // 2. 2D fallback canvas setup
     this.canvas = this.container.querySelector('#game-board-canvas') as HTMLCanvasElement;
     if (this.canvas) {
       this.ctx = this.canvas.getContext('2d');
       this.camera.attach(this.canvas);
       this.handleResize();
-      window.addEventListener('resize', this.handleResize.bind(this));
     }
 
-    // Mount HUD manager
+    // 3. Mount 3D ThreeBoardRenderer if WebGL is available
+    const boardContainer = this.container.querySelector('#board-container') as HTMLElement;
+    if (boardContainer && isWebGLAvailable()) {
+      this.board3DRenderer = new ThreeBoardRenderer({
+        container: boardContainer,
+        onSelectLot: (lotId) => {
+          this.selectLot(lotId, 'board');
+        },
+        onHoverLot: (lotId) => {
+          this.hoveredLotId = lotId;
+        },
+      });
+      this.board3DRenderer.mount();
+      if (this.canvas) {
+        this.canvas.style.display = 'none';
+      }
+      this.renderMode = '3d';
+    } else {
+      this.renderMode = '2d';
+    }
+    if (typeof document !== 'undefined' && document.body?.dataset) {
+      document.body.dataset.viewMode = this.renderMode === '3d' ? 'city-3d' : '2d';
+    }
+
+    // 4. Mount Apple Carousel on #deed-carousel-container
+    const carouselContainer = this.container.querySelector('#deed-carousel-container') as HTMLElement;
+    if (carouselContainer) {
+      const items = this.buildCarouselItems();
+      this.carousel = new AppleCarousel({
+        container: carouselContainer,
+        items,
+        autoplayDurationMs: 6000,
+        onSelect: (item) => {
+          this.selectLot(item.id, 'carousel');
+        },
+      });
+      this.carousel.mount();
+    }
+
+    // 5. Mount iPod Classic Controller on #controller-container
+    const controllerContainer = this.container.querySelector('#controller-container') as HTMLElement;
+    if (controllerContainer) {
+      this.ipodController = new IPodController({
+        container: controllerContainer,
+        menuTitle: this.getPhaseTitle(this.state.phase),
+        actions: this.buildIPodPhaseActions(this.state.phase),
+        onScroll: (delta) => {
+          this.handleIPodScroll(delta);
+        },
+        onSelect: (action) => {
+          action.handler();
+        },
+        onMenu: () => {
+          this.ipodController?.setActions(
+            this.getPhaseTitle(this.state.phase),
+            this.buildIPodPhaseActions(this.state.phase)
+          );
+        },
+      });
+      this.ipodController.mount();
+    }
+
+    // 6. Mount HUD manager
     const hudEl = this.container.querySelector('#hud-container') as HTMLElement;
     if (hudEl) {
       this.hudManager = new HudManager(hudEl, {
@@ -216,13 +407,36 @@ export class RobinTownApp {
           this.audio.toggleMute();
           this.renderAll();
         },
+        onViewToggle: () => {
+          this.toggleRenderMode();
+        },
       });
     }
 
-    // Mount Trade Desk modal
+    // 7. Mount Trade Desk modal
     const tradeEl = this.container.querySelector('#trade-desk-container') as HTMLElement;
     if (tradeEl) {
       this.tradeDeskModal = new TradeDeskModal(tradeEl, this.tradeDeskController);
+    }
+
+    // 8. Mount Wallet Flywheel modal
+    this.walletFlywheelController = new WalletFlywheelController({
+      walletAdapter: this.walletAdapter,
+      flywheelState: this.flywheelState,
+      onResetSimulation: () => this.renderAll(),
+      onVoteCast: (result) => {
+        this.flywheelState = result.state ? result.state : result;
+        this.renderAll();
+      },
+    });
+    const walletModalEl = this.container.querySelector('#wallet-flywheel-container') as HTMLElement;
+    if (walletModalEl) {
+      this.walletFlywheelModal = new WalletFlywheelModal(walletModalEl, this.walletFlywheelController);
+      this.walletFlywheelModal.mount();
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', this.handleResizeBound);
     }
 
     this.bindCanvasInteraction();
@@ -232,13 +446,409 @@ export class RobinTownApp {
     this.renderAll();
   }
 
+  /**
+   * Builds carousel deed representations for all 72 board parcels.
+   */
+  public buildCarouselItems(): CarouselItem[] {
+    const clusters = findAllClusters(this.state.lots);
+    return LOT_DEFINITIONS.map((def) => {
+      const lot = this.state.lots[def.id] || {
+        id: def.id,
+        owner: null,
+        shop: null,
+      };
+      const ownerName = lot.owner !== null ? this.state.players[lot.owner]?.name || `Player ${lot.owner}` : 'Vacant';
+      const shopObj = lot.shop !== null ? SHOPS[lot.shop] : null;
+      const shopName = shopObj ? shopObj.name : 'Vacant';
+      const district = DISTRICT_BLOCKS[def.block] || { name: 'District', accentHex: '#888888' };
+
+      // Calculate lot annual income if owned and built
+      let lotIncome = 0;
+      if (lot.owner !== null && lot.shop !== null) {
+        const cluster = clusters.find((c) => c.lots.includes(def.id) && c.playerId === lot.owner);
+        if (cluster) {
+          const totalClusterIncome = groupIncome(cluster.shopType, cluster.size);
+          lotIncome = Math.round(totalClusterIncome / Math.max(1, cluster.size));
+        }
+      }
+
+      return {
+        id: def.id,
+        title: `Parcel #${def.id + 1}`,
+        district: def.districtName || district.name,
+        color: district.accentHex,
+        owner: ownerName,
+        shop: shopName,
+        income: lotIncome,
+      };
+    });
+  }
+
+  /**
+   * Refreshes carousel deed items to match the current game state.
+   */
+  private syncCarouselDeeds(): void {
+    if (!this.carousel) return;
+    const items = this.buildCarouselItems();
+    this.carousel.setItems(items);
+  }
+
+  /**
+   * Handles iPod click wheel rotational movement for carousel deed scrubbing.
+   */
+  private handleIPodScroll(delta: number): void {
+    if (this.carousel) {
+      if (delta > 0) {
+        this.carousel.next();
+      } else if (delta < 0) {
+        this.carousel.prev();
+      }
+      const item = this.carousel.getCurrentItem();
+      if (item) {
+        this.selectLot(item.id, 'ipod');
+      }
+    }
+  }
+
+  /**
+   * Unified lot selection dispatcher with re-entrancy protection.
+   */
+  public selectLot(
+    lotId: number,
+    source: 'board' | 'carousel' | 'ipod' | 'engine' = 'engine'
+  ): void {
+    if (lotId < 0 || lotId >= TOTAL_LOTS) return;
+    if (this.isSelectingLot) return;
+    this.isSelectingLot = true;
+
+    try {
+      this.selectedLotId = lotId;
+
+      // Center 3D camera if not sourced from 3D board click
+      if (source !== 'board' && this.board3DRenderer) {
+        this.board3DRenderer.focusLot(lotId);
+      }
+
+      // Scroll carousel slide if not sourced from carousel selection
+      if (source !== 'carousel' && this.carousel) {
+        this.carousel.goTo(lotId);
+      }
+
+      // Execute phase actions for board and iPod physical inputs
+      if (source === 'board' || source === 'ipod') {
+        if (this.state.phase === 'receive') {
+          if (this.state.pending && this.state.pending.includes(lotId)) {
+            this.toggleDraftLot(lotId);
+          }
+        } else if (this.state.phase === 'build') {
+          if (this.selectedShopType !== null) {
+            this.buildOnLot(lotId);
+          }
+        } else if (this.state.phase === 'trade') {
+          const lot = this.state.lots[lotId];
+          if (lot && lot.owner !== null && lot.owner !== 0) {
+            this.openTradeDesk(lot.owner);
+          }
+        }
+      }
+
+      this.renderAll();
+    } finally {
+      this.isSelectingLot = false;
+    }
+  }
+
+  /**
+   * Updates ExposureGrid shader background and iPod menu to match current phase.
+   */
+  private syncPhaseTheme(): void {
+    if (this.exposureGrid) {
+      this.exposureGrid.setPhaseTheme(this.state.phase as ExposureGridPhase, 800);
+    }
+    if (this.ipodController) {
+      this.ipodController.setActions(
+        this.getPhaseTitle(this.state.phase),
+        this.buildIPodPhaseActions(this.state.phase)
+      );
+    }
+  }
+
+  private getPhaseTitle(phase: GamePhase): string {
+    switch (phase) {
+      case 'receive':
+        return 'Allocation Draft';
+      case 'trade':
+        return 'OTC Liquidity Desk';
+      case 'build':
+        return 'Protocol Deployment';
+      case 'income':
+        return 'Yield Harvest';
+      case 'ended':
+        return 'Final Settlement';
+      default:
+        return 'Robin-Town';
+    }
+  }
+
+  /**
+   * Builds the action menu for the iPod Classic controller per game phase.
+   */
+  public buildIPodPhaseActions(phase: GamePhase): iPodAction[] {
+    const walletSubmenu: iPodAction = {
+      id: 'wallet-menu',
+      label: 'Wallet & Flywheel',
+      handler: () => {},
+      submenu: {
+        title: 'Wallet Desk',
+        actions: [
+          {
+            id: 'toggle-mode',
+            label: 'Toggle Wallet Mode',
+            handler: () => {
+              const currentMode = this.walletAdapter.getState().mode;
+              this.walletAdapter.setMode(currentMode === 'simulation' ? 'web3' : 'simulation');
+              this.renderAll();
+            },
+          },
+          {
+            id: 'cycle-sim',
+            label: 'Switch Sim Account',
+            handler: () => {
+              const currentAddr = this.walletAdapter.getState().account?.address.toLowerCase();
+              const idx = DEFAULT_SIMULATED_ACCOUNTS.findIndex(
+                (a) => a.address.toLowerCase() === currentAddr
+              );
+              const nextIdx = (idx + 1) % DEFAULT_SIMULATED_ACCOUNTS.length;
+              this.walletAdapter.switchAccount(DEFAULT_SIMULATED_ACCOUNTS[nextIdx].address);
+              this.renderAll();
+            },
+          },
+          {
+            id: 'reset-sim-balance',
+            label: 'Reset Sim Balances',
+            handler: () => {
+              this.walletAdapter.resetSimulation();
+              this.renderAll();
+            },
+          },
+          {
+            id: 'open-wallet-dialog',
+            label: 'Open Full Wallet Dialog',
+            handler: () => {
+              this.openWalletModal();
+            },
+          },
+        ],
+      },
+    };
+
+    switch (phase) {
+      case 'receive':
+        return [
+          {
+            id: 'confirm-draft',
+            label: 'Confirm Selected Deeds',
+            handler: () => {
+              this.confirmDraft(this.selectedDraftLots);
+            },
+          },
+          {
+            id: 'quick-draft',
+            label: 'Quick Draft (Auto)',
+            handler: () => {
+              this.quickDraft();
+            },
+          },
+          {
+            id: 'toggle-parcel',
+            label: 'Toggle Focused Deed',
+            handler: () => {
+              if (this.selectedLotId !== null) {
+                this.toggleDraftLot(this.selectedLotId);
+              }
+            },
+          },
+          {
+            id: 'browse-available',
+            label: 'Browse Deal Tray',
+            handler: () => {},
+            submenu: {
+              title: 'Deal Tray Deeds',
+              actions: (this.state.pending || []).map((lotId) => ({
+                id: `tray-lot-${lotId}`,
+                label: `Parcel #${lotId + 1}`,
+                handler: () => {
+                  this.selectLot(lotId, 'ipod');
+                  this.toggleDraftLot(lotId);
+                },
+              })),
+            },
+          },
+          walletSubmenu,
+        ];
+
+      case 'trade':
+        return [
+          {
+            id: 'open-otc-propose',
+            label: 'Open OTC Liquidity Desk',
+            handler: () => {
+              this.openTradeDesk();
+            },
+          },
+          {
+            id: 'trade-sherwood',
+            label: 'Trade with Sherwood',
+            handler: () => {
+              this.openTradeDesk(1);
+            },
+          },
+          {
+            id: 'trade-apex',
+            label: 'Trade with Apex',
+            handler: () => {
+              this.openTradeDesk(2);
+            },
+          },
+          {
+            id: 'trade-luna',
+            label: 'Trade with Luna',
+            handler: () => {
+              this.openTradeDesk(3);
+            },
+          },
+          {
+            id: 'finish-trading',
+            label: 'Close Trading Phase',
+            handler: () => {
+              this.finishTrading();
+            },
+          },
+          walletSubmenu,
+        ];
+
+      case 'build':
+        return [
+          {
+            id: 'pick-shop-category',
+            label: 'Select Protocol Module',
+            handler: () => {},
+            submenu: {
+              title: 'Protocol Modules',
+              actions: [0, 1, 2, 3, 4, 5].map((shopType) => {
+                const shop = SHOPS[shopType];
+                const count = this.state.players[0].tiles[shopType] || 0;
+                return {
+                  id: `shop-mod-${shopType}`,
+                  label: `${shop.name} (x${count})`,
+                  handler: () => {
+                    this.selectShopType(shopType);
+                  },
+                };
+              }),
+            },
+          },
+          {
+            id: 'deploy-on-focused',
+            label: 'Deploy on Focused Lot',
+            handler: () => {
+              if (this.selectedLotId !== null) {
+                this.buildOnLot(this.selectedLotId);
+              }
+            },
+          },
+          {
+            id: 'clear-shop-choice',
+            label: 'Clear Module Selection',
+            handler: () => {
+              this.selectShopType(null);
+            },
+          },
+          {
+            id: 'finish-building',
+            label: 'Finish Construction',
+            handler: () => {
+              this.harvestYield();
+            },
+          },
+          walletSubmenu,
+        ];
+
+      case 'income':
+        return [
+          {
+            id: 'advance-next-year',
+            label: 'Advance to Next Year',
+            handler: () => {
+              this.advanceToNextYear();
+            },
+          },
+          {
+            id: 'toggle-staking',
+            label: `Staking Boost (${this.isStaked ? '1.20x ON' : 'OFF'})`,
+            handler: () => {
+              this.isStaked = !this.isStaked;
+              this.renderAll();
+            },
+          },
+          walletSubmenu,
+        ];
+
+      case 'ended':
+        return [
+          {
+            id: 'open-settlement',
+            label: 'View Final Settlement',
+            handler: () => {
+              this.openSettlementModal();
+            },
+          },
+          {
+            id: 'swap-points-wif',
+            label: 'Swap Points for $wif',
+            handler: () => {
+              this.openPointSwapModal();
+            },
+          },
+          {
+            id: 'start-fresh-match',
+            label: 'Start Fresh Match',
+            handler: () => {
+              this.startNewGame();
+            },
+          },
+          walletSubmenu,
+        ];
+
+      default:
+        return [
+          {
+            id: 'default-new-game',
+            label: 'Start New Match',
+            handler: () => {
+              this.startNewGame();
+            },
+          },
+          walletSubmenu,
+        ];
+    }
+  }
+
   private handleResize(): void {
-    if (!this.canvas || !this.container) return;
+    if (!this.container) return;
     const boardBox = this.container.querySelector('#board-container') as HTMLElement;
-    const w = boardBox ? boardBox.clientWidth : window.innerWidth;
-    const h = boardBox ? boardBox.clientHeight : window.innerHeight;
+    const w = Math.max(320, boardBox?.clientWidth || 800);
+    const h = Math.max(240, boardBox?.clientHeight || 600);
     this.camera.setViewport(w, h);
-    this.boardRenderer.resizeCanvas(this.canvas, { width: w, height: h });
+    if (this.canvas) {
+      this.boardRenderer.resizeCanvas(this.canvas, { width: w, height: h });
+    }
+    if (this.board3DRenderer) {
+      this.board3DRenderer.resize(w, h);
+    }
+    if (this.exposureGrid && typeof window !== 'undefined') {
+      this.exposureGrid.resize(window.innerWidth, window.innerHeight);
+    }
   }
 
   private preloadAssets(): void {
@@ -264,21 +874,33 @@ export class RobinTownApp {
   }
 
   private startRenderLoop(): void {
+    if (typeof requestAnimationFrame === 'undefined') return;
+
     const loop = () => {
       this.camera.update();
-      this.drawBoard();
+      if (this.renderMode === '2d') {
+        this.drawBoard();
+      }
       this.animFrameId = requestAnimationFrame(loop);
     };
     this.animFrameId = requestAnimationFrame(loop);
   }
 
   public destroy(): void {
-    if (this.animFrameId !== null) {
+    if (this.animFrameId !== null && typeof cancelAnimationFrame !== 'undefined') {
       cancelAnimationFrame(this.animFrameId);
       this.animFrameId = null;
     }
     this.camera.detach();
     this.tradeDeskModal?.destroy();
+    this.board3DRenderer?.unmount();
+    this.carousel?.unmount();
+    this.ipodController?.unmount();
+    this.exposureGrid?.unmount();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.handleResizeBound);
+      window.removeEventListener('keydown', this.handleKeyDownBound);
+    }
   }
 
   private drawBoard(): void {
@@ -330,11 +952,18 @@ export class RobinTownApp {
       this.selectedDraftLots,
       this.selectedShopType,
       walletLabel,
-      this.audio.isMuted()
+      this.audio.isMuted(),
+      this.flywheelState.totalBurned,
+      this.renderMode
     );
 
     this.tradeDeskModal?.render();
     this.renderModalOverlays();
+
+    // Re-render 3D scene if present
+    if (this.board3DRenderer) {
+      this.board3DRenderer.render(this.state, this.selectedLotId);
+    }
   }
 
   private bindCanvasInteraction(): void {
@@ -356,58 +985,42 @@ export class RobinTownApp {
       const sy = e.clientY - rect.top;
       const lotId = this.camera.hitTest(sx, sy);
       if (lotId !== null) {
-        this.handleLotClick(lotId);
+        this.selectLot(lotId, 'board');
       }
     });
   }
 
-  private handleLotClick(lotId: number): void {
-    this.selectedLotId = lotId;
-
-    if (this.state.phase === 'receive') {
-      if (this.state.pending && this.state.pending.includes(lotId)) {
-        this.toggleDraftLot(lotId);
+  private handleKeyDown(e: KeyboardEvent): void {
+    if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen || this.isPointSwapModalOpen) {
+      if (e.key === 'Escape') {
+        this.closeModals();
       }
-    } else if (this.state.phase === 'build') {
-      if (this.selectedShopType !== null) {
-        this.buildOnLot(lotId);
-      }
-    } else if (this.state.phase === 'trade') {
-      const lot = this.state.lots[lotId];
-      if (lot && lot.owner !== null && lot.owner !== 0) {
-        this.openTradeDesk(lot.owner);
-      }
+      return;
     }
 
-    this.renderAll();
+    if (e.key === 't' || e.key === 'T') {
+      if (this.state.phase === 'trade') {
+        this.openTradeDesk();
+      }
+    } else if (e.key === 'q' || e.key === 'Q') {
+      if (this.state.phase === 'receive') {
+        this.quickDraft();
+      }
+    } else if (e.key === 'v' || e.key === 'V') {
+      this.toggleRenderMode();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      this.handleSpaceKey();
+    } else if (e.key === 'Escape') {
+      this.selectedShopType = null;
+      this.selectedLotId = null;
+      this.renderAll();
+    }
   }
 
   private bindKeyboardShortcuts(): void {
-    window.addEventListener('keydown', (e) => {
-      if (this.isWalletModalOpen || this.isSettlementModalOpen || this.isRoomModalOpen) {
-        if (e.key === 'Escape') {
-          this.closeModals();
-        }
-        return;
-      }
-
-      if (e.key === 't' || e.key === 'T') {
-        if (this.state.phase === 'trade') {
-          this.openTradeDesk();
-        }
-      } else if (e.key === 'q' || e.key === 'Q') {
-        if (this.state.phase === 'receive') {
-          this.quickDraft();
-        }
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        this.handleSpaceKey();
-      } else if (e.key === 'Escape') {
-        this.selectedShopType = null;
-        this.selectedLotId = null;
-        this.renderAll();
-      }
-    });
+    if (typeof window === 'undefined') return;
+    window.addEventListener('keydown', this.handleKeyDownBound);
   }
 
   private handleSpaceKey(): void {
@@ -451,7 +1064,7 @@ export class RobinTownApp {
         this.startNewGame();
         break;
       case 'swap-points':
-        this.swapPointsForWif(this.calculatePlayerPoints(0));
+        this.openPointSwapModal();
         break;
     }
   }
@@ -485,6 +1098,11 @@ export class RobinTownApp {
       draftPlots(this.state, 0, lotIds);
       this.selectedDraftLots = [];
       this.tradeDeskController.updateGameState(this.state);
+      this.syncCarouselDeeds();
+      if (this.board3DRenderer) {
+        this.board3DRenderer.render(this.state, this.selectedLotId);
+      }
+      this.syncPhaseTheme();
       this.audio.playPhaseFanfare();
       this.renderAll();
       return true;
@@ -518,6 +1136,7 @@ export class RobinTownApp {
     if (this.state.phase !== 'trade') return;
     this.tradeDeskController.close();
     advancePhase(this.state);
+    this.syncPhaseTheme();
     this.audio.playPhaseFanfare();
     this.renderAll();
   }
@@ -539,6 +1158,10 @@ export class RobinTownApp {
 
     try {
       buildTile(this.state, 0, lotId, this.selectedShopType);
+      this.syncCarouselDeeds();
+      if (this.board3DRenderer) {
+        this.board3DRenderer.render(this.state, this.selectedLotId);
+      }
       this.audio.playTilePop();
       this.renderAll();
       return true;
@@ -562,14 +1185,26 @@ export class RobinTownApp {
       const boosted = calculateStakingBoost(playerHarvest, true);
       const bonus = boosted - playerHarvest;
       this.state.players[0].cash += bonus;
+      this.flywheelState.totalStakingYield += bonus;
       playerHarvest = boosted;
     }
 
+    this.syncCarouselDeeds();
+    if (this.board3DRenderer) {
+      this.board3DRenderer.render(this.state, this.selectedLotId);
+    }
+    this.syncPhaseTheme();
     this.audio.playCoinChime();
     this.renderAll();
 
     const currentPhase = this.state.phase as GamePhase;
     if (currentPhase === 'ended') {
+      if (!this.hasSettledMatchPool) {
+        this.hasSettledMatchPool = true;
+        const finalRankings = rankings(this.state);
+        const pool = calculateMatchPayouts(1000, finalRankings.map((p) => p.id));
+        this.flywheelState = applyMatchPayouts(this.flywheelState, pool);
+      }
       this.audio.playGameOverFanfare();
       this.openSettlementModal();
     }
@@ -590,6 +1225,12 @@ export class RobinTownApp {
 
     if (this.state.year >= 6) {
       this.state.phase = 'ended';
+      if (!this.hasSettledMatchPool) {
+        this.hasSettledMatchPool = true;
+        const finalRankings = rankings(this.state);
+        const pool = calculateMatchPayouts(1000, finalRankings.map((p) => p.id));
+        this.flywheelState = applyMatchPayouts(this.flywheelState, pool);
+      }
       this.audio.playGameOverFanfare();
       this.openSettlementModal();
     } else {
@@ -598,6 +1239,11 @@ export class RobinTownApp {
       this.tradeDeskController.updateGameState(this.state);
     }
 
+    this.syncCarouselDeeds();
+    if (this.board3DRenderer) {
+      this.board3DRenderer.render(this.state, this.selectedLotId);
+    }
+    this.syncPhaseTheme();
     this.selectedDraftLots = [];
     this.selectedShopType = null;
     this.renderAll();
@@ -619,6 +1265,11 @@ export class RobinTownApp {
     const points = this.calculatePlayerPoints(0);
     const swap = calculatePointSwap(points, 0.10, 0.03);
 
+    if (!this.hasSettledMatchPool) {
+      this.hasSettledMatchPool = true;
+      this.flywheelState = applyMatchPayouts(this.flywheelState, pool);
+    }
+
     return {
       rankings: finalRankings,
       matchPool: pool,
@@ -629,7 +1280,23 @@ export class RobinTownApp {
 
   public swapPointsForWif(points: number): PointSwapResult {
     const res = calculatePointSwap(points, 0.10, 0.03);
+    this.flywheelState = applyPointSwap(this.flywheelState, res);
+
+    // Credit net tokens to current active simulated account
+    const walletState = this.walletAdapter.getState();
+    if (walletState.account && res.netWif > 0) {
+      if (walletState.mode === 'simulation') {
+        const simMap = (this.walletAdapter as unknown as { simBalances?: Map<string, number> }).simBalances;
+        if (simMap) {
+          const addr = walletState.account.address.toLowerCase().trim();
+          const currentBal = simMap.get(addr) ?? walletState.account.balance;
+          simMap.set(addr, currentBal + res.netWif);
+        }
+      }
+    }
+
     this.audio.playCoinChime();
+    this.renderAll();
     return res;
   }
 
@@ -644,17 +1311,27 @@ export class RobinTownApp {
       startingCash: 50,
     });
     startYear(this.state);
+    this.hasSettledMatchPool = false;
     this.selectedDraftLots = [];
     this.selectedShopType = null;
     this.selectedLotId = null;
     this.closeModals();
     this.tradeDeskController.updateGameState(this.state);
+    this.syncCarouselDeeds();
+    if (this.board3DRenderer) {
+      this.board3DRenderer.render(this.state, this.selectedLotId);
+    }
+    this.syncPhaseTheme();
     this.audio.playPhaseFanfare();
     this.renderAll();
   }
 
   // Modals management
   public openWalletModal(): void {
+    if (this.walletFlywheelModal) {
+      this.walletFlywheelModal.open();
+      return;
+    }
     this.isWalletModalOpen = true;
     this.renderAll();
   }
@@ -669,10 +1346,16 @@ export class RobinTownApp {
     this.renderAll();
   }
 
+  public openPointSwapModal(): void {
+    this.isPointSwapModalOpen = true;
+    this.renderAll();
+  }
+
   public closeModals(): void {
     this.isWalletModalOpen = false;
     this.isSettlementModalOpen = false;
     this.isRoomModalOpen = false;
+    this.isPointSwapModalOpen = false;
     this.renderAll();
   }
 
@@ -690,6 +1373,9 @@ export class RobinTownApp {
     } else if (this.isRoomModalOpen) {
       modalEl.innerHTML = this.renderRoomModalHTML();
       this.bindRoomModalEvents(modalEl);
+    } else if (this.isPointSwapModalOpen) {
+      modalEl.innerHTML = this.renderPointSwapModalHTML();
+      this.bindPointSwapModalEvents(modalEl);
     } else {
       modalEl.innerHTML = '';
     }
@@ -808,7 +1494,7 @@ export class RobinTownApp {
             <div class="purse-metrics">
               <div class="metric-row">
                 <span>5% Permanent Burn:</span>
-                <span class="text-accent">${settlement.matchPool.burnedAmount} $wif (to 0x...dEaD)</span>
+                <span class="text-accent">${settlement.matchPool.burnedAmount} $wif (to dead address)</span>
               </div>
               <div class="metric-row">
                 <span>5% Community Vault:</span>
@@ -853,7 +1539,8 @@ export class RobinTownApp {
             </div>
           </div>
 
-          <div class="settlement-actions">
+          <div class="settlement-actions" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="btn-secondary" data-action="open-point-swap">Redeem Points for $wif</button>
             <button class="btn-primary" data-action="new-match">Start Fresh Match</button>
           </div>
         </div>
@@ -868,8 +1555,75 @@ export class RobinTownApp {
 
       if (target.dataset.modalClose) {
         this.closeModals();
+      } else if (target.dataset.action === 'open-point-swap') {
+        this.openPointSwapModal();
       } else if (target.dataset.action === 'new-match') {
         this.startNewGame();
+      }
+    });
+  }
+
+  private renderPointSwapModalHTML(): string {
+    const points = this.calculatePlayerPoints(0);
+    const swap = calculatePointSwap(points, 0.10, 0.03);
+    const walletState = this.walletAdapter.getState();
+    const balance = walletState.account?.balance ?? 0;
+
+    return `
+      <div class="modal-backdrop" data-modal-close="true"></div>
+      <div class="modal-dialog point-swap-modal">
+        <header class="modal-header">
+          <h3>Point-to-$wif Redemption Desk</h3>
+          <button class="btn-close" data-modal-close="true">&times;</button>
+        </header>
+        <div class="modal-body">
+          <p class="tab-desc">Convert performance score points into liquid $wif tokens credited directly to your connected wallet.</p>
+          <div class="point-swap-card">
+            <div class="swap-metrics">
+              <div class="metric-row">
+                <span>Earned Score Points:</span>
+                <span class="font-bold">${points.toLocaleString()} pts</span>
+              </div>
+              <div class="metric-row">
+                <span>Gross Conversion (10:1):</span>
+                <span>${swap.grossWif.toLocaleString()} $wif</span>
+              </div>
+              <div class="metric-row">
+                <span>3% Deflationary Burn Tax:</span>
+                <span class="text-accent">-${swap.burnedWif.toLocaleString()} $wif (burned to dead address)</span>
+              </div>
+              <div class="metric-row">
+                <span>Net Token Credit:</span>
+                <span class="text-green font-bold">+${swap.netWif.toLocaleString()} $wif</span>
+              </div>
+              <div class="metric-row">
+                <span>Current Wallet Balance:</span>
+                <span>${balance.toLocaleString()} $wif</span>
+              </div>
+            </div>
+          </div>
+          <div class="settlement-actions" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button class="btn-secondary" data-modal-close="true">Cancel</button>
+            <button class="btn-primary" data-action="confirm-swap" ${points <= 0 ? 'disabled' : ''}>
+              Confirm Swap & Credit ${swap.netWif} $wif
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private bindPointSwapModalEvents(modalEl: HTMLElement): void {
+    modalEl.addEventListener('click', (e) => {
+      const target = (e.target as HTMLElement).closest('[data-modal-close], [data-action]') as HTMLElement | null;
+      if (!target) return;
+
+      if (target.dataset.modalClose) {
+        this.closeModals();
+      } else if (target.dataset.action === 'confirm-swap') {
+        const points = this.calculatePlayerPoints(0);
+        this.swapPointsForWif(points);
+        this.closeModals();
       }
     });
   }

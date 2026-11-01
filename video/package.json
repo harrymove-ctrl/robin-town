@@ -1,0 +1,43 @@
+{
+  "name": "robin-town-video",
+  "version": "1.0.0",
+  "description": "Robin-Town Remotion Demo Film (Hackathon Submission Master 3:20 + X Launch Cut 0:44)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.539",
+    "@remotion/cli": "4.0.539",
+    "@remotion/google-fonts": "^4.0.539",
+    "@remotion/renderer": "4.0.539",
+    "@remotion/tailwind-v4": "4.0.539",
+    "culori": "^4.0.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.539",
+    "tailwindcss": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/culori": "^4.0.1",
+    "@types/node": "^22.10.0",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.56.1",
+    "tone": "^15.1.22",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "typecheck": "tsc --noEmit",
+    "palette": "node scripts/gen-palette.mjs",
+    "sound": "node scripts/make-sound.mjs",
+    "capture": "node scripts/capture-takes.mjs"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

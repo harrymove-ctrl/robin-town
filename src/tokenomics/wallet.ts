@@ -11,10 +11,161 @@
 
 export const ROBINHOOD_CHAIN_ID = 46631;
 export const ROBINHOOD_CHAIN_ID_HEX = '0xb627';
-export const ROBINHOOD_RPC_URL = 'https://rpc.testnet.robinhood.com';
-export const ROBINHOOD_EXPLORER_URL = 'https://explorer.testnet.robinhood.com';
+export const ROBINHOOD_RPC_URL = 'https://rpc.testnet.chain.robinhood.com';
+export const ROBINHOOD_EXPLORER_URL = 'https://explorer.testnet.chain.robinhood.com';
 export const ROBINHOOD_CHAIN_NAME = 'Robinhood Chain Testnet';
+
+export const ROBINHOOD_MAINNET_CHAIN_ID = 4663;
+export const ROBINHOOD_MAINNET_CHAIN_ID_HEX = '0x1237';
+export const ROBINHOOD_MAINNET_RPC_URL = 'https://rpc.mainnet.chain.robinhood.com';
+export const ROBINHOOD_MAINNET_EXPLORER_URL = 'https://robinhoodchain.blockscout.com';
+export const ROBINHOOD_TESTNET_L2_CHAIN_ID = 46630;
+export const ROBINHOOD_TESTNET_L2_CHAIN_ID_HEX = '0xb626';
+
+export const WIF_TOKEN_CONTRACT_ADDRESS = '0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B';
+export const WIF_TOKEN_DECIMALS = 18;
+export const WIF_TOKEN_SYMBOL = 'WIF';
+export const WIF_BLOCKSCOUT_TOKEN_URL = `${ROBINHOOD_MAINNET_EXPLORER_URL}/token/${WIF_TOKEN_CONTRACT_ADDRESS}`;
 export const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD';
+export const BURN_EXPLORER_URL = `${ROBINHOOD_MAINNET_EXPLORER_URL}/address/${BURN_ADDRESS}`;
+
+export interface OnChainWifProof {
+  ok: boolean;
+  mainnetChainId: number;
+  testnetChainId: number;
+  contractAddress: string;
+  tokenName: string;
+  tokenSymbol: string;
+  decimals: number;
+  mainnetBlockNumber: number;
+  testnetBlockNumber: number;
+  totalSupplyWif: number;
+  burnedDeadBalanceWif: number;
+  explorerUrl: string;
+  burnAddressUrl: string;
+  fetchedAt: string;
+}
+
+function pad32HexAddress(addr: string): string {
+  const cleaned = addr.trim().replace(/^0x/i, '').toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(cleaned)) {
+    throw new Error(`Invalid 20-byte EVM address: ${addr}`);
+  }
+  return cleaned.padStart(64, '0');
+}
+
+function pad32HexUint256(amount: number, decimals: number = WIF_TOKEN_DECIMALS): string {
+  if (amount < 0 || !Number.isFinite(amount)) {
+    throw new Error('ERC-20 uint256 amount must be finite and non-negative.');
+  }
+  const scale = 10n ** BigInt(decimals);
+  const whole = BigInt(Math.floor(amount));
+  const frac = BigInt(Math.round((amount - Math.floor(amount)) * 1e9)) * (scale / 1_000_000_000n);
+  const raw = whole * scale + frac;
+  return raw.toString(16).padStart(64, '0');
+}
+
+/**
+ * Encodes ERC-20 `balanceOf(address)` selector `0x70a08231`.
+ */
+export function encodeErc20BalanceOf(owner: string): string {
+  return `0x70a08231${pad32HexAddress(owner)}`;
+}
+
+/**
+ * Encodes ERC-20 `transfer(address,uint256)` selector `0xa9059cbb`.
+ */
+export function encodeErc20Transfer(
+  to: string,
+  amountTokens: number,
+  decimals: number = WIF_TOKEN_DECIMALS,
+): string {
+  return `0xa9059cbb${pad32HexAddress(to)}${pad32HexUint256(amountTokens, decimals)}`;
+}
+
+/**
+ * Encodes ERC-20 `approve(address,uint256)` selector `0x095ea7b3`.
+ */
+export function encodeErc20Approve(
+  spender: string,
+  amountTokens: number,
+  decimals: number = WIF_TOKEN_DECIMALS,
+): string {
+  return `0x095ea7b3${pad32HexAddress(spender)}${pad32HexUint256(amountTokens, decimals)}`;
+}
+
+/**
+ * Encodes burnable ERC-20 `burn(uint256)` selector `0x42966c68`.
+ */
+export function encodeErc20Burn(
+  amountTokens: number,
+  decimals: number = WIF_TOKEN_DECIMALS,
+): string {
+  return `0x42966c68${pad32HexUint256(amountTokens, decimals)}`;
+}
+
+/**
+ * Fetches live on-chain `$wif` contract state & `0x...dEaD` burn telemetry from Robinhood Chain.
+ * Uses local `/api/onchain-wif` relay first (for zero CORS friction), falling back to direct JSON-RPC.
+ */
+export async function fetchLiveOnChainWifProof(): Promise<OnChainWifProof | null> {
+  if (typeof fetch === 'undefined') return null;
+
+  if (
+    typeof window !== 'undefined' &&
+    (window.location?.protocol === 'http:' || window.location?.protocol === 'https:')
+  ) {
+    try {
+      const apiRes = await fetch('/api/onchain-wif', { cache: 'no-store' });
+      if (apiRes.ok) {
+        const data = (await apiRes.json()) as Partial<OnChainWifProof>;
+        if (data.ok && typeof data.mainnetBlockNumber === 'number') {
+          return data as OnChainWifProof;
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const rpcCall = async (method: string, params: unknown[]) => {
+      const res = await fetch(ROBINHOOD_MAINNET_RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      });
+      const json = (await res.json()) as { result?: string };
+      return json.result ?? '0x0';
+    };
+
+    const [blockHex, deadBalHex, supplyHex] = await Promise.all([
+      rpcCall('eth_blockNumber', []),
+      rpcCall('eth_call', [
+        { to: WIF_TOKEN_CONTRACT_ADDRESS, data: encodeErc20BalanceOf(BURN_ADDRESS) },
+        'latest',
+      ]),
+      rpcCall('eth_call', [{ to: WIF_TOKEN_CONTRACT_ADDRESS, data: '0x18160ddd' }, 'latest']),
+    ]);
+
+    return {
+      ok: true,
+      mainnetChainId: ROBINHOOD_MAINNET_CHAIN_ID,
+      testnetChainId: ROBINHOOD_TESTNET_L2_CHAIN_ID,
+      contractAddress: WIF_TOKEN_CONTRACT_ADDRESS,
+      tokenName: 'RobinWifHat',
+      tokenSymbol: WIF_TOKEN_SYMBOL,
+      decimals: WIF_TOKEN_DECIMALS,
+      mainnetBlockNumber: parseInt(blockHex, 16) || 0,
+      testnetBlockNumber: 0,
+      totalSupplyWif: Math.round(hexWeiToTokens(supplyHex)),
+      burnedDeadBalanceWif: Number(hexWeiToTokens(deadBalHex).toFixed(2)),
+      explorerUrl: WIF_BLOCKSCOUT_TOKEN_URL,
+      burnAddressUrl: BURN_EXPLORER_URL,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export type WalletMode = 'simulation' | 'web3';
 export type WalletStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -539,6 +690,116 @@ export class WalletAdapter {
       this.transactions.push(failedTx);
       throw new Error(failedTx.error);
     }
+  }
+
+  /**
+   * Alias for transfer to send tokens or burn fees.
+   */
+  public async sendTransaction(to: string, amount: number): Promise<WalletTransaction> {
+    return this.transfer(to, amount);
+  }
+
+  /**
+   * Queries live ERC-20 `$wif` token balance via `eth_call` (`balanceOf`) on Robinhood Chain.
+   */
+  public async getErc20Balance(
+    ownerAddress?: string,
+    contractAddress: string = WIF_TOKEN_CONTRACT_ADDRESS,
+  ): Promise<number> {
+    const target = ownerAddress ?? this.getState().account?.address;
+    if (!target) return 0;
+    if (this.mode === 'simulation' || !this.provider) {
+      return this.simBalances.get(normalizeAddress(target)) ?? 0;
+    }
+    try {
+      const hex = (await this.provider.request({
+        method: 'eth_call',
+        params: [{ to: contractAddress, data: encodeErc20BalanceOf(target) }, 'latest'],
+      })) as string;
+      return hexWeiToTokens(hex);
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Sends an ERC-20 `$wif` token `transfer(address,uint256)` (`0xa9059cbb`) transaction
+   * against the verified `$wif` contract (`0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`).
+   */
+  public async transferErc20(
+    to: string,
+    amount: number,
+    contractAddress: string = WIF_TOKEN_CONTRACT_ADDRESS,
+  ): Promise<WalletTransaction> {
+    if (this.mode === 'simulation') {
+      return this.transfer(to, amount);
+    }
+    if (amount <= 0 || !Number.isFinite(amount)) {
+      throw new Error('Transfer amount must be a positive finite number.');
+    }
+    const state = this.getState();
+    if (!state.account) {
+      throw new Error('No active wallet connected.');
+    }
+    if (!this.provider) {
+      throw new Error('Web3 provider not available for ERC-20 transfer.');
+    }
+    const fromAddress = state.account.address;
+    const data = encodeErc20Transfer(to, amount, this.chainConfig.decimals);
+    const hash = (await this.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: fromAddress, to: contractAddress, value: '0x0', data }],
+    })) as string;
+
+    const tx: WalletTransaction = {
+      hash,
+      from: fromAddress,
+      to,
+      amount,
+      timestamp: Date.now(),
+      status: 'confirmed',
+      mode: 'web3',
+    };
+    this.transactions.push(tx);
+    return tx;
+  }
+
+  /**
+   * Sends an ERC-20 `$wif` `approve(address,uint256)` (`0x095ea7b3`) transaction.
+   */
+  public async approveErc20(
+    spender: string,
+    amount: number,
+    contractAddress: string = WIF_TOKEN_CONTRACT_ADDRESS,
+  ): Promise<WalletTransaction> {
+    if (this.mode === 'simulation') {
+      return this.approve(spender, amount);
+    }
+    if (amount < 0 || !Number.isFinite(amount)) {
+      throw new Error('Approve amount must be non-negative.');
+    }
+    const state = this.getState();
+    if (!state.account || !this.provider) {
+      throw new Error('Web3 provider not available for ERC-20 approve.');
+    }
+    const fromAddress = state.account.address;
+    const data = encodeErc20Approve(spender, amount, this.chainConfig.decimals);
+    const hash = (await this.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: fromAddress, to: contractAddress, value: '0x0', data }],
+    })) as string;
+
+    const tx: WalletTransaction = {
+      hash,
+      from: fromAddress,
+      to: spender,
+      amount,
+      timestamp: Date.now(),
+      status: 'confirmed',
+      mode: 'web3',
+    };
+    this.transactions.push(tx);
+    return tx;
   }
 
   /**

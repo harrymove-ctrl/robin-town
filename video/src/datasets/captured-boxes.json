@@ -1,0 +1,110 @@
+{
+  "boxes": {
+    "C1": {
+      "x": 422,
+      "y": 297,
+      "w": 806,
+      "h": 435
+    },
+    "viewToggleBtn": {
+      "x": 1286,
+      "y": 32,
+      "w": 103,
+      "h": 31
+    },
+    "C2": {
+      "x": 1395,
+      "y": 32,
+      "w": 152,
+      "h": 30
+    },
+    "X1": {
+      "x": 1286,
+      "y": 32,
+      "w": 103,
+      "h": 31
+    },
+    "C3": {
+      "x": 536,
+      "y": 452,
+      "w": 389,
+      "h": 56
+    },
+    "proposeBtn": {
+      "x": 1252,
+      "y": 855,
+      "w": 145,
+      "h": 44
+    },
+    "C4": {
+      "x": 523,
+      "y": 465,
+      "w": 874,
+      "h": 77
+    },
+    "collectBtn": {
+      "x": 1678,
+      "y": 1022,
+      "w": 158,
+      "h": 44
+    },
+    "C5": {
+      "x": 759,
+      "y": 407,
+      "w": 402,
+      "h": 158
+    },
+    "C6": {
+      "x": 593,
+      "y": 245,
+      "w": 734,
+      "h": 247
+    },
+    "stakeBtn": {
+      "x": 606,
+      "y": 566,
+      "w": 297,
+      "h": 44
+    },
+    "C7": {
+      "x": 593,
+      "y": 633,
+      "w": 734,
+      "h": 139
+    },
+    "X2": {
+      "x": 593,
+      "y": 174,
+      "w": 734,
+      "h": 58
+    },
+    "C8": {
+      "x": 1666,
+      "y": 597,
+      "w": 240,
+      "h": 395
+    }
+  },
+  "events": {
+    "clip01Start": 5.136,
+    "clip01Toggle": 19.205,
+    "clip01Draft": 27.337,
+    "clip02Start": 3.428,
+    "clip02Propose": 15.935,
+    "clip03Start": 2.191,
+    "clip03Collect": 4.192,
+    "realPaydayText": "+240 $wif",
+    "clip04Start": 2.521,
+    "clip04Stake": 10.523,
+    "clip05Start": 1.69,
+    "clip06Start": 1.673
+  },
+  "realFlywheelStats": {
+    "burnedText": "1,524 $wif",
+    "vaultText": "682 $wif",
+    "podiumText": "7,200 $wif",
+    "onChainPillText": "● On-Chain Block #103,099,794 · 4,600,001 $wif burned on 0x…dEaD",
+    "walletAddress": "0x7F4C892B194D33E1A04F289012B59A7C4E1892A4",
+    "chainId": 46631
+  }
+}

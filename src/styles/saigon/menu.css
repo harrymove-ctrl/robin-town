@@ -1,0 +1,595 @@
+/* Local display and UI font faces with consistent cross-platform metrics. */
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/saigon/fonts/be-vietnam-regular.ttf') format('truetype');
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/saigon/fonts/be-vietnam-bold.ttf') format('truetype');
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Lora;
+  src: url('/assets/saigon/fonts/lora.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Lora;
+  src: url('/assets/saigon/fonts/lora-italic.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: Bungee;
+  src: url('/assets/saigon/fonts/bungee.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --font-ui: 'Be Vietnam Pro', sans-serif;
+  --font-book: 'Lora', Georgia, serif;
+  --font-title: 'Bungee', 'Be Vietnam Pro', sans-serif;
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  position: fixed;
+  inset: 0;
+  min-width: 0;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+button,
+a {
+  touch-action: manipulation;
+}
+img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+  font-size: 16px !important;
+  touch-action: pan-x pan-y;
+}
+.game-shell .map-viewport,
+.hud-menu,
+.belt-button,
+.pocket-main,
+.year-open {
+  touch-action: none;
+}
+.shop-tray,
+.address-strip {
+  touch-action: pan-x;
+}
+dialog,
+.modal-body,
+.plot-inspector,
+.research,
+.start-screen,
+.barter-plots,
+.phase-announcement,
+body.notebook-open #app {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.offer-tray {
+  touch-action: pan-x;
+}
+.game-brand,
+.start-logo {
+  font-family: var(--font-title);
+  font-weight: 400;
+}
+.game-shell .wallet strong,
+.phase-medal,
+.piece-count,
+.plot-target,
+.inspector-address {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.game-shell .district-identity strong,
+.plot-number,
+.address-slip {
+  font-family: var(--font-book);
+}
+.game-shell .address-slip.selected:after {
+  font-family: var(--font-ui);
+}
+.book-page,
+.ledger-dialog h2,
+.ledger-dialog h3,
+.ledger-signature {
+  font-family: var(--font-book);
+}
+.lot.built .owner-token {
+  width: 25px;
+  height: 25px;
+  right: -2px;
+  bottom: -2px;
+  filter: drop-shadow(1px 2px #122d25);
+}
+.lot:not(.built) .owner-token {
+  width: 35px;
+  height: 35px;
+  filter: drop-shadow(1px 2px #35472d80);
+}
+.game-shell .pocket-token img {
+  width: 29px;
+  height: 29px;
+}
+/* Six clear stops around a solid center. The active year is readable at a glance. */
+.game-shell .calendar {
+  --wheel-size: 124px;
+  width: var(--wheel-size);
+  height: var(--wheel-size);
+  right: 12px;
+  top: 12px;
+}
+.game-shell .year-wheel {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 3px 0 #081d16) drop-shadow(0 5px 8px #0c231e80);
+}
+.game-shell .wheel-art {
+  border: 3px solid #f0d593;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from -30deg, #526143 0deg 57deg, #c5a66a 57deg 60deg);
+  box-shadow: inset 0 0 0 3px #253e2c;
+}
+.game-shell .year-center {
+  width: 62%;
+  height: 62%;
+  justify-content: center;
+  border-radius: 50%;
+  background: #15382b;
+  border: 2px solid #d4b579;
+  color: #fff0be;
+  text-shadow: 0 2px #0a2117;
+  gap: 0;
+}
+.game-shell .year-center small {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 1px;
+  line-height: 1.4;
+  color: #e2d1a6;
+}
+.game-shell .year-center strong {
+  font-family: var(--font-ui);
+  font-size: 29px;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -1px;
+}
+.game-shell .year-center strong em {
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: #c5d6b7;
+}
+.game-shell .year-center > span {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffe8a4;
+}
+.game-shell .year-node {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #b9a26b;
+  background: #2e4934;
+  color: #f5e9c7;
+  text-shadow: none;
+  z-index: 1;
+  opacity: 1;
+}
+.game-shell .year-node.past {
+  background: #243d2a;
+  color: #bed4a5;
+  border-color: #91ab77;
+}
+.game-shell .year-node.current {
+  color: #143528;
+  background: #ffe8a2;
+  border: 2px solid #fff5d7;
+  box-shadow: 0 0 0 2px #755931;
+}
+.game-shell .year-pointer {
+  inset: -3px;
+  z-index: 2;
+}
+.game-shell .year-pointer span {
+  width: 12px;
+  height: 13px;
+  left: calc(50% - 6px);
+  background: #fff4c6;
+  border: 1px solid #533d1c;
+}
+.game-shell .year-open {
+  z-index: 4;
+}
+/* Start/pause screen: a single, tactile menu above the running neighborhood. */
+.start-screen[hidden] {
+  display: none;
+}
+.start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  background: #102e25;
+  color: #ffecc1;
+  isolation: isolate;
+}
+.menu-scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #082b25c7, #0d2e2599, #082b25c7),
+    url('/assets/saigon/city/saigon-city-board-v6.png') center/cover;
+  image-rendering: pixelated;
+  opacity: 0.7;
+}
+.start-panel {
+  width: min(100%, 440px);
+  text-align: center;
+  padding: 25px 34px 21px;
+  border: 2px solid #b89a60;
+  border-top: 5px solid #e0c28a;
+  border-bottom: 7px solid #685030;
+  border-radius: 9px;
+  background: linear-gradient(140deg, #264b3bf5, #123426f9);
+  box-shadow:
+    0 5px #0b241a,
+    0 20px 70px #041c16a6,
+    inset 0 0 0 5px #1c3a2c;
+}
+.start-kicker {
+  margin: 0 0 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ddc48f;
+}
+.start-logo {
+  font-size: 57px;
+  line-height: 1.03;
+  letter-spacing: 1px;
+  margin: 0;
+  color: #ffdf94;
+  text-shadow:
+    0 4px #6f4c2d,
+    0 7px #0d281e;
+}
+.start-logo span {
+  display: block;
+  font-size: 42px;
+  letter-spacing: 11px;
+  padding-left: 11px;
+  color: #fff0c3;
+}
+.menu-shops {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 104px;
+  margin: 9px 0 0;
+  filter: drop-shadow(0 5px #0b241970);
+}
+.menu-shops img {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+.menu-shops img:nth-child(2) {
+  width: 110px;
+  height: 110px;
+  margin: 0 -5px;
+  z-index: 1;
+}
+.start-description {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 9px 0 18px;
+  color: #d9e2c6;
+}
+.start-actions {
+  display: grid;
+  gap: 9px;
+}
+.start-play,
+.menu-option {
+  min-height: 48px;
+  width: 100%;
+  font-size: 16px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.start-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 25px;
+  background: linear-gradient(#ffe39b, #e1b357);
+  border: 1px solid #fff3c8;
+  color: #243b26;
+  box-shadow: 0 4px #70502c;
+  text-shadow: none;
+}
+.start-play:disabled {
+  opacity: 0.6;
+}
+.start-play > span {
+  font-size: 14px;
+}
+.menu-option {
+  background: #2d4b36;
+  color: #f6e6c3;
+  border: 1px solid #8e9768;
+  box-shadow: 0 3px #0c291c;
+}
+.menu-option:hover {
+  background: #3b6046;
+}
+.menu-option:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px #0c291c;
+}
+.save-caption {
+  font-size: 12px;
+  color: #bccfaf;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+.start-foot {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #b4c8a8;
+  margin: 14px 0 2px;
+}
+.artbook-link {
+  background: none;
+  border: 0;
+  min-height: 32px;
+  font-size: 11px;
+  color: #d6c99f;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.load-status {
+  margin-top: 17px;
+  min-height: 17px;
+  font-size: 11px;
+  color: #c8dbb7;
+}
+.load-status progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin: 0 0 7px;
+  accent-color: #e5c474;
+}
+.load-status progress[hidden] {
+  display: none;
+}
+.load-status button {
+  background: #ffe6a8;
+  color: #233d2b;
+  border: 0;
+  margin-top: 6px;
+  padding: 9px 14px;
+  min-height: 44px;
+  border-radius: 3px;
+}
+.menu-open #toast {
+  z-index: 95;
+}
+@media (max-width: 600px) {
+  .game-shell .calendar {
+    --wheel-size: 94px;
+    top: 8px;
+    right: 8px;
+  }
+  .game-shell .year-center small {
+    font-size: 9px;
+  }
+  .game-shell .year-center strong {
+    font-size: 24px;
+  }
+  .game-shell .year-center strong em {
+    font-size: 10px;
+  }
+  .game-shell .year-center > span {
+    font-size: 11px;
+  }
+  .game-shell .year-node {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+  .game-shell .year-pointer span {
+    width: 10px;
+    height: 11px;
+    left: calc(50% - 5px);
+  }
+  .game-shell .pocket-token img {
+    width: 19px;
+    height: 19px;
+  }
+  .start-panel {
+    padding: 20px 25px 15px;
+  }
+  .start-logo {
+    font-size: 49px;
+  }
+  .start-logo span {
+    font-size: 36px;
+  }
+  .start-description {
+    font-size: 13px;
+    margin: 7px 0 13px;
+  }
+  .menu-shops {
+    height: 86px;
+  }
+  .menu-shops img {
+    width: 82px;
+    height: 82px;
+  }
+  .menu-shops img:nth-child(2) {
+    width: 95px;
+    height: 95px;
+  }
+  .start-kicker {
+    font-size: 9px;
+    letter-spacing: 1.4px;
+  }
+}
+@media (max-height: 650px) {
+  .start-screen {
+    place-items: start center;
+  }
+  .start-panel {
+    margin: auto;
+  }
+  .start-kicker {
+    margin-bottom: 7px;
+  }
+  .menu-shops {
+    height: 75px;
+  }
+  .menu-shops img {
+    width: 76px;
+    height: 76px;
+  }
+  .menu-shops img:nth-child(2) {
+    width: 88px;
+    height: 88px;
+  }
+  .start-description {
+    margin: 7px 0 10px;
+  }
+  .start-actions {
+    gap: 7px;
+  }
+  .start-foot {
+    margin-top: 8px;
+  }
+  .load-status {
+    margin-top: 10px;
+  }
+}
+@media (max-height: 500px) and (min-width: 601px) {
+  .start-panel {
+    width: min(100%, 760px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 30px;
+    padding: 20px 30px;
+  }
+  .start-kicker,
+  .start-logo,
+  .menu-shops,
+  .start-description {
+    grid-column: 1;
+  }
+  .start-kicker {
+    grid-row: 1;
+  }
+  .start-logo {
+    grid-row: 2;
+  }
+  .menu-shops {
+    grid-row: 3;
+  }
+  .start-description {
+    grid-row: 4;
+  }
+  .start-actions {
+    grid-column: 2;
+    grid-row: 1/5;
+    align-content: center;
+  }
+  .load-status,
+  .start-foot,
+  .artbook-link {
+    grid-column: 1/3;
+  }
+  .start-logo {
+    font-size: 43px;
+  }
+  .start-logo span {
+    font-size: 33px;
+  }
+  .start-description {
+    font-size: 12px;
+  }
+  .game-shell .calendar {
+    --wheel-size: 92px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .start-panel {
+    animation: menu-arrive 0.35s ease-out;
+  }
+  .menu-shops img:nth-child(2) {
+    animation: shop-welcome 3s ease-in-out infinite;
+  }
+  @keyframes menu-arrive {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes shop-welcome {
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+}

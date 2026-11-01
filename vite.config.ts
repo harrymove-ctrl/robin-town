@@ -1,7 +1,34 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
+// @ts-expect-error ESM helper script shared with production Node server
+import { createMultiplayerRelay } from './scripts/ws-relay.mjs';
 
 export default defineConfig({
+  plugins: [
+    {
+      name: 'robin-town-ws-and-onchain-relay',
+      configureServer(server) {
+        const relay = createMultiplayerRelay();
+        server.middlewares.use((req, res, next) => {
+          if (relay.handleApiRequest(req, res)) return;
+          next();
+        });
+        server.httpServer?.on('upgrade', (req, socket, head) => {
+          relay.handleUpgrade(req, socket, head);
+        });
+      },
+      configurePreviewServer(server) {
+        const relay = createMultiplayerRelay();
+        server.middlewares.use((req, res, next) => {
+          if (relay.handleApiRequest(req, res)) return;
+          next();
+        });
+        server.httpServer?.on('upgrade', (req, socket, head) => {
+          relay.handleUpgrade(req, socket, head);
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

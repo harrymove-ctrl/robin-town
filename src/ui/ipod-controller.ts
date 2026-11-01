@@ -26,6 +26,14 @@ export interface iPodOptions {
   onMenu?: () => void;
 }
 
+/**
+ * Computes the number of discrete rotary notches given accumulated angle degrees.
+ * Pure mathematical quantization function: Math.floor(Math.abs(deltaDeg) / stepDeg).
+ */
+export function quantizeRotaryDegrees(deltaDeg: number, stepDeg = 15): number {
+  return Math.floor(Math.abs(deltaDeg) / stepDeg);
+}
+
 export const DRAG_STEP_DEGREES = 15;
 export const MIN_SPEED_THRESHOLD = 180;
 export const ACCELERATION_TIERS = [1, 2, 3, 5, 8, 13, 21, 34];
@@ -470,7 +478,7 @@ export class IPodController {
     // 15-degree notch quantization
     this.accumulatedDegrees += Math.abs(delta);
     if (this.accumulatedDegrees >= DRAG_STEP_DEGREES) {
-      const notches = Math.floor(this.accumulatedDegrees / DRAG_STEP_DEGREES);
+      const notches = quantizeRotaryDegrees(this.accumulatedDegrees, DRAG_STEP_DEGREES);
       this.accumulatedDegrees = this.accumulatedDegrees % DRAG_STEP_DEGREES;
 
       const totalSteps = notches * moveSign * multiplier;
@@ -667,7 +675,11 @@ export class IPodController {
   }
 
   private playClickAudio(): void {
-    if (this.isAudioMuted || !this.audioContext || !this.clickBuffer) return;
+    if (this.isAudioMuted) return;
+    if (!this.audioContext) {
+      this.initAudio();
+    }
+    if (!this.audioContext || !this.clickBuffer) return;
 
     const now = this.audioContext.currentTime;
     // 50ms piezo diaphragm spacing limit

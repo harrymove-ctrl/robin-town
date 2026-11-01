@@ -1,0 +1,930 @@
+/* Robin-Town enhancements layered cleanly onto the tabletop street-life UI */
+
+/* SolaceUI Exposure-Grid Shader Canvas on Start Screen & 3D City Backdrop */
+.robin-shader-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+
+#start-screen {
+  overflow-y: auto;
+}
+
+#start-screen .start-panel {
+  position: relative;
+  z-index: 2;
+  max-width: min(680px, 94vw);
+}
+
+.robin-kicker-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.robin-chain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: #13392a;
+  color: #8bf5b5;
+  border: 1px solid #2f855a;
+}
+
+.robin-chain-pill.burn {
+  background: #3d1f1a;
+  color: #ffb899;
+  border-color: #9c4221;
+}
+
+/* Match Entry Selector on Start Screen */
+.entry-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 12px;
+  text-align: left;
+}
+
+.entry-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 2px solid #c9b78b;
+  background: #fbf5e4;
+  color: #1f3529;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.entry-mode-card:hover {
+  transform: translateY(-1px);
+  border-color: #2f7f5f;
+}
+
+.entry-mode-card.active {
+  background: #eaf7ee;
+  border-color: #1f8a58;
+  box-shadow: 0 3px 0 #185e3d;
+}
+
+.entry-mode-card strong {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #143627;
+}
+
+.entry-mode-card small {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #485e50;
+}
+
+.entry-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #1f8a58;
+  color: #fff;
+  font-weight: 800;
+}
+
+.entry-mode-card[data-entry-mode="ranked"] .entry-tag {
+  background: #b7782c;
+}
+
+/* Apple Carousel Showcase Strip on Start Screen & Modal */
+.start-carousel-wrap {
+  margin: 12px 0 8px;
+  padding: 8px 6px 4px;
+  border-radius: 12px;
+  background: rgba(18, 46, 35, 0.92);
+  border: 1px solid #356951;
+  text-align: left;
+}
+
+.start-carousel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #a9dec0;
+  text-transform: uppercase;
+}
+
+.apple-carousel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.apple-carousel-viewport {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.apple-carousel-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.apple-carousel-track {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  margin: 0;
+  list-style: none;
+  align-items: stretch;
+}
+
+.apple-carousel-slide {
+  flex: 0 0 196px;
+  height: 76px;
+  cursor: pointer;
+}
+
+.apple-carousel-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 7px 10px;
+  background: #1a3d2f;
+  border: 1px solid #3c735a;
+  border-left-width: 4px;
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.apple-carousel-slide.active .apple-carousel-card,
+.apple-carousel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  border-color: #5eead4;
+}
+
+.apple-carousel-badge {
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #0d2219;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.apple-carousel-title {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f7f3e6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apple-carousel-meta {
+  font-size: 10px;
+  color: #c7dfd0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-income {
+  color: #f6d069;
+  font-weight: 700;
+}
+
+.apple-carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 22px;
+  padding-top: 2px;
+}
+
+.apple-carousel-tablist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 76%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.apple-carousel-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.apple-carousel-tab {
+  width: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.apple-carousel-tab[aria-selected="true"] {
+  width: 24px;
+  background: #39d98a;
+}
+
+.apple-carousel-play-button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  width: 20px;
+  height: 20px;
+  color: #f7f3e6;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Top HUD Utilities Cluster ($wif Hub, 2D/3D Switcher, iPod Toggle) */
+.game-hud-top {
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+}
+
+.calendar-heading {
+  font-size: 8.5px !important;
+  letter-spacing: 0.05em !important;
+  white-space: nowrap;
+}
+
+.robin-hud-utilities {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #1b4d36, #102a20);
+  border: 1px solid #3fa073;
+  border-radius: 8px;
+  padding: 4px 10px;
+  color: #a3f7c4;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.view-toggle-btn:hover {
+  background: linear-gradient(135deg, #246849, #173d2e);
+  border-color: #58c991;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.view-toggle-icon {
+  font-size: 13px;
+}
+
+.view-toggle-swap {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.view-mode-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: #102a20;
+  border: 1px solid #356852;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-mode-btn {
+  border: 0;
+  background: transparent;
+  color: #bdd8c8;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.view-mode-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.view-mode-btn.active {
+  background: #2ca56d;
+  color: #0b2217;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.wif-hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #1b4b38, #123527);
+  border: 1px solid #489e73;
+  color: #f7f4e8;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wif-hud-pill:hover {
+  border-color: #84f2b8;
+}
+
+.wif-hud-burn {
+  color: #ffb088;
+  font-weight: 800;
+}
+
+.wif-hud-boost {
+  background: #eec353;
+  color: #231b07;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.ipod-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #233f33;
+  border: 1px solid #4e7c67;
+  color: #f5efe0;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ipod-hud-btn.active {
+  background: #eec353;
+  color: #1c241e;
+  border-color: #f8df8c;
+}
+
+/* 3D Tabletop Isometric Street Tilt (Default 3D Tabletop Mode) */
+body[data-view-mode="tabletop-3d"] .board-frame {
+  perspective: 1500px;
+}
+
+body[data-view-mode="tabletop-3d"] .map-viewport {
+  transform: rotateX(14deg) scale(0.975);
+  transform-origin: 50% 54%;
+  border-radius: 14px;
+  box-shadow:
+    0 14px 0 #3f2d1f,
+    0 26px 48px rgba(8, 22, 16, 0.62);
+  border: 3px solid #cbb484;
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.32s ease;
+}
+
+body[data-view-mode="tabletop-3d"] .lot.built .built-shop {
+  filter: drop-shadow(0 6px 4px rgba(14, 24, 18, 0.52));
+  transform: translateY(-4px) scale(1.04);
+}
+
+body[data-view-mode="tabletop-3d"] .lot .owner-token {
+  filter: drop-shadow(0 4px 3px rgba(14, 24, 18, 0.55));
+}
+
+body[data-view-mode="tabletop-3d"] .lot.offered {
+  transform: translateY(-3px);
+  box-shadow:
+    0 5px 0 #9f741c,
+    0 10px 18px rgba(238, 195, 83, 0.45);
+}
+
+/* Full WebGL Three.js 3D City Mode */
+.three-city-stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  background: radial-gradient(circle at 50% 42%, #315344 0%, #233d32 82%);
+  overflow: hidden;
+  z-index: 3;
+}
+
+.three-city-stage .robin-shader-canvas {
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+body[data-view-mode="city-3d"] .three-city-stage {
+  display: block;
+}
+
+body[data-view-mode="city-3d"] .map-viewport {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-view-mode="city-3d"] .camera-hint {
+  display: none !important;
+}
+
+.three-city-canvas-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.three-city-toolbar {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  max-width: calc(100% - 28px);
+  box-sizing: border-box;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  background: rgba(25, 48, 38, 0.92);
+  border: 1px solid #cbb484;
+  box-shadow: 0 6px 18px rgba(10, 22, 16, 0.42);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: #f6efe0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.three-city-toolbar .three-city-label {
+  padding-right: 4px;
+  color: #eec353;
+  letter-spacing: 0.03em;
+}
+
+.three-city-toolbar .three-city-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(203, 180, 132, 0.42);
+  margin: 0 2px;
+}
+
+.three-city-toolbar button {
+  background: rgba(255, 248, 231, 0.12);
+  color: #f6efe0;
+  border: 1px solid rgba(203, 180, 132, 0.42);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.three-city-toolbar button:hover {
+  background: rgba(238, 195, 83, 0.24);
+  border-color: #eec353;
+}
+
+.three-city-toolbar button:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.three-city-toolbar button.active,
+.three-city-toolbar button[data-action="view-toggle"] {
+  background: #39a883;
+  color: #0b2217;
+  border-color: #6ee7b7;
+}
+
+.three-city-toolbar button[data-action="set-3d-atmo"].active-atmo {
+  background: #eec353;
+  color: #231906;
+  border-color: #ffe38f;
+}
+
+/* Collapsible Floating iPod Classic Mini-Dock */
+.robin-ipod-dock {
+  position: fixed;
+  right: 14px;
+  bottom: 88px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+
+.robin-ipod-dock[hidden] {
+  display: none !important;
+}
+
+.robin-ipod-card {
+  pointer-events: auto;
+  background: rgba(14, 31, 24, 0.94);
+  border: 2px solid #4d8068;
+  border-radius: 22px;
+  padding: 8px 10px 10px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s ease;
+}
+
+.robin-ipod-dock.collapsed .robin-ipod-card {
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.robin-ipod-dock.collapsed .robin-ipod-scale {
+  display: none !important;
+}
+
+.robin-ipod-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 6px;
+  color: #d6efe1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.robin-ipod-bar button {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  width: 20px;
+  height: 20px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.robin-ipod-scale {
+  width: 216px;
+  height: 345px;
+  overflow: hidden;
+}
+
+.robin-ipod-scale .ipod-classic-chassis {
+  transform: scale(0.72);
+  transform-origin: top left;
+  width: 300px;
+  height: 480px;
+  background: linear-gradient(145deg, #f3efe4, #d4ccb8);
+  border: 3px solid #8c826c;
+  border-radius: 28px;
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.robin-ipod-scale .ipod-screen {
+  width: 260px;
+  height: 180px;
+  background: #dbe7df;
+  border: 2px solid #1c3a2d;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #12291f;
+}
+
+.robin-ipod-scale .ipod-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: linear-gradient(180deg, #bfd4c7, #aac3b4);
+  border-bottom: 1px solid #6e8f7c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.robin-ipod-scale .ipod-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 165px;
+}
+
+.robin-ipod-scale .ipod-battery-icon {
+  display: flex;
+  gap: 1px;
+  border: 1px solid #234737;
+  padding: 1px;
+  border-radius: 2px;
+}
+
+.robin-ipod-scale .ipod-battery-cell {
+  width: 3px;
+  height: 6px;
+  background: #1f8a58;
+}
+
+.robin-ipod-scale .ipod-menu-items {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.robin-ipod-scale .ipod-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.robin-ipod-scale .ipod-menu-item.active {
+  background: #1c6b47;
+  color: #ffffff;
+}
+
+.robin-ipod-scale .ipod-click-wheel {
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff, #dcd7ca);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22), inset 0 2px 4px #ffffff;
+  margin-top: 22px;
+  position: relative;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.robin-ipod-scale .ipod-wheel-button {
+  position: absolute;
+  background: transparent;
+  border: none;
+  color: #3a4f44;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.robin-ipod-scale .ipod-btn-menu {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.robin-ipod-scale .ipod-btn-play {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.robin-ipod-scale .ipod-btn-prev {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.robin-ipod-scale .ipod-btn-next {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.robin-ipod-scale .ipod-select-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f6f3ea, #dfdacb);
+  border: 1px solid #bfb8a6;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18), inset 0 1px 2px #ffffff;
+  cursor: pointer;
+}
+
+/* $wif Flywheel & Robinhood Chain Hub Modal */
+.wif-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.wif-stat-box {
+  background: #f5eedb;
+  border: 1px solid #cbb98e;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wif-stat-box small {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #5b6d60;
+  text-transform: uppercase;
+}
+
+.wif-stat-box strong {
+  font-size: 15px;
+  color: #163829;
+}
+
+.wif-hub-section {
+  background: #fbf6e8;
+  border: 1px solid #d5c59d;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.wif-hub-section h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #173a2b;
+}
+
+.wif-hub-section p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #42584a;
+}
+
+.wif-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.wif-sim-pill {
+  border: 1px solid #bfa97a;
+  background: #fffdf7;
+  color: #1d3c2e;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wif-sim-pill.active {
+  background: #1f8a58;
+  color: #fff;
+  border-color: #16653f;
+}
+
+.room-code-input {
+  width: 110px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #b5a176;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: #fff;
+  color: #163829;
+}
+
+.money-symbol {
+  font-weight: 800;
+  font-size: 0.88em;
+}
+
+@media (max-width: 860px) {
+  .entry-mode-grid {
+    grid-template-columns: 1fr;
+  }
+  .wif-hub-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .wif-hud-burn {
+    display: none;
+  }
+  .ipod-hud-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .game-hud-top {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto !important;
+    gap: 5px !important;
+  }
+  .robin-hud-utilities .view-mode-segmented,
+  .robin-hud-utilities .wif-hud-pill,
+  .robin-hud-utilities .view-toggle-label {
+    display: none;
+  }
+  .robin-hud-utilities .view-toggle-btn {
+    padding: 5px 7px;
+    gap: 3px;
+  }
+  .three-city-toolbar {
+    left: 8px;
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+    border-radius: 14px;
+    padding: 4px 7px;
+    gap: 4px;
+  }
+  .three-city-toolbar .three-city-label,
+  .three-city-toolbar .three-city-sep {
+    display: none;
+  }
+  .three-city-toolbar button {
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+}
+
+/* ?debug=1 QA Telemetry & Hitbox Overlay */
+body[data-qa-debug="1"] button,
+body[data-qa-debug="1"] .lot {
+  outline: 1px dashed rgba(52, 211, 153, 0.72) !important;
+  outline-offset: -1px;
+}
+
+.robin-qa-debug-pill {
+  position: fixed;
+  left: 12px;
+  top: 90px;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(9, 24, 18, 0.92);
+  border: 1px solid #34d399;
+  color: #a7f3d0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 5px 9px;
+  border-radius: 6px;
+}

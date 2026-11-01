@@ -60,6 +60,36 @@ body {
   background-color: var(--bg-dark);
 }
 
+#bg-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Diorama Central Workspace */
+.diorama-workspace {
+  display: flex;
+  flex: 1;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.main-viewport {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+
 /* Board Viewport and Canvas */
 .board-container {
   flex: 1;
@@ -67,7 +97,7 @@ body {
   height: 100%;
   position: relative;
   overflow: hidden;
-  background-color: #070a12;
+  background-color: transparent;
 }
 
 .board-canvas {
@@ -79,6 +109,43 @@ body {
 
 .board-canvas:active {
   cursor: grabbing;
+}
+
+/* Property Deed Carousel Ribbon */
+.deed-carousel-container {
+  height: 130px;
+  width: 100%;
+  background: rgba(11, 15, 25, 0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-muted);
+  position: relative;
+  z-index: 15;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* Tactile iPod Classic Controller Dock */
+.controller-container {
+  width: 340px;
+  flex-shrink: 0;
+  height: 100%;
+  background: rgba(11, 15, 25, 0.62);
+  backdrop-filter: blur(22px);
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  position: relative;
+  z-index: 15;
+  overflow-y: auto;
+}
+
+.hud-container {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 25;
 }
 
 /* HUD Top Bar */
@@ -276,19 +343,20 @@ body {
 
 /* Activity Log Terminal Feed */
 .activity-feed-panel {
-  position: absolute;
-  top: 95px;
-  right: 16px;
+  position: fixed;
+  top: 118px;
+  left: 16px;
   width: 280px;
-  max-height: 190px;
-  background-color: rgba(11, 15, 25, 0.88);
-  border: 1px solid var(--border-muted);
-  border-radius: 6px;
-  padding: 8px;
-  z-index: 10;
+  max-height: 136px;
+  background-color: rgba(11, 15, 25, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  z-index: 22;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .feed-header {
@@ -329,11 +397,19 @@ body {
 
 /* HUD Bottom Dock: Actions and Drawer */
 .hud-bottom-dock {
+  position: fixed;
+  left: 16px;
+  right: 356px;
+  bottom: 142px;
   display: flex;
   flex-direction: column;
-  background-color: rgba(17, 24, 39, 0.95);
-  border-top: 2px solid var(--border-muted);
-  z-index: 20;
+  background-color: rgba(11, 15, 25, 0.84);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  z-index: 25;
 }
 
 .action-bar-container {
@@ -1117,3 +1193,382 @@ body {
 .font-bold {
   font-weight: bold;
 }
+
+/* Apple Carousel Component Styles */
+.apple-carousel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.apple-carousel-viewport {
+  flex: 1;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.apple-carousel-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.apple-carousel-track {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  margin: 0;
+  list-style: none;
+  height: 100%;
+  align-items: center;
+}
+
+.apple-carousel-slide {
+  flex: 0 0 200px;
+  height: 80px;
+  cursor: pointer;
+}
+
+.apple-carousel-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 8px 10px;
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid var(--border-muted);
+  border-left-width: 4px;
+  border-radius: 6px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.apple-carousel-slide.active .apple-carousel-card,
+.apple-carousel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border-color: var(--robin-green);
+}
+
+.apple-carousel-badge {
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #0b0f19;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.apple-carousel-title {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.apple-carousel-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-income {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.apple-carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 24px;
+  padding-bottom: 4px;
+}
+
+.apple-carousel-tablist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 70%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.apple-carousel-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.apple-carousel-tab {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.apple-carousel-tab[aria-selected="true"] {
+  width: 24px;
+  background: var(--robin-green);
+}
+
+.apple-carousel-play-button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.apple-carousel-play-button:hover {
+  color: var(--text-main);
+}
+
+/* iPod Classic Controller Chassis */
+.ipod-classic-chassis {
+  width: 300px;
+  height: 480px;
+  background: linear-gradient(145deg, #2a3447, #131a26);
+  border: 3px solid #3b475e;
+  border-radius: 28px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.ipod-screen {
+  width: 260px;
+  height: 180px;
+  background: #cddbe8;
+  border: 2px solid #0f172a;
+  border-radius: 8px;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #111827;
+}
+
+.ipod-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: linear-gradient(180deg, #b9c9d8, #a8bccd);
+  border-bottom: 1px solid #7c95ac;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ipod-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  text-align: center;
+}
+
+.ipod-status-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.ipod-battery-icon {
+  display: flex;
+  gap: 1px;
+  border: 1px solid #374151;
+  padding: 1px;
+  border-radius: 2px;
+}
+
+.ipod-battery-cell {
+  width: 3px;
+  height: 6px;
+  background: #10b981;
+}
+
+.ipod-menu-items {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ipod-menu-items::-webkit-scrollbar {
+  display: none;
+}
+
+.ipod-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ipod-menu-item.active {
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+  color: #ffffff;
+}
+
+.ipod-item-chevron {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Circular Click Wheel */
+.ipod-click-wheel {
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e5e7eb, #d1d5db);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+  margin-top: 24px;
+  position: relative;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.ipod-wheel-button {
+  position: absolute;
+  background: transparent;
+  border: none;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  transition: color 0.15s ease;
+}
+
+.ipod-wheel-button:hover {
+  color: #111827;
+}
+
+.ipod-btn-menu {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ipod-btn-play {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.ipod-btn-prev {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ipod-btn-next {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ipod-select-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f3f4f6, #e5e7eb);
+  border: 1px solid #d1d5db;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), inset 0 1px 2px #ffffff;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.ipod-select-button:active {
+  transform: translate(-50%, -50%) scale(0.96);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Burn Ticker and View Toggle */
+.burn-ticker-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  font-family: var(--font-retro);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background-color: rgba(31, 41, 55, 0.8);
+  border: 1px solid var(--border-muted);
+  color: var(--accent-cyan);
+  font-family: var(--font-retro);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-toggle-btn:hover {
+  background-color: rgba(0, 240, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+/* Responsive collapse for viewports under 1024px */
+@media (max-width: 1024px) {
+  .diorama-workspace {
+    flex-direction: column;
+  }
+  .controller-container {
+    width: 100%;
+    height: 320px;
+    border-left: none;
+    border-top: 2px solid var(--border-muted);
+  }
+  .hud-bottom-dock {
+    right: 16px;
+    bottom: 332px;
+  }
+}
+

@@ -64,6 +64,8 @@ export const PLAYER_COLORS: readonly string[] = Object.freeze([
   '#EEC353', // Player 1: Bullion Gold
   '#29B6F6', // Player 2: Ocean Cyan
   '#FF7043', // Player 3: Sunset Coral
+  '#AB47BC', // Player 4: Royal Purple
+  '#EC407A', // Player 5: Neon Rose
 ]);
 
 export const PLAYER_LIGHT_COLORS: readonly string[] = Object.freeze([
@@ -71,6 +73,8 @@ export const PLAYER_LIGHT_COLORS: readonly string[] = Object.freeze([
   '#FFE899',
   '#81D4FA',
   '#FFAB91',
+  '#E1BEE7',
+  '#F8BBD0',
 ]);
 
 /**

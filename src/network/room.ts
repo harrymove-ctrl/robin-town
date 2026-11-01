@@ -59,7 +59,7 @@ export interface RoomPlayer {
   name: string;
   address: string;
   avatar: string;
-  seat: number | null; // 0, 1, 2, 3 or null if spectator
+  seat: number | null; // 0..maxPlayers-1 or null if spectator
   isHost: boolean;
   isReady: boolean;
   connected: boolean;
@@ -71,7 +71,7 @@ export interface RoomState {
   status: RoomStatus;
   hostClientId: string;
   players: RoomPlayer[];
-  maxPlayers: number; // strictly 4 for robin-town
+  maxPlayers: number; // 3 to 6 players, default 4
   gameState: GameState | null;
   stateSeq: number;
   seed: number;
@@ -403,6 +403,302 @@ export class MemoryTransport implements NetworkTransport {
   }
 }
 
+export interface WebSocketRelayOptions {
+  wsUrl?: string;
+  isHost?: boolean;
+  autoReconnect?: boolean;
+}
+
+/**
+ * RFC 6455 Browser WebSocket transport connecting to `/ws?room=CODE&client=ID`
+ * for real cross-device multiplayer rooms on Railway and Vite dev servers.
+ */
+export class WebSocketRelayTransport implements NetworkTransport {
+  public status: TransportStatus = 'disconnected';
+  public readonly channelId: string;
+  public readonly localClientId: string;
+
+  private readonly roomCode: string;
+  private readonly wsUrl: string;
+  private readonly autoReconnect: boolean;
+  private socket: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private manuallyClosed = false;
+  private outboundQueue: string[] = [];
+  private messageListeners = new Set<TransportMessageListener>();
+  private statusListeners = new Set<TransportStatusListener>();
+
+  constructor(roomCode: string, localClientId: string, options?: WebSocketRelayOptions) {
+    this.roomCode = normalizeRoomCode(roomCode);
+    this.channelId = `ws:room:${this.roomCode}`;
+    this.localClientId = localClientId;
+    this.autoReconnect = options?.autoReconnect ?? true;
+
+    if (options?.wsUrl) {
+      const sep = options.wsUrl.includes('?') ? '&' : '?';
+      this.wsUrl = `${options.wsUrl}${sep}room=${encodeURIComponent(this.roomCode)}&client=${encodeURIComponent(localClientId)}&host=${options.isHost ? '1' : '0'}`;
+    } else if (typeof window !== 'undefined' && window.location?.host) {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.wsUrl = `${proto}//${window.location.host}/ws?room=${encodeURIComponent(this.roomCode)}&client=${encodeURIComponent(localClientId)}&host=${options?.isHost ? '1' : '0'}`;
+    } else {
+      this.wsUrl = `ws://127.0.0.1:8080/ws?room=${encodeURIComponent(this.roomCode)}&client=${encodeURIComponent(localClientId)}&host=${options?.isHost ? '1' : '0'}`;
+    }
+  }
+
+  public isCloudConnected(): boolean {
+    return Boolean(this.socket && this.socket.readyState === WebSocket.OPEN);
+  }
+
+  public async connect(): Promise<void> {
+    this.manuallyClosed = false;
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    if (typeof WebSocket === 'undefined') {
+      this.updateStatus('error');
+      return;
+    }
+
+    this.updateStatus('connecting');
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+      const timer = setTimeout(done, 1200);
+
+      try {
+        const ws = new WebSocket(this.wsUrl);
+        this.socket = ws;
+
+        ws.onopen = () => {
+          clearTimeout(timer);
+          this.updateStatus('connected');
+          while (this.outboundQueue.length > 0 && ws.readyState === WebSocket.OPEN) {
+            const msg = this.outboundQueue.shift();
+            if (msg) ws.send(msg);
+          }
+          done();
+        };
+
+        ws.onmessage = (ev: MessageEvent) => {
+          if (typeof ev.data !== 'string') return;
+          try {
+            const packet = JSON.parse(ev.data) as NetworkPacket;
+            if (packet && packet.roomCode === this.roomCode && packet.senderId !== this.localClientId) {
+              for (const listener of this.messageListeners) {
+                listener(packet);
+              }
+            }
+          } catch {}
+        };
+
+        ws.onerror = () => {
+          clearTimeout(timer);
+          done();
+        };
+
+        ws.onclose = () => {
+          clearTimeout(timer);
+          if (this.socket === ws) {
+            this.socket = null;
+          }
+          if (!this.manuallyClosed) {
+            this.updateStatus('disconnected');
+            if (this.autoReconnect) {
+              this.reconnectTimer = setTimeout(() => {
+                if (!this.manuallyClosed) void this.connect();
+              }, 2000);
+            }
+          }
+          done();
+        };
+      } catch {
+        clearTimeout(timer);
+        this.updateStatus('error');
+        done();
+      }
+    });
+  }
+
+  public disconnect(): void {
+    this.manuallyClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.outboundQueue = [];
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch {}
+      this.socket = null;
+    }
+    this.updateStatus('disconnected');
+    this.messageListeners.clear();
+    this.statusListeners.clear();
+  }
+
+  public send(packet: NetworkPacket): void {
+    this.broadcast(packet);
+  }
+
+  public broadcast(packet: NetworkPacket): void {
+    const raw = JSON.stringify(packet);
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(raw);
+      return;
+    }
+    if (!this.manuallyClosed) {
+      if (this.outboundQueue.length >= 32) {
+        this.outboundQueue.shift();
+      }
+      this.outboundQueue.push(raw);
+    }
+  }
+
+  public onMessage(listener: TransportMessageListener): () => void {
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
+  }
+
+  public onStatusChange(listener: TransportStatusListener): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => this.statusListeners.delete(listener);
+  }
+
+  private updateStatus(next: TransportStatus): void {
+    if (this.status === next) return;
+    this.status = next;
+    for (const listener of this.statusListeners) {
+      listener(next);
+    }
+  }
+}
+
+/**
+ * Combines same-device BroadcastChannel with cross-device WebSocket relay,
+ * deduplicating incoming packets by `packet.id`.
+ */
+export class HybridRoomTransport implements NetworkTransport {
+  public status: TransportStatus = 'disconnected';
+  public readonly channelId: string;
+  public readonly localClientId: string;
+
+  private readonly localBroadcast: BroadcastChannelTransport | null;
+  private readonly wsRelay: WebSocketRelayTransport | null;
+  private readonly seenPacketIds: string[] = [];
+  private readonly seenPacketSet = new Set<string>();
+  private messageListeners = new Set<TransportMessageListener>();
+  private statusListeners = new Set<TransportStatusListener>();
+
+  constructor(roomCode: string, localClientId: string, options?: WebSocketRelayOptions) {
+    const norm = normalizeRoomCode(roomCode);
+    this.channelId = `hybrid:room:${norm}`;
+    this.localClientId = localClientId;
+    this.localBroadcast =
+      typeof BroadcastChannel !== 'undefined'
+        ? new BroadcastChannelTransport(norm, localClientId)
+        : null;
+    const canUseWs =
+      typeof WebSocket !== 'undefined' &&
+      (Boolean(options?.wsUrl) ||
+        (typeof window !== 'undefined' &&
+          (window.location?.protocol === 'http:' || window.location?.protocol === 'https:') &&
+          Boolean(window.location?.host)));
+    this.wsRelay = canUseWs ? new WebSocketRelayTransport(norm, localClientId, options) : null;
+
+    const handleIncoming = (packet: NetworkPacket) => {
+      if (!packet || !packet.id) return;
+      if (this.seenPacketSet.has(packet.id)) return;
+      this.seenPacketSet.add(packet.id);
+      this.seenPacketIds.push(packet.id);
+      if (this.seenPacketIds.length > 256) {
+        const oldest = this.seenPacketIds.shift();
+        if (oldest) this.seenPacketSet.delete(oldest);
+      }
+      for (const listener of this.messageListeners) {
+        listener(packet);
+      }
+    };
+
+    this.localBroadcast?.onMessage(handleIncoming);
+    this.wsRelay?.onMessage(handleIncoming);
+    this.wsRelay?.onStatusChange(() => {
+      for (const listener of this.statusListeners) {
+        listener(this.status);
+      }
+    });
+  }
+
+  public isCloudConnected(): boolean {
+    return this.wsRelay?.isCloudConnected() ?? false;
+  }
+
+  public async connect(): Promise<void> {
+    if (this.localBroadcast) {
+      await this.localBroadcast.connect();
+      this.status = 'connected';
+      for (const listener of this.statusListeners) listener(this.status);
+    }
+    if (this.wsRelay) {
+      if (this.localBroadcast) {
+        void this.wsRelay.connect();
+      } else {
+        await this.wsRelay.connect();
+        this.status = this.wsRelay.status === 'connected' ? 'connected' : 'connecting';
+        for (const listener of this.statusListeners) listener(this.status);
+      }
+    }
+  }
+
+  public disconnect(): void {
+    this.localBroadcast?.disconnect();
+    this.wsRelay?.disconnect();
+    this.status = 'disconnected';
+    this.seenPacketIds.length = 0;
+    this.seenPacketSet.clear();
+    this.messageListeners.clear();
+    this.statusListeners.clear();
+  }
+
+  public send(packet: NetworkPacket): void {
+    this.broadcast(packet);
+  }
+
+  public broadcast(packet: NetworkPacket): void {
+    if (packet?.id && !this.seenPacketSet.has(packet.id)) {
+      this.seenPacketSet.add(packet.id);
+      this.seenPacketIds.push(packet.id);
+      if (this.seenPacketIds.length > 256) {
+        const oldest = this.seenPacketIds.shift();
+        if (oldest) this.seenPacketSet.delete(oldest);
+      }
+    }
+    if (this.localBroadcast && this.localBroadcast.status === 'connected') {
+      this.localBroadcast.broadcast(packet);
+    }
+    if (this.wsRelay) {
+      this.wsRelay.broadcast(packet);
+    }
+  }
+
+  public onMessage(listener: TransportMessageListener): () => void {
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
+  }
+
+  public onStatusChange(listener: TransportStatusListener): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => this.statusListeners.delete(listener);
+  }
+}
+
 export interface NetworkRoomConfig {
   roomCode: string;
   localPlayer: {
@@ -412,6 +708,7 @@ export interface NetworkRoomConfig {
   };
   transport?: NetworkTransport;
   isHost?: boolean;
+  maxPlayers?: number;
   heartbeatIntervalMs?: number;
   disconnectTimeoutMs?: number;
 }
@@ -435,6 +732,9 @@ export class NetworkRoom {
     this.heartbeatIntervalMs = config.heartbeatIntervalMs ?? 3000;
     this.disconnectTimeoutMs = config.disconnectTimeoutMs ?? 9000;
 
+    const rawMax = config.maxPlayers ?? 4;
+    const maxPlayers = Math.max(3, Math.min(6, rawMax));
+
     const isHost = Boolean(config.isHost);
     const initialPlayer: RoomPlayer = {
       clientId: this.localClientId,
@@ -453,7 +753,7 @@ export class NetworkRoom {
       status: 'lobby',
       hostClientId: isHost ? this.localClientId : '',
       players: [initialPlayer],
-      maxPlayers: 4,
+      maxPlayers,
       gameState: null,
       stateSeq: 0,
       seed: Math.floor(Math.random() * 1000000),
@@ -463,11 +763,22 @@ export class NetworkRoom {
 
     this.transport =
       config.transport ??
-      (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined'
-        ? new BroadcastChannelTransport(code, this.localClientId)
+      (typeof window !== 'undefined' &&
+      (typeof BroadcastChannel !== 'undefined' || typeof WebSocket !== 'undefined')
+        ? new HybridRoomTransport(code, this.localClientId, { isHost })
         : new MemoryTransport(code, this.localClientId));
 
     this.transport.onMessage((packet) => this.handleIncomingPacket(packet));
+  }
+
+  public isCloudRelayActive(): boolean {
+    if (this.transport instanceof HybridRoomTransport) {
+      return this.transport.isCloudConnected();
+    }
+    if (this.transport instanceof WebSocketRelayTransport) {
+      return this.transport.isCloudConnected();
+    }
+    return false;
   }
 
   public async start(): Promise<void> {
@@ -508,7 +819,14 @@ export class NetworkRoom {
 
   public setSeat(seatIndex: number): void {
     if (this.state.status !== 'lobby') return;
-    if (seatIndex < 0 || seatIndex > 3) throw new Error('Seat index must be 0, 1, 2, or 3');
+    if (seatIndex < 0 || seatIndex >= this.state.maxPlayers) {
+      const allowed = Array.from({ length: this.state.maxPlayers }, (_, i) => i);
+      const allowedStr =
+        this.state.maxPlayers === 4
+          ? '0, 1, 2, or 3'
+          : `${allowed.slice(0, -1).join(', ')}, or ${allowed[allowed.length - 1]}`;
+      throw new Error(`Seat index must be ${allowedStr}`);
+    }
     const existing = this.state.players.find((p) => p.seat === seatIndex && p.connected);
     if (existing && existing.clientId !== this.localClientId) {
       throw new Error(`Seat ${seatIndex} is already occupied by ${existing.name}`);
@@ -556,24 +874,26 @@ export class NetworkRoom {
       { name: 'Sherwood', address: '0x2000000000000000000000000000000000000001', avatar: 'avatar_1.png' },
       { name: 'Apex', address: '0x3000000000000000000000000000000000000002', avatar: 'avatar_2.png' },
       { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_3.png' },
+      { name: 'Nexus', address: '0x5000000000000000000000000000000000000004', avatar: 'avatar_1.png' },
+      { name: 'Solace', address: '0x6000000000000000000000000000000000000005', avatar: 'avatar_2.png' },
     ];
 
-    const fourPlayers: { name: string; address: string; avatar: string }[] = [];
+    const matchPlayers: { name: string; address: string; avatar: string }[] = [];
     let botIndex = 0;
 
-    for (let seat = 0; seat < 4; seat++) {
+    for (let seat = 0; seat < this.state.maxPlayers; seat++) {
       const human = this.state.players.find((p) => p.seat === seat && p.connected);
       if (human) {
-        fourPlayers.push({ name: human.name, address: human.address, avatar: human.avatar });
+        matchPlayers.push({ name: human.name, address: human.address, avatar: human.avatar });
       } else {
         const bot = botArchetypes[botIndex % botArchetypes.length];
         botIndex++;
-        fourPlayers.push(bot);
+        matchPlayers.push(bot);
       }
     }
 
     const rng = createSeededRng(matchSeed);
-    const initialEngineState = createGame({ players: fourPlayers, seed: matchSeed }, rng);
+    const initialEngineState = createGame({ players: matchPlayers, seed: matchSeed }, rng);
     this.state.gameState = initialEngineState;
     this.state.status = 'playing';
     this.state.seed = matchSeed;
@@ -678,7 +998,8 @@ export class NetworkRoom {
           );
 
         if (isSeatOccupied) {
-          const vacantSeat = [0, 1, 2, 3].find(
+          const allSeats = Array.from({ length: this.state.maxPlayers }, (_, i) => i);
+          const vacantSeat = allSeats.find(
             (seat) =>
               !this.state.players.some(
                 (p) => p.clientId !== sender.clientId && p.connected && p.seat === seat
@@ -707,11 +1028,14 @@ export class NetworkRoom {
           break;
         }
 
-        const availableSeat = [0, 1, 2, 3].find(
+        const availableSeats = Array.from({ length: this.state.maxPlayers }, (_, i) => i);
+        const availableSeat = availableSeats.find(
           (seat) => !this.state.players.some((p) => p.seat === seat && p.connected)
         );
         const assignedSeat =
           packet.payload.preferredSeat !== undefined &&
+          packet.payload.preferredSeat >= 0 &&
+          packet.payload.preferredSeat < this.state.maxPlayers &&
           !this.state.players.some((p) => p.seat === packet.payload.preferredSeat && p.connected)
             ? packet.payload.preferredSeat
             : availableSeat ?? null;
@@ -779,7 +1103,10 @@ export class NetworkRoom {
         }
         const player = this.state.players.find((p) => p.clientId === packet.senderId);
         const targetSeat = packet.payload?.targetSeat;
-        const isValidSeat = typeof targetSeat === 'number' && targetSeat >= 0 && targetSeat <= 3;
+        const isValidSeat =
+          typeof targetSeat === 'number' &&
+          targetSeat >= 0 &&
+          targetSeat < this.state.maxPlayers;
         const occupied =
           isValidSeat &&
           this.state.players.some(

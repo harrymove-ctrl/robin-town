@@ -22,14 +22,16 @@ export interface AppleCarouselOptions {
   autoplayDurationMs?: number;
 }
 
-export const CLONE_COUNT = 4;
+export const CLONES_PER_SIDE = 2;
+export const CLONE_COUNT = 2;
+export const TOTAL_CLONES = CLONES_PER_SIDE * 2;
 export const SETTLE_DELAY = 150;
 
 export class AppleCarousel {
   private container: HTMLElement;
   private items: CarouselItem[] = [];
   private onSelectCallback?: (item: CarouselItem) => void;
-  private autoplayDurationMs = 5000;
+  private autoplayDurationMs = 4000;
 
   // DOM Elements
   private rootElement: HTMLElement | null = null;
@@ -74,7 +76,7 @@ export class AppleCarousel {
 
   public getCloneCardCount(): number {
     if (this.items.length <= 1) return 0;
-    return Math.min(CLONE_COUNT, this.items.length) * 2;
+    return Math.min(CLONES_PER_SIDE, this.items.length) * 2;
   }
 
   public getCardElements(): HTMLElement[] {
@@ -169,7 +171,7 @@ export class AppleCarousel {
     const count = this.items.length;
     if (count === 0) return;
 
-    const cloneCount = count <= 1 ? 0 : Math.min(CLONE_COUNT, count);
+    const cloneCount = count <= 1 ? 0 : Math.min(CLONES_PER_SIDE, count);
 
     // 1. Leading clones: items.slice(count - cloneCount)
     if (cloneCount > 0) {
@@ -296,6 +298,13 @@ export class AppleCarousel {
       this.scrollDebounceTimer = setTimeout(() => {
         this.handleSettle();
       }, SETTLE_DELAY);
+      if (
+        this.scrollDebounceTimer &&
+        typeof this.scrollDebounceTimer === 'object' &&
+        typeof (this.scrollDebounceTimer as unknown as { unref: () => void }).unref === 'function'
+      ) {
+        (this.scrollDebounceTimer as unknown as { unref: () => void }).unref();
+      }
     };
 
     this.boundOnScrollEnd = () => {
@@ -409,11 +418,26 @@ export class AppleCarousel {
     return slideLeft - (viewportWidth - slideWidth) / 2;
   }
 
-  private writeScrollLeft(left: number): void {
+  private writeScrollLeft(left: number, silent = false): void {
     if (!this.viewportElement) return;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     this.ignoreScrollUntil = now + SETTLE_DELAY;
-    this.viewportElement.scrollLeft = left;
+    if (silent) {
+      const prevBehavior = this.viewportElement.style.scrollBehavior;
+      this.viewportElement.style.scrollBehavior = 'auto';
+      this.viewportElement.scrollLeft = left;
+      if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(() => {
+          if (this.viewportElement) {
+            this.viewportElement.style.scrollBehavior = prevBehavior;
+          }
+        });
+      } else {
+        this.viewportElement.style.scrollBehavior = prevBehavior;
+      }
+    } else {
+      this.viewportElement.scrollLeft = left;
+    }
   }
 
   private handleSettle(): void {
@@ -430,7 +454,7 @@ export class AppleCarousel {
       const realSlide = this.getRealSlide(logicalIndex);
       if (realSlide) {
         const targetSnapLeft = this.getSnapLeft(realSlide);
-        this.writeScrollLeft(targetSnapLeft);
+        this.writeScrollLeft(targetSnapLeft, true);
       }
     }
 
@@ -485,6 +509,10 @@ export class AppleCarousel {
       const isSelected = index === this.currentIndex;
       tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
       tab.classList.toggle('active', isSelected);
+      const fill = tab.querySelector('.apple-carousel-tab-fill') as HTMLElement | null;
+      if (fill && !isSelected) {
+        fill.style.transform = 'scaleX(0)';
+      }
     });
 
     // 3. Update root data-playing
@@ -612,6 +640,13 @@ export class AppleCarousel {
     this.fallbackTimer = setTimeout(() => {
       this.next();
     }, this.autoplayDurationMs);
+    if (
+      this.fallbackTimer &&
+      typeof this.fallbackTimer === 'object' &&
+      typeof (this.fallbackTimer as unknown as { unref: () => void }).unref === 'function'
+    ) {
+      (this.fallbackTimer as unknown as { unref: () => void }).unref();
+    }
   }
 
   private pauseAutoplayAnimation(): void {

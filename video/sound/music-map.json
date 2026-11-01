@@ -1,0 +1,31 @@
+{
+  "note": "Variant A (Saigon Lo-Fi Acoustic Nylon Guitar, Fender Rhodes & Warm Emerald Synth Drop) at 120 BPM (1 bar = 2.0s = 60f @ 30fps). Bars are 0-indexed [fromBar, toBar].",
+  "full": {
+    "seconds": 200,
+    "sections": [
+      ["intro", 0, 8],
+      ["grooveA", 8, 24],
+      ["grooveB", 24, 40],
+      ["build", 40, 44],
+      ["drop1", 44, 56],
+      ["breakdown", 56, 62],
+      ["drop2", 62, 74],
+      ["bridge", 74, 90],
+      ["quickstart", 90, 94.75],
+      ["silence", 94.75, 95],
+      ["outro", 95, 100]
+    ]
+  },
+  "x": {
+    "seconds": 44,
+    "sections": [
+      ["intro", 0, 4],
+      ["grooveA", 4, 12],
+      ["build", 12, 13],
+      ["drop2", 13, 18],
+      ["bridge", 18, 19.75],
+      ["silence", 19.75, 20],
+      ["outro", 20, 22]
+    ]
+  }
+}

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Chinatown negotiation board game adaptation for Robinhood Chain with $wif tokenomics flywheel and original pixel art assets.",
   "scripts": {
+    "start": "node scripts/serve-prod.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "npm run typecheck && npm run verify:assets && vite build",
     "typecheck": "tsc --noEmit",
@@ -18,7 +19,9 @@
     "test:e2e:tier5": "node --import tsx --test tests/e2e/tier5-adversarial.test.ts",
     "test:adversarial": "node --import tsx scripts/adversarial-stress.ts",
     "generate:assets": "node --import tsx scripts/generate-assets.ts",
+    "generate:english-assets": "node --import tsx scripts/generate-english-saigon-assets.ts",
     "verify:assets": "node --import tsx scripts/verify-assets.ts",
+    "verify:browser": "NODE_PATH=/Users/harryphan/.npm/_npx/e41f203b7505f1fb/node_modules node --import tsx scripts/verify-browser-e2e.ts",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

@@ -17,11 +17,13 @@ import {
   PLOT_LAYOUT,
   plotNeighbors,
   TOTAL_LOTS,
+  canBuildShop,
 } from './board-layout';
 import {
   botBuild,
   botDraft,
   evaluateTradeOffer,
+  generateBotTradeOffer,
 } from './bot';
 import type {
   GameAction,
@@ -59,7 +61,29 @@ export const DISTRICT_NAMES = [
 export const COMPLETE = COMPLETE_PAYOUTS;
 export const INCOMPLETE = INCOMPLETE_PAYOUTS;
 
-export const PLOT_KEEP_SCHEDULE = [5, 4, 3, 2, 2, 2];
+export const PLOT_KEEP_SCHEDULES: Record<number, number[]> = {
+  3: [6, 5, 4, 3, 3, 3],
+  4: [5, 4, 3, 2, 2, 2],
+  5: [4, 3, 2, 2, 2, 1],
+  6: [3, 3, 2, 2, 1, 1],
+};
+
+export const TILE_DRAW_SCHEDULES: Record<number, number[]> = {
+  3: [6, 5, 5, 5, 5, 5],
+  4: [5, 4, 4, 4, 4, 4],
+  5: [4, 3, 3, 3, 3, 3],
+  6: [4, 3, 3, 2, 2, 2],
+};
+
+export function getPlotKeepSchedule(playerCount: number): number[] {
+  return PLOT_KEEP_SCHEDULES[playerCount] ?? PLOT_KEEP_SCHEDULES[4];
+}
+
+export function getTileDrawSchedule(playerCount: number): number[] {
+  return TILE_DRAW_SCHEDULES[playerCount] ?? TILE_DRAW_SCHEDULES[4];
+}
+
+export const PLOT_KEEP_SCHEDULE = PLOT_KEEP_SCHEDULES[4];
 export const TILE_DEAL_SCHEDULE = [6, 5, 5, 5, 5, 5];
 export const TILE_KEEP_SCHEDULE = [5, 4, 3, 2, 2, 2];
 export const KEEP = PLOT_KEEP_SCHEDULE;
@@ -147,12 +171,8 @@ export function canPlace(state: GameState, player: number, id: number, shop: num
   if (!Number.isInteger(id) || !state.lots[id] || !Number.isInteger(shop) || !SHOPS[shop]) {
     return false;
   }
-  const lot = state.lots[id];
-  return (
-    lot.owner === player &&
-    lot.shop === null &&
-    (state.players[player]?.tiles[shop] ?? 0) >= 1
-  );
+  const tileCount = state.players[player]?.tiles[shop] ?? 0;
+  return canBuildShop(state.lots, id, player, shop, tileCount).valid;
 }
 
 /**
@@ -160,6 +180,13 @@ export function canPlace(state: GameState, player: number, id: number, shop: num
  */
 export function createGame(config?: GameConfig, rng: RandomSource = Math.random): GameState {
   const startingCash = config?.startingCash ?? 50;
+  const defaultBots = [
+    { name: 'Sherwood', address: '0x2000000000000000000000000000000000000001', avatar: 'avatar_1.png' },
+    { name: 'Apex', address: '0x3000000000000000000000000000000000000002', avatar: 'avatar_2.png' },
+    { name: 'Luna', address: '0x4000000000000000000000000000000000000003', avatar: 'avatar_3.png' },
+    { name: 'Nexus', address: '0x5000000000000000000000000000000000000004', avatar: 'avatar_1.png' },
+    { name: 'Solace', address: '0x6000000000000000000000000000000000000005', avatar: 'avatar_2.png' },
+  ];
   const defaultPlayers: Player[] = [
     {
       id: 0,
@@ -203,10 +230,19 @@ export function createGame(config?: GameConfig, rng: RandomSource = Math.random)
     ? config.players.map((p, idx) => ({
         id: idx,
         name: p.name,
-        address: p.address ?? defaultPlayers[idx].address,
+        address:
+          p.address ??
+          (idx === 0
+            ? '0x1000000000000000000000000000000000000000'
+            : (defaultBots[idx - 1]?.address ??
+               `0x${(idx + 1).toString().padStart(40, '0')}`)),
         cash: startingCash,
         tiles: [0, 0, 0, 0, 0, 0],
-        avatar: p.avatar ?? defaultPlayers[idx].avatar,
+        avatar:
+          p.avatar ??
+          (idx === 0
+            ? 'avatar_0.png'
+            : (defaultBots[idx - 1]?.avatar ?? `avatar_${idx % 4}.png`)),
         ownedLots: [],
       }))
     : defaultPlayers;
@@ -243,6 +279,7 @@ export function createGame(config?: GameConfig, rng: RandomSource = Math.random)
     logs: [],
     lastIncome: [],
     trades: 0,
+    incomingOffers: [],
   };
 
   startYear(state, rng);
@@ -276,7 +313,8 @@ export function newGame(
 export function startYear(state: GameState, rng: RandomSource = Math.random): GameState {
   state.phase = 'receive';
   state.lastIncome = [];
-  const count = PLOT_KEEP_SCHEDULE[state.year - 1];
+  const schedule = getPlotKeepSchedule(state.players.length);
+  const count = schedule[state.year - 1] ?? schedule[schedule.length - 1];
   state.draftCount = count;
 
   const unclaimed = state.lots
@@ -288,9 +326,10 @@ export function startYear(state: GameState, rng: RandomSource = Math.random): Ga
     Math.min(count + 2, unclaimed.length)
   );
 
-  // Distribute shop tiles: 5 in Year 1, 4 in Years 2 to 6
-  const tileCount = state.year === 1 ? 5 : 4;
-  for (let player = 0; player < 4; player++) {
+  // Distribute shop tiles according to player count schedule
+  const tileSchedule = getTileDrawSchedule(state.players.length);
+  const tileCount = tileSchedule[state.year - 1] ?? 4;
+  for (let player = 0; player < state.players.length; player++) {
     drawTiles(state, player, tileCount);
   }
 
@@ -339,13 +378,29 @@ export function draftPlots(
   state.pending = [];
 
   // Automated bot drafting for remaining bots
-  for (let botId = 1; botId < 4; botId++) {
+  for (let botId = 1; botId < state.players.length; botId++) {
     if (botId !== playerId) {
       botDraft(state, botId, state.draftCount, rng);
     }
   }
 
   state.phase = 'trade';
+  state.incomingOffers = [];
+
+  for (let botId = 1; botId < state.players.length; botId++) {
+    if (botId !== playerId) {
+      const offer = generateBotTradeOffer(botId, playerId, state);
+      if (offer) {
+        state.incomingOffers.push(offer);
+        const lotNumber = (offer.take.lots[0] ?? 0) + 1;
+        log(
+          state,
+          `${state.players[botId].name} proposed an OTC trade: ${offer.give.cash} $wif for Parcel ${lotNumber}.`
+        );
+      }
+    }
+  }
+
   log(
     state,
     `${state.players[playerId].name} claimed parcels ${lotIds.map((id) => id + 1).join(', ')}.`
@@ -368,6 +423,7 @@ export function claimPlots(
 export function advancePhase(state: GameState): GameState {
   if (state.phase === 'trade') {
     state.phase = 'build';
+    state.incomingOffers = [];
     log(state, 'OTC Liquidity Desk closed. Protocol deployment initiated.');
   } else if (state.phase === 'income') {
     if (state.year < 6) {
@@ -398,15 +454,19 @@ export function buildTile(
   if (state.phase !== 'build') {
     throw Error('Shops open during the Build phase.');
   }
-  if (!canPlace(state, playerId, lotId, shopType)) {
-    throw Error('Choose your own empty plot and a tile you have in hand.');
+  const tileCount = state.players[playerId]?.tiles[shopType] ?? 0;
+  const validation = canBuildShop(state.lots, lotId, playerId, shopType, tileCount);
+  if (!validation.valid) {
+    const reason = validation.reason || 'Choose your own empty plot and a tile you have in hand.';
+    log(state, `Build rejected on Parcel ${lotId + 1}: ${reason}`);
+    throw Error(reason);
   }
 
   state.lots[lotId].shop = shopType;
   state.lots[lotId].shopSize = SHOPS[shopType].size;
   state.players[playerId].tiles[shopType]--;
 
-  // Update cluster completeness flags
+  // Update cluster completeness flags across all groups owned by this player
   const playerGroups = groups(state, playerId);
   for (const g of playerGroups) {
     for (const lid of g.lots) {
@@ -440,12 +500,12 @@ export function collectIncome(state: GameState): { state: GameState; payouts: nu
   }
 
   // Execute greedy bot builds
-  for (let botId = 1; botId < 4; botId++) {
+  for (let botId = 1; botId < state.players.length; botId++) {
     botBuild(state, botId);
   }
 
   state.lastIncome = state.players.map((p) => income(state, p.id));
-  for (let p = 0; p < 4; p++) {
+  for (let p = 0; p < state.players.length; p++) {
     state.players[p].cash += state.lastIncome[p];
   }
 
@@ -483,11 +543,20 @@ export function validateOffer(state: GameState, offer: TradeOffer): boolean {
     throw Error('Deals are available only during the Trade phase.');
   }
   const partner = offer.toPlayer ?? offer.partner;
-  if (!Number.isInteger(partner) || partner === undefined || partner < 1 || partner > 3) {
+  const proposer = offer.fromPlayer ?? 0;
+  if (
+    !Number.isInteger(partner) ||
+    partner === undefined ||
+    partner < 0 ||
+    partner >= state.players.length ||
+    partner === proposer
+  ) {
     throw Error('Choose a trading partner.');
   }
+  if (!Number.isInteger(proposer) || proposer < 0 || proposer >= state.players.length) {
+    throw Error('Invalid trade proposer.');
+  }
 
-  const proposer = offer.fromPlayer ?? 0;
   const sides: [OfferSide, number][] = [
     [offer.give, proposer],
     [offer.take, partner],
@@ -597,6 +666,32 @@ export function executeTrade(
   for (const id of offer.give.lots) state.lots[id].owner = partner.id;
   for (const id of offer.take.lots) state.lots[id].owner = proposer.id;
 
+  // Recalculate cluster completeness on transferred and surrounding occupied parcels
+  if (offer.give.lots.length > 0 || offer.take.lots.length > 0) {
+    const affectedPlayers = [proposer.id, partner.id];
+    for (const pid of affectedPlayers) {
+      for (const lot of state.lots) {
+        if (lot.owner === pid) {
+          lot.isComplete = false;
+        }
+      }
+      const playerGroups = groups(state, pid);
+      for (const g of playerGroups) {
+        for (const lid of g.lots) {
+          state.lots[lid].isComplete = g.isComplete;
+        }
+      }
+    }
+  }
+
+  if (state.incomingOffers && state.incomingOffers.length > 0) {
+    state.incomingOffers = state.incomingOffers.filter((o) => {
+      if (o === offer) return false;
+      const oPartner = o.toPlayer ?? o.partner ?? 0;
+      return o.take.lots.every((lid) => state.lots[lid].owner === oPartner);
+    });
+  }
+
   state.trades++;
   log(
     state,
@@ -637,7 +732,8 @@ export function validSave(value: unknown): value is GameState {
     s.year >= 1 &&
     s.year <= 6 &&
     Array.isArray(s.players) &&
-    s.players.length === 4 &&
+    s.players.length >= 3 &&
+    s.players.length <= 6 &&
     Array.isArray(s.lots) &&
     s.lots.length === 72 &&
     Array.isArray(s.bag) &&

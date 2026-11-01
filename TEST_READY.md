@@ -10,20 +10,22 @@ All tests execute through the native Node.js test runner paired with tsx. Zero e
 
 | Command | Scope | Target Test Files | Timeout |
 |---|---|---|---|
-| `npm test` | Unified full suite (Unit + E2E) | `tests/**/*.test.ts` (491 tests) | 30s |
-| `npm run test:unit` | Core engine, bot, and math | `tests/unit/**/*.test.ts` (334 tests) | 15s |
-| `npm run test:e2e` | Complete 5-tier E2E verification | `tests/e2e/**/*.test.ts` (157 tests) | 30s |
+| `npm test` | Unified full suite (Unit + E2E) | `tests/**/*.test.ts` (916 tests across 217 suites) | 30s |
+| `npm run test:unit` | Core engine, bot, and math | `tests/unit/**/*.test.ts` (759 tests across 163 suites) | 15s |
+| `npm run test:e2e` | Complete 5-tier E2E verification | `tests/e2e/**/*.test.ts` (157 tests across 54 suites) | 30s |
 | `npm run test:e2e:tier1` | Tier 1: Feature Coverage (60 tests) | `tests/e2e/tier1-features.test.ts` | 10s |
 | `npm run test:e2e:tier2` | Tier 2: Boundary & Corner Cases (60 tests) | `tests/e2e/tier2-boundaries.test.ts` | 10s |
 | `npm run test:e2e:tier3` | Tier 3: Pairwise Combinations (12 tests) | `tests/e2e/tier3-pairwise.test.ts` | 10s |
 | `npm run test:e2e:tier4` | Tier 4: Real-World Scenarios (6 tests) | `tests/e2e/tier4-scenarios.test.ts` | 15s |
 | `npm run test:e2e:tier5` | Tier 5: Adversarial Hardening (19 tests) | `tests/e2e/tier5-adversarial.test.ts` | 15s |
 | `npm run test:adversarial` | Empirical stress testing harness | `scripts/adversarial-stress.ts` | 30s |
+| `npm run verify:assets` | Asset health and signature verification | `scripts/verify-assets.ts` (69 assets) | 10s |
+| `npm run verify:browser` | Headless Playwright multi-viewport E2E | `scripts/verify-browser-e2e.ts` (Desktop & Mobile) | 60s |
 
 ### Execution Semantics
 
 * **Exit Code Contract**: Exit code 0 indicates 100% test passes. Any non-zero exit code indicates an assertion or runtime failure.
-* **Execution Performance**: Sub-second execution for individual tiers, under 1.0 second total for all 157 E2E tests, and under 1.5 seconds for the entire 491-test unified suite.
+* **Execution Performance**: Sub-second execution for individual tiers, under 0.5 seconds for all 157 E2E tests, and approximately 1.5 seconds for the entire 916-test unified suite.
 * **Deterministic Isolation**: Seeded pseudo-random number generator (`createDeterministicRng`) guarantees byte-for-byte reproducibility across runs.
 
 ## 5-Tier Test Architecture Breakdown
@@ -48,7 +50,7 @@ Every inventoried feature from ORIGINAL_REQUEST.md and PROJECT.md is mapped acro
 | F1 | Execution Plan & Thematic Docs | ORIGINAL_REQUEST § R1 | 5 tests | 5 tests | Included in F1 x F2 | Included in S1 | Docs schema integrity | READY |
 | F2 | Thematic Mapping & Dictionary | ORIGINAL_REQUEST § R1 | 5 tests | 5 tests | Included in F2 x F5 | Included in S1 | M3 nomenclature mutation | READY |
 | F3 | Pixel Art Asset Pipeline | ORIGINAL_REQUEST § R4 | 5 tests | 5 tests | Included in F3 x F4 | Included in S1 | Asset pipeline verification | READY |
-| F4 | Visual Assets & Rendering | ORIGINAL_REQUEST § R4 | 5 tests | 5 tests | P9 (F4 x F10), P11 (F4 x F5) | Included in S1 | 65/65 asset integrity | READY |
+| F4 | Visual Assets & Rendering | ORIGINAL_REQUEST § R4 | 5 tests | 5 tests | P9 (F4 x F10), P11 (F4 x F5) | Included in S1 | 69/69 asset integrity | READY |
 | F5 | Core Game Engine & Rules | ORIGINAL_REQUEST § R2 | 5 tests | 5 tests | P1, P4, P7, P11 | S1, S2, S5, S6 | Suite 1, Suite 2, Suite 6 | READY |
 | F6 | AI Bot Negotiation Engine | ORIGINAL_REQUEST § R2 | 5 tests | 5 tests | P1 (F5 x F6), P2 (F6 x F10) | S1, S2, S3, S5 | Suite 2 monopoly trade, M7 | READY |
 | F7 | $wif Tokenomics Flywheel | ORIGINAL_REQUEST § R3 | 5 tests | 5 tests | P3, P4, P5, P6, P12 | S1, S2, S3 | Suite 3 burn run, M4, M5 | READY |
@@ -135,6 +137,15 @@ Located in `tests/e2e/tier5-adversarial.test.ts`. Integrates empirical white-box
 * **Suite 5: Invariant Mutation Sensitivity Verifications (8 Mutations)**: Validates that test assertions genuinely catch injected defects across payout curves, parcel counts, district nomenclature, buy-in burn sinks, casual point swaps, wallet initial balances, AI bot risk profiles, and room code constraints.
 * **Suite 6: Board Geometry and District Isolation Enforcement**: Proves that all 72 lots in ADJACENCY_GRAPH are strictly block-internal with zero cross-district connections, prevents cross-street parcel clustering, and blocks illegal expansion of completed businesses.
 * **Suite 7: Wallet Mode Transition and Resilient Fallback Handling**: Verifies seamless transitions between simulation mode and Web3 EIP-1193 providers, testing missing provider fallback, user rejection error handling, and mid-game provider disconnect recovery.
+
+## Multi-Viewport Headless Browser Verification Matrix (Milestone M13)
+
+Implemented in `scripts/verify-browser-e2e.ts` and executed via `npm run verify:browser`. Headless Chromium navigates the production application bundle in `dist/` across Desktop and Mobile form factors, validating visual integrity, user interaction, and layout contracts:
+
+| Viewport | Dimensions | Target Scope | Key Assertions | Status |
+|---|---|---|---|---|
+| Desktop | 1440x900 | Complete UI, 3D Canvas, iPod Dock | 0 console errors, 0 page errors, 0 HTTP 404s, Carousel autoplay toggle, $wif modal, 3D city canvas and shader active, 1-click view toggle, segmented mode buttons, iPod dock expansion and collapse | VERIFIED |
+| Mobile | 390x844 | Responsive Layout & Non-Obstruction | 0 console errors, 0 page errors, 0 HTTP 404s, Carousel interaction, $wif modal, 3D city canvas active, 1-click view toggle, non-obstruction responsive hiding of iPod dock | VERIFIED |
 
 ## Quality and Verification Invariants
 

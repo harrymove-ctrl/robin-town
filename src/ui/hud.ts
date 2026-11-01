@@ -22,6 +22,7 @@ export interface TopBarViewModel {
   phaseTitle: string;
   phaseSubtitle: string;
   isStaked: boolean;
+  totalBurned?: number;
 }
 
 export interface PlayerCardViewModel {
@@ -98,6 +99,8 @@ export const PLAYER_COLORS: readonly string[] = Object.freeze([
   '#EEC353',
   '#29B6F6',
   '#FF7043',
+  '#AB47BC',
+  '#EC407A',
 ]);
 
 const PHASE_TITLES: Record<GamePhase, { title: string; subtitle: string }> = {
@@ -128,7 +131,8 @@ const PHASE_TITLES: Record<GamePhase, { title: string; subtitle: string }> = {
  */
 export function projectTopBarViewModel(
   state: GameState,
-  isStaked = true
+  isStaked = true,
+  totalBurned = 0
 ): TopBarViewModel {
   const info = PHASE_TITLES[state.phase] || {
     title: state.phase,
@@ -141,6 +145,7 @@ export function projectTopBarViewModel(
     phaseTitle: info.title,
     phaseSubtitle: info.subtitle,
     isStaked,
+    totalBurned,
   };
 }
 
@@ -398,6 +403,7 @@ export interface HudEventHandlers {
   onDraftToggle?: (lotId: number) => void;
   onWalletClick?: () => void;
   onAudioToggle?: () => void;
+  onViewToggle?: () => void;
 }
 
 /**
@@ -418,9 +424,11 @@ export class HudManager {
     selectedDraftLots: number[] = [],
     selectedShopType: number | null = null,
     walletLabel = 'Off-Chain Sim: 10,000 $wif',
-    isAudioMuted = false
+    isAudioMuted = false,
+    totalBurned = 0,
+    viewMode: '2d' | '3d' = '3d'
   ): void {
-    const topBar = projectTopBarViewModel(state);
+    const topBar = projectTopBarViewModel(state, true, totalBurned);
     const ribbon = projectPlayerRibbonViewModel(state);
     const actions = projectActionBarViewModel(state, selectedDraftLots, selectedShopType);
     const drawer = projectDrawerViewModel(state, 0, selectedShopType, selectedDraftLots);
@@ -447,9 +455,16 @@ export class HudManager {
         </div>
 
         <div class="topbar-actions">
+          <div class="burn-ticker-pill" title="Total $wif burned permanently to dead address">
+            <span class="burn-icon">🔥</span>
+            <span class="burn-label">${totalBurned.toLocaleString()} $wif</span>
+          </div>
           <button class="wallet-pill" data-action="wallet-toggle" title="Switch between Simulation and Robinhood Chain">
             <span class="status-dot"></span>
             <span class="wallet-label">${walletLabel}</span>
+          </button>
+          <button class="view-toggle-btn" data-action="view-toggle" title="Toggle 2D or 3D view mode">
+            <span class="view-label">${viewMode.toUpperCase()}</span>
           </button>
           <button class="audio-toggle-btn ${isAudioMuted ? 'muted' : ''}" data-action="audio-toggle" title="Toggle Sound">
             ${isAudioMuted ? '🔇' : '🔊'}
@@ -570,6 +585,8 @@ export class HudManager {
         this.handlers.onWalletClick?.();
       } else if (target.dataset.action === 'audio-toggle') {
         this.handlers.onAudioToggle?.();
+      } else if (target.dataset.action === 'view-toggle') {
+        this.handlers.onViewToggle?.();
       } else if (target.dataset.actionId) {
         this.handlers.onActionClick?.(target.dataset.actionId);
       } else if (target.dataset.shopType !== undefined) {

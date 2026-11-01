@@ -880,6 +880,24 @@ export const TOKEN_PALETTES: Palette[] = [
     L: [255, 171, 145, 255],
     W: [255, 255, 255, 255],
   },
+  // Player 4: Royal Purple
+  {
+    '.': [0, 0, 0, 0],
+    '#': [11, 15, 25, 255],
+    C: [171, 71, 188, 255],
+    c: [123, 31, 162, 255],
+    L: [225, 190, 231, 255],
+    W: [255, 255, 255, 255],
+  },
+  // Player 5: Neon Rose
+  {
+    '.': [0, 0, 0, 0],
+    '#': [11, 15, 25, 255],
+    C: [236, 64, 122, 255],
+    c: [194, 24, 91, 255],
+    L: [248, 187, 208, 255],
+    W: [255, 255, 255, 255],
+  },
 ];
 
 export const TOKEN_MATRICES: string[][] = [
@@ -1681,9 +1699,9 @@ export async function generateAssets(targetDir?: string): Promise<void> {
   fs.writeFileSync(path.join(publicAssets, 'usdg-note.png'), usdgPng);
   fs.writeFileSync(path.join(publicAssets, 'usdg-note.svg'), usdgSvg);
 
-  // 4c. Player tokens (0..3)
-  for (let i = 0; i < 4; i++) {
-    const tokenRgba = matrixToRgba(TOKEN_MATRICES[i], TOKEN_PALETTES[i], 32, 32);
+  // 4c. Player tokens (0..5)
+  for (let i = 0; i < 6; i++) {
+    const tokenRgba = matrixToRgba(TOKEN_MATRICES[i % TOKEN_MATRICES.length], TOKEN_PALETTES[i], 32, 32);
     const tokenPng = encodePng(32, 32, tokenRgba);
 
     fs.writeFileSync(path.join(publicAssets, 'tokens', `token_${i}.png`), tokenPng);

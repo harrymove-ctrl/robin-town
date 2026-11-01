@@ -112,6 +112,40 @@ export const BOT_PERSONALITIES: Record<number, BotPersonality> = {
       rejected: 'Too illiquid for my books right now. Give me something that flows.',
     },
   },
+  4: {
+    id: 4,
+    name: 'Nexus',
+    title: 'The Autonomous Protocol Optimizer',
+    avatar: 'avatar_1.png',
+    profitMargin: 1.06,
+    riskTolerance: 0.5,
+    preferredShops: [2, 3],
+    preferredDistricts: [3, 1],
+    dialogue: {
+      greeting: 'Connection established. Present your optimization parameters for verification.',
+      thinking: 'Simulating deterministic payout scenarios across all epochs...',
+      accepted: 'Equilibrium reached. Settlement batch committed to the state machine.',
+      counteroffer: 'Suboptimal allocation detected. Add {shortfall} $wif to achieve Pareto efficiency.',
+      rejected: 'Transaction rejected. Variance exceeds risk-neutral threshold by {shortfall} $wif.',
+    },
+  },
+  5: {
+    id: 5,
+    name: 'Solace',
+    title: 'The Compassionate Community Steward',
+    avatar: 'avatar_2.png',
+    profitMargin: 1.02,
+    riskTolerance: 0.75,
+    preferredShops: [0, 1],
+    preferredDistricts: [0, 4],
+    dialogue: {
+      greeting: 'Welcome, neighbor! Let us trade fairly and help our whole district thrive.',
+      thinking: 'Considering how this trade helps both our storefronts grow...',
+      accepted: 'Wonderful! A thriving neighborhood begins with great partnership.',
+      counteroffer: 'We are almost there, friend. Could you top up {shortfall} $wif so we both break even?',
+      rejected: 'I wish I could help, but this spread would leave my shops unable to build this year.',
+    },
+  },
 };
 
 export const BOT_PROFILES = BOT_PERSONALITIES;

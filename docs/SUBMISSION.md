@@ -1,54 +1,58 @@
-# Robin-Town: Hackathon Submission Guide and Action Checklist
+# Robin Town: Hackathon Submission Package and Final Checklist
 
-## Project Summary
-**Robin-Town** is a Web3 negotiation and DeFi property board game built for Robinhood Chain, inspired by the tabletop classic Chinatown and `saigon-town`. Up to 4 players (human wallets or autonomous AI bot traders `Sherwood`, `Apex`, and `Luna`) compete across 6 Epochs to acquire 72 city parcels across 6 Robinhood Chain financial districts, draft 120 DeFi protocol tiles across 6 categories (including the `Stock Token Bridge`), negotiate free-form bilateral deals on the OTC Liquidity Desk, and harvest exponential `$wif` yields.
+## Submission Links and On-Chain Proof
 
-* **GitHub Repository**: https://github.com/harrymove-ctrl/robin-town
-* **Full Goal Checklist for `@tung-lee`**: [`docs/TUNG_LEE_CHECKLIST.md`](./TUNG_LEE_CHECKLIST.md)
-* **Diorama Playbook & Code Kit (`sloemo01/diorama`)**: [`docs/diorama-kit/`](./diorama-kit/)
+* **Live Playable URL (Railway HTTPS + WSS)**: [https://robin-town-production.up.railway.app](https://robin-town-production.up.railway.app)
+* **GitHub Repository**: [https://github.com/harrymove-ctrl/robin-town](https://github.com/harrymove-ctrl/robin-town)
+* **Hackathon Master Demo Video (`3:20`, 1080p)**: [https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-hackathon-master.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-hackathon-master.mp4) (local file: `docs/video/exports/robin-town-hackathon-master.mp4`)
+* **X Launch Cut (`0:44`, 1080p)**: [https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-x-launch.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-x-launch.mp4) (local file: `docs/video/exports/robin-town-x-launch.mp4`)
+* **Verified `$wif` Token Contract (Robinhood Chain)**: [`0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`](https://robinhoodchain.blockscout.com/token/0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B) (`RobinWifHat / WIF`, `18` decimals)
+* **Verified Dead Burn Address (`4,600,000.60+ $wif` Burned On-Chain)**: [`0x000000000000000000000000000000000000dEaD`](https://robinhoodchain.blockscout.com/token/0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B?tab=holders)
+* **Live On-Chain Telemetry API**: [https://robin-town-production.up.railway.app/api/onchain-wif](https://robin-town-production.up.railway.app/api/onchain-wif)
+* **Live Multiplayer Rooms API**: [https://robin-town-production.up.railway.app/api/rooms](https://robin-town-production.up.railway.app/api/rooms)
 * **Hackathon**: Robinhood Chain Hackathon: Build with `$wif` (`10,000 USDG` Winner Takes All)
 * **Submissions Close**: 2 Nov 2026, 17:30 UTC
 * **Round One Voting Closes**: 4 Nov 2026, 17:30 UTC
 * **Final Voting Closes**: 6 Nov 2026, 17:30 UTC
 
-## How `$wif` is Put to Work (The Economic Flywheel)
-1. **Competitive Match Escrow and 5% Burn Sink**: Players buy into 4-player lobbies with `$wif`. Each match pool allocates 90% to the top-3 podium (`50%` 1st, `25%` 2nd, `15%` 3rd), permanently burns **5%** to `0x000000000000000000000000000000000000dEaD`, and routes **5%** to the community staking yield vault.
-2. **Casual AI Bot Mode and 3% Point-to-`$wif` Redemption Burn**: Players who compete against AI bots earn Treasury Points from final net worth and completed protocol monopolies, redeemable for `$wif` with a **3% deflationary burn tax** and a staking yield multiplier (`1.0x` to `1.2x`).
-3. **1% OTC Trade Micro-Tax**: Every bilateral `$wif` cash transfer on the OTC Liquidity Desk deducts a **1% micro-tax** into the community staking vault, rewarding active liquidity providers and keeping players coming back.
+## Ready-to-Paste Hackathon Submission Description
 
-## Action Checklist (What We Need To Do Right Now)
+### Tagline
+Pull up a stool, haggle for street corners in `$wif`, build connected harbor storefronts in 3D and 2D, and compound annual `$wif` yields on Robinhood Chain.
+
+### What It Does
+**Robin Town** turns pure tabletop street negotiation into a replayable `$wif` neighborhood economy on Robinhood Chain. Across 6 Zodiac Years, 4 traders (`You`, `Cole`, `Maya`, and `Clara`, or live human players across phones and laptops via 6-character WebSocket room codes) draft 72 numbered street plots across 6 harbor districts (`Sherwood`, `Clocktower`, `Harborview`, `Lantern Hall`, `Grand Market`, `Maple Lane`), draw 6 storefront categories (`Coffee House`, `Corner Bakery`, `Noodle Kitchen`, `Flower Studio`, `Silk Tailor`, `Corner Grocer`), negotiate open bundles of `$wif` cash, land deeds, and shop tiles at the two-way OTC Bargaining Table, and earn compounding annual `$wif` income from connected multi-lot chains.
+
+Players can toggle seamlessly with zero state loss between an illustrated `1100x730` Aseprite `2D` and `3D Tilt` street board and a WebGL Three.js **3D Harbor Diorama** complete with a chamfered walnut tabletop plinth, animated turquoise waves, cargo barges, `Day / Sunset / Night` lighting presets, unified connected-cluster terraces, and warm glowing night windows.
+
+### How `$wif` Is Put to Work (The Retention Flywheel)
+1. **Zero-Cost Casual Onboarding + 3% Point-to-`$wif` Burn**: Anyone can play Casual Town immediately for free without holding crypto upfront (plus 4 pre-funded `10,000 $wif` instant test wallets). Completed deals, storefronts, and matches award **Town Points** that convert into `$wif` (`10 pts = 1 $wif`) with a **3% permanent burn** to `0x000000000000000000000000000000000000dEaD`.
+2. **Ranked `1,000 $wif` Arena + 5% Match Pool Burn**: Competitive 4-player lobbies escrow `4,000 $wif`, distributing **90%** (`3,600 $wif`) to the top-3 podium (`50%` 1st, `25%` 2nd, `15%` 3rd), permanently burning **5%** (`200 $wif`) to `0x000000000000000000000000000000000000dEaD`, and routing **5%** (`200 $wif`) into the neighborhood Staking Vault.
+3. **1.20x `$wif` Staking Yield Multiplier**: Staking `500 $wif` in the Vault multiplies every annual storefront payday by **1.20x**, rewarding committed `$wif` holders every game year.
+4. **1% OTC Bargaining Cash Micro-Fee**: Every settled `$wif` cash transfer at the OTC Bargaining Table routes a **1% micro-fee** into the Staking Vault so active dealmaking continuously refills community yield.
+5. **Community Vote Burn & Live On-Chain Verification**: Players can burn `100 $wif` on neighborhood governance votes and verify the live `RobinWifHat` (`$wif`) ERC-20 contract (`0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`), Robinhood Chain Mainnet and Testnet block heights, and the `4,600,000.60+ $wif` on-chain burn balance directly inside the `$wif` Hub.
+
+## Completed Engineering & Submission Checklist
 
 ### 1. Repository and Team Onboarding
-- [x] Initialize Git repository and push codebase to `https://github.com/harrymove-ctrl/robin-town`
-- [x] Invite `tung-lee` (`https://github.com/tung-lee`) as a collaborator with write permissions (`https://github.com/harrymove-ctrl/robin-town/invitations`)
-- [ ] `tung-lee` accepts the GitHub collaborator invitation and clones the repository
-- [ ] Confirm final team roster (up to 4 members) and the team lead receiving wallet address for the `10,000 USDG` prize
+- [x] Initialize Git repository and push codebase cleanly as `harrymove-ctrl` to `https://github.com/harrymove-ctrl/robin-town`
+- [x] Invite `tung-lee` (`https://github.com/tung-lee`) as a collaborator with write permissions
+- [ ] Confirm final team roster (up to 4 members) and the team lead receiving wallet address on the hackathon submission form for the `10,000 USDG` prize
 
-### 2. Live Deployment and Multiplayer Relay
-- [ ] Deploy the production build (`npm run build` output in `dist/`) to a public HTTPS URL (Vercel, Cloudflare Pages, or Railway) so judges and voters can play immediately in browser
-- [ ] Optional: Add a lightweight WebSocket or PartyKit relay alongside `BroadcastChannelTransport` in `src/network/room.ts` for cross-device online multiplayer rooms (currently supports local AI bot matches and cross-tab `BroadcastChannel` multiplayer)
+### 2. Live Deployment and Cross-Device Multiplayer Relay
+- [x] Deploy production Docker build (`scripts/serve-prod.mjs` + `scripts/ws-relay.mjs` + `dist/`) to Railway at `https://robin-town-production.up.railway.app`
+- [x] Ship cross-device RFC 6455 WebSocket multiplayer rooms (`/ws`, `/api/rooms`, and `?room=CODE6X` shareable invite links) paired with `BroadcastChannel` in `src/network/room.ts`
 
 ### 3. On-Chain `$wif` Contract and Wallet Verification
-- [ ] Verify the live Robinhood Chain RPC endpoint and official `$wif` token contract details
-- [ ] Wire optional ERC-20 `$wif` contract call data in `src/tokenomics/wallet.ts` alongside the native EIP-1193 transfer flow and simulation mode
-- [ ] Execute and record at least one live testnet/mainnet transaction hash as on-chain proof for the submission
+- [x] Verify live Robinhood Chain Mainnet (`https://rpc.mainnet.chain.robinhood.com`, Chain ID `4663`) and Testnet (`https://rpc.testnet.chain.robinhood.com`, Chain ID `46630`) RPC endpoints plus official `$wif` ERC-20 contract `0xE49A1C3033EcC6b804bc423021D3F71F1A3e0F9B`
+- [x] Wire ERC-20 `$wif` ABI calldata encoders (`balanceOf`, `transfer`, `approve`, `burn`) and live `/api/onchain-wif` RPC burn proof (`4,600,000.60 $wif` burned on `0x000000000000000000000000000000000000dEaD`) into `src/tokenomics/wallet.ts` and the `$wif` Hub
 
-### 4. Visual Polish and Live Browser QA
-- [ ] Playtest full 6-Epoch matches in browser (`npm run dev`) across desktop and mobile viewports
-- [ ] Capture high-resolution screenshots of the Board View, OTC Liquidity Desk negotiation, Dual-Mode Wallet Modal, and Epoch 6 Final Settlement burn breakdown for `README.md`
+### 4. Visual Polish, 3D Harbor Diorama, and Automated QA
+- [x] Ship complete 3D Harbor Diorama (`Street`, `Iso`, `2D Match`, `Top` camera presets + `Day`, `Sunset`, `Night` atmospheres + connected multi-tile cluster plinths + shoreline boats)
+- [x] Pass all `926` unit, integration, WebSocket relay, ERC-20 calldata, and Playwright browser tests (`npm run verify:assets`, `npm run typecheck`, `npm test`, `npm run build`)
+- [x] Embed deterministic high-resolution `Day`, `Sunset`, `Night`, and `Iso` 3D Harbor Diorama screenshots in `docs/screenshots/` and `README.md`
 
-### 5. Demo Video and Final Submission (Before 2 Nov 2026, 17:30 UTC)
-- [ ] Record a 2 to 3 minute gameplay and tokenomics pitch video demonstrating instant simulation onboarding, OTC trade negotiation with `1%` micro-tax, `Stock Token Bridge` monopoly completion, and the `5%` match pool + `3%` swap burn flywheel
-- [ ] Submit the live game URL, GitHub repository link, demo video, and `$wif` flywheel write-up before **2 Nov 2026, 17:30 UTC**
-- [ ] Rally community and judge support for Round One `$wif` voting (2 Nov to 4 Nov 2026)
-
-## Quick Start and Verification Commands
-```bash
-npm install
-npm run verify:assets
-npm run typecheck
-npm test
-npm run test:e2e
-npm run build
-npm run dev
-```
+### 5. Demo Videos and Final Submission Form (Before 2 Nov 2026, 17:30 UTC)
+- [x] Render and master 1080p @ 30fps Hackathon Submission Video (`docs/video/exports/robin-town-hackathon-master.mp4`, `3:20`) and X Launch Video (`docs/video/exports/robin-town-x-launch.mp4`, `0:44`)
+- [ ] Upload demo video and submit the live Railway URL, GitHub repository link, and `$wif` flywheel write-up on the Robinhood Chain Hackathon portal before **2 Nov 2026, 17:30 UTC**
+- [ ] Share the X Launch Video (`0:44`) and playable Railway room link for Round One `$wif` community voting (2 Nov to 4 Nov 2026)

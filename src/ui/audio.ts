@@ -18,6 +18,75 @@ const DEFAULT_SETTINGS: AudioSettings = {
   muted: false,
 };
 
+export interface PhaseTrackSpec {
+  beatDuration: number;
+  chords: number[][];
+  waveType: OscillatorType;
+  filterCutoff: number;
+}
+
+export const PHASE_TRACKS: Record<string, PhaseTrackSpec> = {
+  receive: {
+    beatDuration: 0.34,
+    chords: [
+      [60, 64, 67, 71],
+      [57, 60, 64, 67],
+      [62, 65, 69, 72],
+      [55, 59, 62, 65],
+    ],
+    waveType: 'triangle',
+    filterCutoff: 1400,
+  },
+  trade: {
+    beatDuration: 0.30,
+    chords: [
+      [57, 60, 64, 67],
+      [62, 65, 69, 72],
+      [55, 59, 62, 65],
+      [64, 67, 71, 74],
+    ],
+    waveType: 'triangle',
+    filterCutoff: 1250,
+  },
+  build: {
+    beatDuration: 0.37,
+    chords: [
+      [60, 64, 67, 69],
+      [65, 69, 72, 76],
+      [62, 65, 69, 72],
+      [55, 59, 62, 69],
+    ],
+    waveType: 'sine',
+    filterCutoff: 1100,
+  },
+  income: {
+    beatDuration: 0.31,
+    chords: [
+      [65, 69, 72, 76],
+      [67, 71, 74, 77],
+      [60, 64, 67, 71],
+      [60, 64, 67, 72],
+    ],
+    waveType: 'triangle',
+    filterCutoff: 1550,
+  },
+  ended: {
+    beatDuration: 0.42,
+    chords: [
+      [60, 64, 67, 71],
+      [65, 69, 72, 76],
+      [62, 65, 69, 72],
+      [60, 64, 67, 72],
+    ],
+    waveType: 'sine',
+    filterCutoff: 1000,
+  },
+};
+
+export function midiToFrequency(midi: number): number {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
 /**
  * Procedural audio synthesizer utilizing Web Audio API nodes.
  */
@@ -25,6 +94,8 @@ export class AudioSynthesizer {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private settings: AudioSettings;
+  private activeTrackOscillators: OscillatorNode[] = [];
+  private isTrackPlayingState = false;
 
   constructor() {
     this.settings = this.loadSettings();
@@ -348,6 +419,63 @@ export class AudioSynthesizer {
     } catch {
       // Ignore audio synthesis errors
     }
+  }
+
+  public playPhaseTrack(phase: string): void {
+    this.stopPhaseTrack();
+    const spec = PHASE_TRACKS[phase] || PHASE_TRACKS.receive;
+    const ctx = this.initContext();
+    if (!ctx || !this.masterGain || this.settings.muted) return;
+
+    try {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(spec.filterCutoff, ctx.currentTime);
+      filter.connect(this.masterGain);
+
+      const now = ctx.currentTime;
+      const chord = spec.chords[0] || [60, 64, 67];
+
+      chord.forEach((midi) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = spec.waveType;
+        osc.frequency.setValueAtTime(midiToFrequency(midi), now);
+
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + spec.beatDuration * 2);
+
+        osc.connect(gain);
+        gain.connect(filter);
+
+        osc.start(now);
+        osc.stop(now + spec.beatDuration * 2);
+        this.activeTrackOscillators.push(osc);
+      });
+
+      this.isTrackPlayingState = true;
+    } catch {
+      // Safe no-op in headless
+    }
+  }
+
+  public stopPhaseTrack(): void {
+    this.activeTrackOscillators.forEach((osc) => {
+      try {
+        osc.stop();
+        osc.disconnect();
+      } catch {
+        // Safe no-op
+      }
+    });
+    this.activeTrackOscillators = [];
+    this.isTrackPlayingState = false;
+  }
+
+  public isPhaseTrackPlaying(): boolean {
+    return this.isTrackPlayingState;
   }
 
   private loadSettings(): AudioSettings {
