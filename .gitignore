@@ -12,3 +12,4 @@ video/public/clips/*.mp4
 video/public/audio/*.wav
 docs/video/exports/*.mp4
 .data/
+skills/
