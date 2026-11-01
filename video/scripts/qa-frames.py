@@ -37,6 +37,7 @@ palette_hues_np = np.array(palette_hues, dtype=np.float32)
 SAMPLES = [
     ("robin-town-hackathon-master.mp4", [2.0, 9.5, 13.5, 18.0, 30.0, 50.0, 84.0, 106.0, 114.0, 133.0, 175.0, 195.0]),
     ("robin-town-x-launch.mp4", [1.5, 5.0, 14.5, 22.0, 32.5, 42.0]),
+    ("robin-town-intro.mp4", [1.5, 4.0, 7.5, 11.0, 15.0, 17.5, 22.0, 26.5, 31.5]),
 ]
 
 results = []

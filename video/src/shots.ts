@@ -49,6 +49,8 @@ export const TARGETS: Record<TargetId, ScreenBox> = {
   C8: B.C8,
   X1: B.X1,
   X2: B.X2,
+  I1: B.I1,
+  I2: B.I2,
 };
 
 const centerOf = (box: ScreenBox): Point => ({

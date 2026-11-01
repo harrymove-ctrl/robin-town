@@ -1,9 +1,12 @@
-import type { CSSProperties, ReactNode } from "react";
+// RobinTownIntro (1,011 frames = 33.70s @ 30fps):
+// 100% real live Robin Town gameplay (<OffthreadVideo> + <Footage>), 100% palette.ts + <SolaceGround /> (#112a24),
+// @snapcn/orb-swarm, @snapcn/block-wordmark, @snapcn/laptop-frame, @snapcn/phone-frame, @snapcn/button-press,
+// @snapcn/phone-stack, @snapcn/dot-bloom, OrbitFlow, MetricMorph, and Fable EndLockup synced frame-for-frame to raylight-intro.wav.
 import {
   AbsoluteFill,
   Audio,
   Easing,
-  Img,
+  OffthreadVideo,
   Sequence,
   interpolate,
   spring,
@@ -11,2041 +14,1231 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { FontGate, TownMark } from "../components/TownMark";
-import { BE_VIETNAM, BUNGEE, MONO, PALETTE } from "../theme";
+import { BlockWordmark } from "@/components/snap-cn/block-wordmark";
+import { ButtonPress } from "@/components/snap-cn/button-press";
+import { CursorTrack } from "@/components/snap-cn/cursor-track";
+import { DOT_BLOOM_CUT, DotBloom } from "@/components/snap-cn/dot-bloom";
+import { LaptopFrame } from "@/components/snap-cn/laptop-frame";
+import { OrbSwarm } from "@/components/snap-cn/orb-swarm";
+import { PhoneFrame } from "@/components/snap-cn/phone-frame";
+import { PhoneStack } from "@/components/snap-cn/phone-stack";
+import { CALLOUT_MODE, Eyebrow } from "../components/Callout";
+import { FontGate, SolaceGround, TownMark } from "../components/TownMark";
+import { Footage } from "../Footage";
+import { C, DISTRICT_PALETTE, PALETTE } from "../palette";
+import type { ShotSpec } from "../shots";
+import { BE_VIETNAM, BUNGEE, MONO, ROBIN_THEME } from "../theme";
+import { OrbitFlow } from "./OrbitFlow";
 
 export const INTRO_FRAMES = 1011; // Exact 33.70s @ 30fps matching raylight-intro.wav
 
 const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-const easeOut = Easing.out(Easing.cubic);
-const easeInOut = Easing.inOut(Easing.cubic);
+const outCubic = Easing.out(Easing.cubic);
+const inCubic = Easing.in(Easing.cubic);
 
-function prog(frame: number, start: number, dur: number, easing = easeOut): number {
-  return interpolate(frame, [start, start + Math.max(1, dur)], [0, 1], {
+// I03 (f168..277 = 109f): Live 3D Harbor Diorama sweeping Street -> Sunset -> Night,
+// flattening to 0 deg right on f218 (local 50) double-ding for Callout I1.
+const INTRO_SHOT_I03: ShotSpec = {
+  id: "I03",
+  clip: "clips/clip-01-living-town.mp4",
+  trimBefore: 162,
+  playbackRate: 2.15,
+  eyebrow: { n: 1, title: "3D Harbor Diorama" },
+  camera: [
+    { at: 0, scale: 1.03, focus: { x: 960, y: 540 }, yaw: 9 },
+    { at: 42, scale: 1.05, focus: { x: 900, y: 520 }, yaw: 3 },
+    { at: 50, scale: 1.05, focus: { x: 880, y: 520 }, yaw: 0 },
+    { at: 96, scale: 1.05, focus: { x: 900, y: 515 }, yaw: 0 },
+    { at: 109, scale: 1.07, focus: { x: 960, y: 540 }, yaw: -8 },
+  ],
+  rings: [],
+  ticks: [],
+  callouts: [
+    {
+      id: "I1",
+      from: 50,
+      to: 114,
+      side: "right",
+      what: "2D tabletop to 3D harbor",
+      why: "72 plots across 6 districts, Day to Night.",
+      accent: PALETTE.accentEmerald,
+    },
+  ],
+};
+
+// I07 (f700..848 = 148f): Live Year 6 Standings modal flattening to 0 deg and locking
+// #1 You (+2,160 $wif Purse) with Callout I2 right on f812 (local 112) victory chime.
+const INTRO_SHOT_I07: ShotSpec = {
+  id: "I07",
+  clip: "clips/clip-06-year6-standings.mp4",
+  trimBefore: 108,
+  eyebrow: { n: 4, title: "Year 6 Settlement" },
+  camera: [
+    { at: 0, scale: 1.03, focus: { x: 960, y: 540 }, yaw: -8 },
+    { at: 96, scale: 1.03, focus: { x: 960, y: 530 }, yaw: 0, panX: -255 },
+    { at: 112, scale: 1.03, focus: { x: 960, y: 530 }, yaw: 0, panX: -255 },
+    { at: 148, scale: 1.03, focus: { x: 960, y: 530 }, yaw: 0, panX: -255 },
+  ],
+  rings: [{ at: 112, p: { x: 960, y: 368 } }],
+  ticks: [{ at: 112, p: { x: 960, y: 368 } }],
+  callouts: [
+    {
+      id: "I2",
+      from: 112,
+      to: 157,
+      side: "right",
+      what: "Ranked #1 podium settlement",
+      why: "Win +2,160 $wif while 4.6M+ $wif burns live.",
+      accent: PALETTE.accentGold,
+    },
+  ],
+};
+
+function DrawnCheckBadge({ at, x, y }: { at: number; x: number; y: number }) {
+  const frame = useCurrentFrame();
+  if (CALLOUT_MODE === "rings") return null;
+  const local = frame - at;
+  if (local < 0 || local > 44) return null;
+  const draw = interpolate(local, [0, 9], [0, 1], { ...CLAMP, easing: outCubic });
+  const fade = interpolate(local, [30, 44], [1, 0], CLAMP);
+  const scale = interpolate(local, [0, 8], [0.74, 1], {
     ...CLAMP,
-    easing,
+    easing: Easing.out(Easing.back(1.6)),
   });
-}
-
-/** Moody Raylight dark spotlight studio backdrop tuned to Robin Town emerald & bullion gold. */
-function StudioSpotlight({
-  intensity = 1,
-  cx = 52,
-  cy = 48,
-  goldMix = 0,
-}: {
-  intensity?: number;
-  cx?: number;
-  cy?: number;
-  goldMix?: number;
-}) {
-  const eAlpha = (0.28 * intensity).toFixed(3);
-  const bAlpha = (0.22 * intensity).toFixed(3);
-  const gAlpha = (0.22 * goldMix * intensity).toFixed(3);
-  return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: "#040709",
-        backgroundImage: [
-          `radial-gradient(64% 58% at ${cx}% ${cy}%, rgba(44, 165, 109, ${eAlpha}) 0%, rgba(16, 48, 68, ${bAlpha}) 42%, rgba(4, 7, 9, 0.98) 78%)`,
-          `radial-gradient(38% 36% at ${cx + 8}% ${cy - 6}%, rgba(238, 195, 83, ${gAlpha}) 0%, transparent 70%)`,
-        ].join(", "),
-      }}
-    >
-      {/* Subtle studio vignette */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          boxShadow: "inset 0 0 220px 60px rgba(0, 0, 0, 0.82)",
-          pointerEvents: "none",
-        }}
-      />
-    </AbsoluteFill>
-  );
-}
-
-/** True 3D extruded Titanium iPhone rig with multi-slice depth rails, Dynamic Island & specular sheen. */
-function IPhone3D({
-  rotateX,
-  rotateY,
-  rotateZ = 0,
-  scale = 1,
-  tx = 0,
-  ty = 0,
-  glarePos = 0.35,
-  children,
-}: {
-  rotateX: number;
-  rotateY: number;
-  rotateZ?: number;
-  scale?: number;
-  tx?: number;
-  ty?: number;
-  glarePos?: number;
-  children: ReactNode;
-}) {
-  const W = 430;
-  const H = 910;
-  const R = 64;
-  const slices = [-18, -14, -10, -6, -3];
-
   return (
     <div
       style={{
         position: "absolute",
-        inset: 0,
+        left: x - 24,
+        top: y - 24,
+        width: 48,
+        height: 48,
+        borderRadius: 999,
+        background: PALETTE.accentEmerald,
+        border: `2px solid ${PALETTE.parchmentLight}`,
+        boxShadow: "0 10px 22px rgba(8, 22, 16, 0.68)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        perspective: 1500,
+        opacity: fade,
+        transform: `scale(${scale})`,
+        pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          width: W,
-          height: H,
-          position: "relative",
-          transformStyle: "preserve-3d",
-          transform: `translate3d(${tx}px, ${ty}px, 0px) scale(${scale}) rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotateZ(${rotateZ}deg)`,
-        }}
-      >
-        {/* Extruded metallic titanium depth slices */}
-        {slices.map((z, idx) => (
-          <div
-            key={z}
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: R,
-              transform: `translateZ(${z}px)`,
-              background:
-                idx === 0
-                  ? "linear-gradient(145deg, #0b1412 0%, #1c312b 50%, #0a1110 100%)"
-                  : "linear-gradient(135deg, #27423a 0%, #13211d 48%, #3c5c51 100%)",
-              border: "1.5px solid rgba(139, 245, 181, 0.22)",
-              boxShadow:
-                idx === 0 ? "0 60px 140px rgba(0, 0, 0, 0.88)" : undefined,
-            }}
-          />
-        ))}
-
-        {/* Front titanium bezel */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: R,
-            padding: 13,
-            background:
-              "linear-gradient(160deg, #3c594f 0%, #15231f 36%, #0c1412 72%, #2f4b41 100%)",
-            boxShadow:
-              "inset 0 0 0 2px rgba(241, 209, 145, 0.28), 0 30px 90px rgba(0, 0, 0, 0.78)",
-            transform: "translateZ(0px)",
-          }}
-        >
-          {/* Inner OLED screen */}
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: R - 11,
-              overflow: "hidden",
-              position: "relative",
-              backgroundColor: "#0a1914",
-              boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Dedicated top iOS status bar + Dynamic Island safe area (zero content overlap) */}
-            <div
-              style={{
-                height: 40,
-                padding: "8px 26px 0",
-                background: "#081712",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexShrink: 0,
-                zIndex: 30,
-                pointerEvents: "none",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 700,
-                  fontSize: 13,
-                  color: PALETTE.parchmentLight,
-                  letterSpacing: 0.3,
-                }}
-              >
-                22:03
-              </span>
-              <div
-                style={{
-                  width: 112,
-                  height: 25,
-                  borderRadius: 999,
-                  background: "#020504",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span
-                  style={{
-                    width: 16,
-                    height: 9,
-                    borderRadius: 2.5,
-                    border: "1.4px solid rgba(251,246,232,0.88)",
-                    display: "inline-block",
-                    padding: 1.2,
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "block",
-                      width: "82%",
-                      height: "100%",
-                      background: PALETTE.accentMintPill,
-                      borderRadius: 1,
-                    }}
-                  />
-                </span>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-              {children}
-            </div>
-
-            {/* Specular diagonal glass reflection */}
-            <div
-              style={{
-                position: "absolute",
-                inset: -120,
-                background: `linear-gradient(115deg, transparent ${(glarePos * 100 - 18).toFixed(1)}%, rgba(255, 255, 255, 0.11) ${(glarePos * 100).toFixed(1)}%, transparent ${(glarePos * 100 + 18).toFixed(1)}%)`,
-                pointerEvents: "none",
-                zIndex: 35,
-              }}
-            />
-          </div>
-        </div>
-      </div>
+      <svg width={26} height={26} viewBox="0 0 26 26">
+        <path
+          d="M5 13.5 L10.5 19 L21 7.5"
+          fill="none"
+          stroke={PALETTE.parchmentLight}
+          strokeWidth={3.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={30}
+          strokeDashoffset={(1 - draw) * 30}
+        />
+      </svg>
     </div>
   );
 }
 
-/** Stool player badge icon matching Robin Town HUD. */
-function StoolBadge({ color, size = 34 }: { color: string; size?: number }) {
+/** I01 (f0..95): Fast 6-card @snapcn/orb-swarm hook on #112a24 SolaceGround, neutral "you" voice. */
+function IntroOrbHook() {
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-      <rect
-        x="2"
-        y="2"
-        width="32"
-        height="32"
-        rx="9"
-        fill="rgba(8, 20, 16, 0.9)"
-        stroke={color}
-        strokeWidth="2"
+    <SolaceGround>
+      <OrbSwarm
+        script="Pull up a stool. | Claim harbor corners. | Bargain $wif. | Build 3D. | Outsmart AI neighbors. | Put $wif to work."
+        background={PALETTE.bgDeep}
+        ink={PALETTE.parchmentLight}
+        orbColor={PALETTE.accentEmerald}
+        fontFamily={BE_VIETNAM}
+        softness={0}
+        speed={1.62}
+        theme={ROBIN_THEME}
+        mode="dark"
       />
-      <ellipse cx="18" cy="12" rx="9" ry="3.6" fill={color} />
-      <path
-        d="M11 13 L9 27 M25 13 L27 27 M15 15 L14 27 M21 15 L22 27 M10.5 21 H25.5"
-        stroke={color}
-        strokeWidth="2.3"
-        strokeLinecap="round"
-      />
-    </svg>
+    </SolaceGround>
   );
 }
 
-/** SCENE 1 (f0..150 | 0.0s..5.0s): 3D Angled iPhone Reveal, Beat-Cut CTA Zoom & Turn Drawer Tilt */
-function Scene1HeroReveal() {
-  const f = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  // Sub-shot A (0..35): Angled right-facing hero reveal ("Welcome, Trader")
-  // Sub-shot B (35..95): Hard beat cut at f35 into "+ Enter 1,000 $wif Arena" button
-  // Sub-shot C (95..150): Steep 3D side tilt into Turn 1 Street Deed setup
-  let rx = -14;
-  let ry = -44;
-  let rz = 3;
-  let sc = 1.48;
-  let tx = 40;
-  let ty = 120;
-
-  if (f < 35) {
-    const p = prog(f, 0, 35, easeOut);
-    rx = interpolate(p, [0, 1], [-22, -12]);
-    ry = interpolate(p, [0, 1], [-58, -38]);
-    rz = interpolate(p, [0, 1], [6, 2]);
-    sc = interpolate(p, [0, 1], [1.34, 1.56]);
-    tx = interpolate(p, [0, 1], [90, 20]);
-    ty = interpolate(p, [0, 1], [180, 145]);
-  } else if (f < 95) {
-    const p = prog(f, 35, 60, easeOut);
-    const kick = spring({ frame: f - 35, fps, config: { damping: 14, stiffness: 180 } });
-    rx = interpolate(p, [0, 1], [10, 16]);
-    ry = interpolate(p, [0, 1], [-18, -10]);
-    rz = interpolate(p, [0, 1], [-2, -1]);
-    sc = interpolate(kick, [0, 1], [1.62, 1.88]);
-    tx = interpolate(p, [0, 1], [-20, 10]);
-    ty = interpolate(p, [0, 1], [55, 25]);
-  } else {
-    const p = prog(f, 95, 55, easeInOut);
-    rx = interpolate(p, [0, 1], [24, 34]);
-    ry = interpolate(p, [0, 1], [32, 22]);
-    rz = interpolate(p, [0, 1], [-18, -10]);
-    sc = interpolate(p, [0, 1], [1.45, 1.62]);
-    tx = interpolate(p, [0, 1], [-30, 15]);
-    ty = interpolate(p, [0, 1], [110, 40]);
-  }
-
-  const showDrawer = f >= 95;
-  const ctaGlow = 0.55 + 0.45 * Math.sin(f * 0.25);
+/** I02a (f95..140): @snapcn/block-wordmark + TownMark crest + Chain ID 46631 · 10,000 $wif Ready. */
+function IntroBrandWordmark() {
+  const frame = useCurrentFrame();
+  const speed = 2.25;
+  const f = frame * speed;
+  const markIn = interpolate(f, [52, 70], [0, 1], { ...CLAMP, easing: outCubic });
 
   return (
-    <AbsoluteFill>
-      <StudioSpotlight
-        intensity={1.08}
-        cx={f < 35 ? 58 : 48}
-        cy={46}
-        goldMix={f >= 35 && f < 95 ? 0.85 : 0.35}
+    <SolaceGround>
+      <BlockWordmark
+        text="ROBIN TOWN"
+        fontFamily={BUNGEE}
+        fontSize={132}
+        color={PALETTE.brandWordmarkGold}
+        colors={[...DISTRICT_PALETTE.slice(0, 6)]}
+        background="transparent"
+        blockSizing="glyph"
+        growDuration={8}
+        spinDuration={26}
+        splitDuration={5}
+        ascenderDuration={8}
+        holdDuration={10}
+        flashStagger={1.8}
+        flashDuration={3}
+        flashToSwap={3}
+        speed={speed}
+        theme={ROBIN_THEME}
+        mode="dark"
       />
-
-      <IPhone3D
-        rotateX={rx}
-        rotateY={ry}
-        rotateZ={rz}
-        scale={sc}
-        tx={tx}
-        ty={ty}
-        glarePos={interpolate(f, [0, 150], [0.18, 0.82], CLAMP)}
+      <AbsoluteFill
+        style={{
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+          opacity: markIn,
+          transform: `translateY(${(1 - markIn) * -14}px)`,
+        }}
       >
-        {/* Subtle live 3D town hero background at top */}
-        <Img
-          src={staticFile("intro/retina_1_start.png")}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            opacity: 0.22,
-            filter: "blur(2px)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(180deg, rgba(8,20,16,0.86) 0%, rgba(10,24,19,0.96) 38%, #07120e 100%)",
-          }}
-        />
-
-        {!showDrawer ? (
-          <div
-            style={{
-              position: "relative",
-              zIndex: 10,
-              padding: "24px 26px 28px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 18,
-            }}
-          >
-            {/* Top brand header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  background: "rgba(44, 165, 109, 0.18)",
-                  border: "1px solid rgba(139, 245, 181, 0.35)",
-                  fontFamily: MONO,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: PALETTE.accentMintPill,
-                }}
-              >
-                10,000 $wif READY
-              </div>
-              <TownMark size={36} />
-            </div>
-
-            <div style={{ textAlign: "center", marginTop: 6 }}>
-              <div
-                style={{
-                  fontFamily: BUNGEE,
-                  fontSize: 28,
-                  letterSpacing: 1.5,
-                  color: PALETTE.brandWordmarkGold,
-                }}
-              >
-                ROBIN TOWN
-              </div>
-              <div
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 800,
-                  fontSize: 30,
-                  color: PALETTE.parchmentLight,
-                  marginTop: 10,
-                }}
-              >
-                Welcome, Alice
-              </div>
-              <div
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontSize: 14,
-                  color: PALETTE.inkMuted,
-                  marginTop: 4,
-                }}
-              >
-                6-Year 3D Harbor Negotiation Game
-              </div>
-            </div>
-
-            {/* Glowing Hero CTA button matching "+ Nowy temat" slot */}
-            <div
-              style={{
-                marginTop: 8,
-                padding: "18px 20px",
-                borderRadius: 18,
-                background:
-                  "linear-gradient(135deg, rgba(44, 165, 109, 0.28) 0%, rgba(238, 195, 83, 0.18) 100%)",
-                border: `2px solid rgba(238, 195, 83, ${(0.55 + 0.35 * ctaGlow).toFixed(2)})`,
-                boxShadow: `0 0 36px rgba(44, 165, 109, ${(0.35 * ctaGlow).toFixed(2)})`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: MONO,
-                  fontWeight: 800,
-                  fontSize: 22,
-                  color: PALETTE.accentGold,
-                }}
-              >
-                +
-              </span>
-              <span
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 800,
-                  fontSize: 18,
-                  color: PALETTE.parchmentLight,
-                }}
-              >
-                Enter 1,000 $wif Arena
-              </span>
-            </div>
-
-            {/* District cards below CTA */}
-            {[
-              { name: "Grand Market Corner", stats: "4/4 Lots", pct: 100, color: PALETTE.accentEmerald },
-              { name: "Harborview Quay", stats: "3/6 Lots", pct: 50, color: PALETTE.accentGold },
-              { name: "Clocktower Plaza", stats: "4/5 Lots", pct: 80, color: "#29b6f6" },
-            ].map((d) => (
-              <div
-                key={d.name}
-                style={{
-                  padding: "14px 16px",
-                  borderRadius: 14,
-                  background: "rgba(16, 42, 32, 0.88)",
-                  border: "1px solid rgba(203, 185, 142, 0.2)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontFamily: BE_VIETNAM,
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: PALETTE.parchmentLight,
-                    marginBottom: 8,
-                  }}
-                >
-                  <span>{d.name}</span>
-                  <span style={{ fontFamily: MONO, color: d.color }}>{d.stats}</span>
-                </div>
-                <div
-                  style={{
-                    height: 8,
-                    borderRadius: 99,
-                    background: "rgba(255,255,255,0.08)",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${d.pct}%`,
-                      height: "100%",
-                      borderRadius: 99,
-                      background: d.color,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          /* Sub-shot C (95..150): Year 1 Street Deed & Shop Tile Drawer */
-          <div
-            style={{
-              position: "relative",
-              zIndex: 10,
-              padding: "26px 26px 28px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: BUNGEE,
-                fontSize: 20,
-                color: PALETTE.accentGold,
-                letterSpacing: 1,
-              }}
-            >
-              YEAR 1 · SNAKE
-            </div>
-            <div
-              style={{
-                fontFamily: BE_VIETNAM,
-                fontWeight: 800,
-                fontSize: 24,
-                color: PALETTE.parchmentLight,
-              }}
-            >
-              Claim Your Corner
-            </div>
-            <div
-              style={{
-                padding: "14px 16px",
-                borderRadius: 14,
-                background: "rgba(22, 58, 48, 0.85)",
-                border: "1px solid rgba(139, 245, 181, 0.3)",
-                fontFamily: MONO,
-                fontSize: 13,
-                color: PALETTE.accentMintPill,
-              }}
-            >
-              Deeds Dealt: #53 · #54 · #55 · #60
-            </div>
-            <div
-              style={{
-                height: 210,
-                borderRadius: 18,
-                border: `2px dashed ${PALETTE.accentEmerald}`,
-                background: "rgba(44, 165, 109, 0.12)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 16,
-                  background: PALETTE.accentEmerald,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: MONO,
-                  fontWeight: 800,
-                  fontSize: 28,
-                  color: "#06150f",
-                }}
-              >
-                +
-              </div>
-              <div
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 700,
-                  fontSize: 16,
-                  color: PALETTE.parchmentLight,
-                }}
-              >
-                Snap Into 3D Harbor Map
-              </div>
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 12,
-                  color: PALETTE.inkMuted,
-                }}
-              >
-                4 Players · You, Cole, Maya, Clara
-              </div>
-            </div>
-          </div>
-        )}
-      </IPhone3D>
-    </AbsoluteFill>
-  );
-}
-
-/** SCENE 2 (f150..277 | 5.0s..9.23s): Camera Shutter Snap (f168) + 3 Fanning 3D Cards + District Rows (f218) */
-function Scene2ShutterAndCards() {
-  const f = useCurrentFrame(); // 0..127 (global 150..277)
-  const { fps } = useVideoConfig();
-  const gf = f + 150;
-
-  // Sub-shot A (gf 150..218): 3D Phone on left + Shutter Flash at gf=168 + 3 3D Gameplay Cards fanning out on right!
-  // Sub-shot B (gf 218..252): Macro pan across glowing District Yield bars (ding-ding cue at gf=218!)
-  // Sub-shot C (gf 252..277): Full 3D Phone pull-back overview
-  const shutterFlash =
-    gf >= 167 && gf <= 176
-      ? interpolate(gf, [167, 169, 176], [0, 0.88, 0], CLAMP)
-      : 0;
-
-  if (gf < 218) {
-    const phoneSlide = prog(gf, 166, 26, easeOut);
-    const fanSpring = spring({
-      frame: Math.max(0, gf - 168),
-      fps,
-      config: { damping: 13, stiffness: 150 },
-    });
-
-    const cards = [
-      {
-        step: "01 RECEIVE",
-        title: "Harbor Street Deeds",
-        metric: "Plots #53 · #54 · #55",
-        badge: "Grand Market",
-        accent: PALETTE.accentEmerald,
-        sprite: "sprites/coffee.png",
-      },
-      {
-        step: "02 BARGAIN OTC",
-        title: "2-Way Neighbor Deals",
-        metric: "Trade Deeds + Tiles + $wif",
-        badge: "1% Vault Fee",
-        accent: PALETTE.accentGold,
-        sprite: "sprites/banhmi.png",
-      },
-      {
-        step: "03 BUILD IN 3D",
-        title: "Connected Shophouses",
-        metric: "+140 $wif / yr Harvest",
-        badge: "1.20x Boost",
-        accent: PALETTE.accentCoral,
-        sprite: "sprites/pho.png",
-      },
-    ];
-
-    return (
-      <AbsoluteFill>
-        <StudioSpotlight intensity={1.1} cx={46} cy={50} goldMix={0.5} />
-
-        <IPhone3D
-          rotateX={interpolate(phoneSlide, [0, 1], [6, 8])}
-          rotateY={interpolate(phoneSlide, [0, 1], [0, 28])}
-          rotateZ={interpolate(phoneSlide, [0, 1], [0, -3])}
-          scale={interpolate(phoneSlide, [0, 1], [0.84, 0.82])}
-          tx={interpolate(phoneSlide, [0, 1], [0, -290])}
-          ty={10}
-          glarePos={0.42}
-        >
-          <Img
-            src={staticFile("intro/retina_2_receive_3d.png")}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-          {/* Camera viewfinder ring before shutter */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: 34,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 62,
-              height: 62,
-              borderRadius: 999,
-              border: `4px solid ${PALETTE.parchmentLight}`,
-              background: "rgba(238, 195, 83, 0.9)",
-              boxShadow: "0 8px 28px rgba(0,0,0,0.6)",
-            }}
-          />
-        </IPhone3D>
-
-        {/* 3 Fanning 3D Parchment & Emerald Cards on the right (matching t=6s Studdly fanning sheets!) */}
-        {gf >= 168 && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              perspective: 1400,
-              pointerEvents: "none",
-            }}
-          >
-            {cards.map((c, idx) => {
-              const delay = idx * 4;
-              const sp = spring({
-                frame: Math.max(0, gf - 168 - delay),
-                fps,
-                config: { damping: 13, stiffness: 145 },
-              });
-              const xOff = 185 + idx * 82 * sp;
-              const yOff = (idx - 1) * 195 * sp;
-              const zOff = idx * 24;
-              const rotY = -20 + idx * 5;
-              const rotZ = (idx - 1) * 4 * sp;
-              return (
-                <div
-                  key={c.step}
-                  style={{
-                    position: "absolute",
-                    width: 350,
-                    padding: "24px 26px",
-                    borderRadius: 24,
-                    background:
-                      "linear-gradient(155deg, #fbf6e8 0%, #efe2c0 100%)",
-                    border: `2.5px solid ${c.accent}`,
-                    boxShadow: "0 34px 80px rgba(0, 0, 0, 0.72)",
-                    opacity: sp,
-                    transform: `translate3d(${xOff}px, ${yOff}px, ${zOff}px) scale(${0.72 + 0.28 * fanSpring}) rotateY(${rotY}deg) rotateZ(${rotZ}deg)`,
-                    color: PALETTE.inkDark,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 14,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: MONO,
-                        fontWeight: 800,
-                        fontSize: 12,
-                        padding: "5px 10px",
-                        borderRadius: 99,
-                        background: "#102a20",
-                        color: PALETTE.accentMintPill,
-                      }}
-                    >
-                      {c.step}
-                    </span>
-                    <Img
-                      src={staticFile(c.sprite)}
-                      style={{
-                        width: 40,
-                        height: 40,
-                        imageRendering: "pixelated",
-                      }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: BE_VIETNAM,
-                      fontWeight: 800,
-                      fontSize: 23,
-                      color: "#12261e",
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {c.title}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontWeight: 700,
-                      fontSize: 15,
-                      color: "#2b5e49",
-                      marginTop: 10,
-                    }}
-                  >
-                    {c.metric}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 16,
-                      paddingTop: 12,
-                      borderTop: "1px solid rgba(18, 38, 30, 0.14)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      fontFamily: BE_VIETNAM,
-                      fontWeight: 700,
-                      fontSize: 13,
-                      color: "#574834",
-                    }}
-                  >
-                    <span>{c.badge}</span>
-                    <span style={{ color: "#102a20", fontWeight: 800 }}>LIVE 3D</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Crisp white iPhone camera shutter flash right at gf=168 */}
-        {shutterFlash > 0 && (
-          <AbsoluteFill
-            style={{
-              backgroundColor: "#ffffff",
-              opacity: shutterFlash,
-              pointerEvents: "none",
-            }}
-          />
-        )}
-      </AbsoluteFill>
-    );
-  }
-
-  // Sub-shot B & C (gf 218..277): Ding-Ding District Yield Rows -> Pull-out to full 3D Phone
-  const pullOut = prog(gf, 246, 30, easeInOut);
-  const fillAnim = prog(gf, 218, 24, easeOut);
-
-  return (
-    <AbsoluteFill>
-      <StudioSpotlight intensity={1.05} cx={50} cy={48} goldMix={0.45} />
-
-      <IPhone3D
-        rotateX={interpolate(pullOut, [0, 1], [18, 6])}
-        rotateY={interpolate(pullOut, [0, 1], [8, -12])}
-        rotateZ={interpolate(pullOut, [0, 1], [-2, 1])}
-        scale={interpolate(pullOut, [0, 1], [1.95, 0.88])}
-        tx={0}
-        ty={interpolate(pullOut, [0, 1], [-40, 8])}
-        glarePos={0.55}
-      >
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            background: "linear-gradient(180deg, #0b1f18 0%, #07120e 100%)",
-            padding: "22px 24px 24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontFamily: BUNGEE, fontSize: 20, color: PALETTE.brandWordmarkGold }}>
-              ROBIN TOWN
-            </span>
-            <span style={{ fontFamily: MONO, fontSize: 12, color: PALETTE.accentMintPill }}>
-              +276 $wif / yr
-            </span>
-          </div>
-
-          {/* Mini 3D viewport preview */}
-          <div
-            style={{
-              height: 220,
-              borderRadius: 18,
-              overflow: "hidden",
-              border: "1.5px solid rgba(139, 245, 181, 0.3)",
-              position: "relative",
-            }}
-          >
-            <Img
-              src={staticFile("intro/fast_play_2_midgame_bots_3d.png")}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </div>
-
-          {[
-            { label: "Grand Market Noodle Block", count: "4/4", pct: 100, yieldText: "+120 $wif/yr" },
-            { label: "Clocktower Bakery Row", count: "3/3", pct: 100, yieldText: "+80 $wif/yr" },
-            { label: "Harborview Coffee Corner", count: "5/6", pct: 83, yieldText: "+76 $wif/yr" },
-          ].map((row) => (
-            <div
-              key={row.label}
-              style={{
-                padding: "14px 16px",
-                borderRadius: 16,
-                background: "rgba(18, 46, 36, 0.92)",
-                border: "1px solid rgba(139, 245, 181, 0.24)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 700,
-                  fontSize: 13.5,
-                  color: PALETTE.parchmentLight,
-                  marginBottom: 8,
-                }}
-              >
-                <span>{row.label}</span>
-                <span style={{ fontFamily: MONO, color: PALETTE.accentGold }}>{row.yieldText}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div
-                  style={{
-                    flex: 1,
-                    height: 9,
-                    borderRadius: 99,
-                    background: "rgba(255,255,255,0.08)",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${(row.pct * fillAnim).toFixed(1)}%`,
-                      height: "100%",
-                      borderRadius: 99,
-                      background: `linear-gradient(90deg, ${PALETTE.accentEmerald}, ${PALETTE.accentMintPill})`,
-                    }}
-                  />
-                </div>
-                <span style={{ fontFamily: MONO, fontSize: 12, color: PALETTE.inkMuted }}>
-                  {row.count}
-                </span>
-              </div>
-            </div>
-          ))}
+        <div style={{ transform: "translateY(-138px)" }}>
+          <TownMark size={82} />
         </div>
-      </IPhone3D>
-    </AbsoluteFill>
-  );
-}
-
-/** SCENE 3 (f277..390 | 9.23s..13.0s): Floating 3D OTC Deal Notification Pill -> Full 3D Harbor Phone */
-function Scene3FloatingDealPill() {
-  const f = useCurrentFrame(); // 0..113 (global 277..390)
-  const { fps } = useVideoConfig();
-  const gf = f + 277;
-
-  // gf 277..352: Floating 3D glass notification pill in spotlight (matching Studdly "Przygotowywanie tematu 6/7 >")
-  // gf 352..390: Smooth pull-back into full 3D Harbor mobile screen
-  if (gf < 352) {
-    const enter = spring({ frame: f, fps, config: { damping: 14, stiffness: 120 } });
-    const settled = gf >= 318;
-    const barPct = interpolate(gf, [282, 318], [28, 100], CLAMP);
-    const tiltY = interpolate(gf, [277, 352], [-16, 14], CLAMP);
-    const tiltX = interpolate(gf, [277, 352], [10, -6], CLAMP);
-
-    return (
-      <AbsoluteFill>
-        <StudioSpotlight intensity={1.15} cx={50} cy={50} goldMix={settled ? 0.75 : 0.25} />
         <div
           style={{
             position: "absolute",
-            inset: 0,
+            top: "50%",
+            marginTop: 88,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            perspective: 1200,
+            gap: 12,
+            padding: "8px 22px",
+            borderRadius: 999,
+            background: "rgba(16, 42, 32, 0.94)",
+            border: `1px solid ${PALETTE.borderEmerald}`,
+            fontFamily: MONO,
+            fontVariantNumeric: "tabular-nums",
+            fontSize: 21,
+            fontWeight: 700,
+            color: PALETTE.accentMintPill,
+            letterSpacing: "0.04em",
           }}
         >
+          <span>● CHAIN ID 46631</span>
+          <span style={{ color: PALETTE.accentGold }}>·</span>
+          <span style={{ color: PALETTE.parchmentWarm }}>10,000 $WIF READY</span>
+        </div>
+      </AbsoluteFill>
+    </SolaceGround>
+  );
+}
+
+/** I02b (f140..168 = 28f): @snapcn/laptop-frame bezel dive landing on exact f168 camera shutter snap. */
+function IntroLaptopDive() {
+  return (
+    <SolaceGround>
+      <LaptopFrame
+        entrance="open"
+        finale="zoom-to-screen"
+        showNotch={true}
+        notchLabel="Chain ID 46631 · 10,000 $wif Ready"
+        indicatorColor={PALETTE.accentEmerald}
+        bezelColor={PALETTE.bgHudDark}
+        screenColor={PALETTE.bgCityStage}
+        shadow="0 16px 24px rgba(8, 22, 16, 0.72)"
+        fontFamily={BE_VIETNAM}
+        speed={185 / 28}
+        theme={ROBIN_THEME}
+        mode="dark"
+      >
+        <OffthreadVideo
+          src={staticFile("clips/clip-01-living-town.mp4")}
+          trimBefore={154}
+          muted
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            maxWidth: "none",
+            objectFit: "cover",
+          }}
+        />
+      </LaptopFrame>
+    </SolaceGround>
+  );
+}
+
+/** I04 (f277..390 = 113f): Two-Way OTC Bargaining (desktop clip-02) + Live Mobile 3D Fast Play (@snapcn/phone-frame). */
+function IntroOtcAndMobileStage() {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  const cardIn = interpolate(frame, [0, 18], [0, 1], { ...CLAMP, easing: outCubic });
+  const yaw = interpolate(frame, [0, 45, 113], [6, 2.5, 4], CLAMP);
+
+  // Left desktop card sits at x: 52..1276 (w=1224), y: 144..832 (h=688 = exact 16:9), leaving >= 64px gap to phone bezel!
+  const clickX = Math.round(52 + 1325 * (1224 / 1920)); // 897
+  const clickY = Math.round(144 + 877 * (688 / 1080)); // 703
+
+  const waypoints = [
+    { at: 24, x: 0.56, y: 0.78, duration: 5 },
+    { at: 32, x: clickX / width, y: clickY / height, duration: 13, click: true },
+  ];
+
+  return (
+    <SolaceGround>
+      <CursorTrack path={waypoints} theme={ROBIN_THEME} mode="dark">
+        <AbsoluteFill>
+          {/* Top-left non-overlapping stage pill */}
           <div
             style={{
-              width: 720,
-              padding: "32px 38px",
-              borderRadius: 28,
-              background:
-                "linear-gradient(145deg, rgba(16, 42, 32, 0.95) 0%, rgba(9, 22, 18, 0.98) 100%)",
-              border: settled
-                ? `2px solid ${PALETTE.accentGold}`
-                : "1.5px solid rgba(139, 245, 181, 0.32)",
-              boxShadow: settled
-                ? "0 30px 90px rgba(0,0,0,0.85), 0 0 60px rgba(238, 195, 83, 0.24)"
-                : "0 30px 90px rgba(0,0,0,0.85)",
-              transform: `scale(${0.82 + 0.18 * enter}) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`,
+              position: "absolute",
+              left: 52,
+              top: 52,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              opacity: cardIn,
+              transform: `translateY(${(1 - cardIn) * -12}px)`,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <StoolBadge color={settled ? PALETTE.accentGold : PALETTE.accentEmerald} size={46} />
-                <div>
-                  <div
-                    style={{
-                      fontFamily: BE_VIETNAM,
-                      fontWeight: 800,
-                      fontSize: 26,
-                      color: PALETTE.parchmentLight,
-                    }}
-                  >
-                    Grand Market Plot #54 OTC Swap
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 15,
-                      color: settled ? PALETTE.accentMintPill : PALETTE.inkMuted,
-                      marginTop: 6,
-                    }}
-                  >
-                    {settled
-                      ? "Deal Accepted by Maya · 4-Lot Corner Connected (6/6)"
-                      : "Bargaining with Cole, Maya & Clara... (5/6)"}
-                  </div>
-                </div>
-              </div>
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontWeight: 800,
-                  fontSize: 26,
-                  color: settled ? PALETTE.accentGold : PALETTE.inkMuted,
-                }}
-              >
-                &gt;
-              </div>
-            </div>
-
             <div
               style={{
-                marginTop: 22,
-                height: 10,
-                borderRadius: 99,
-                background: "rgba(255,255,255,0.08)",
-                overflow: "hidden",
+                padding: "10px 20px",
+                borderRadius: 999,
+                background: C.card,
+                border: `1px solid ${PALETTE.borderEmerald}`,
+                fontFamily: MONO,
+                fontVariantNumeric: "tabular-nums",
+                fontSize: 18,
+                fontWeight: 700,
+                color: PALETTE.accentMintPill,
+                letterSpacing: "0.06em",
               }}
             >
-              <div
+              TWO-WAY OTC DEALS · CASH + DEEDS + SHOP TILES
+            </div>
+            <div
+              style={{
+                padding: "10px 20px",
+                borderRadius: 999,
+                background: C.card,
+                border: `1px solid ${C.line}`,
+                fontFamily: BE_VIETNAM,
+                fontVariantNumeric: "tabular-nums",
+                fontSize: 20,
+                fontWeight: 600,
+                color: PALETTE.accentGold,
+              }}
+            >
+              1% cash fee feeds Staking Vault
+            </div>
+          </div>
+
+          {/* Left 16:9 Live OTC Bargaining Gameplay Card */}
+          <div
+            style={{
+              position: "absolute",
+              left: 52,
+              top: 144,
+              width: 1224,
+              height: 688,
+              perspective: 1600,
+              opacity: cardIn,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 20,
+                overflow: "hidden",
+                border: `1px solid ${C.line}`,
+                boxShadow: "0 16px 24px rgba(8, 22, 16, 0.72)",
+                background: PALETTE.bgCityStage,
+                transform: `translateY(${(1 - cardIn) * 24}px) rotateY(${yaw}deg)`,
+              }}
+            >
+              <OffthreadVideo
+                src={staticFile("clips/clip-02-otc-bargain.mp4")}
+                trimBefore={430}
+                playbackRate={1.06}
+                muted
                 style={{
-                  width: `${barPct.toFixed(1)}%`,
+                  width: "100%",
                   height: "100%",
-                  borderRadius: 99,
-                  background: settled
-                    ? `linear-gradient(90deg, ${PALETTE.accentEmerald}, ${PALETTE.accentGold})`
-                    : PALETTE.accentEmerald,
+                  objectFit: "cover",
+                  display: "block",
                 }}
               />
             </div>
           </div>
-        </div>
-      </AbsoluteFill>
-    );
-  }
 
-  // Pull back to crisp 3D phone (gf 352..390)
-  const p = prog(gf, 352, 38, easeOut);
-  return (
-    <AbsoluteFill>
-      <StudioSpotlight intensity={1.05} cx={50} cy={48} goldMix={0.4} />
-      <IPhone3D
-        rotateX={interpolate(p, [0, 1], [14, 4])}
-        rotateY={interpolate(p, [0, 1], [-18, 8])}
-        rotateZ={0}
-        scale={interpolate(p, [0, 1], [1.15, 0.86])}
-        glarePos={0.5}
-      >
-        <Img
-          src={staticFile("intro/retina_4_build_3d.png")}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      </IPhone3D>
-    </AbsoluteFill>
+          {/* Right Live Mobile 3D Fast Play inside @snapcn/phone-frame (showDynamicIsland=false) */}
+          <div
+            style={{
+              position: "absolute",
+              left: 1344,
+              top: 16,
+              width: 528,
+              height: 952,
+            }}
+          >
+            <PhoneFrame
+              variant="tilt"
+              tiltAngle={-11}
+              entrance="rotate-in"
+              scale={1.34}
+              bezelColor={PALETTE.bgHudDark}
+              screenColor={PALETTE.bgCityStage}
+              shadow="0 16px 24px rgba(8, 22, 16, 0.72)"
+              showDynamicIsland={false}
+              theme={ROBIN_THEME}
+              mode="dark"
+            >
+              <OffthreadVideo
+                src={staticFile("clips/clip-mobile-3d-fastplay.mp4")}
+                trimBefore={80}
+                playbackRate={1.85}
+                muted
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  maxWidth: "none",
+                  objectFit: "cover",
+                }}
+              />
+            </PhoneFrame>
+          </div>
+
+          {/* Clean mobile caption badge below phone */}
+          <div
+            style={{
+              position: "absolute",
+              left: 1356,
+              bottom: 34,
+              width: 504,
+              display: "flex",
+              justifyContent: "center",
+              opacity: cardIn,
+            }}
+          >
+            <div
+              style={{
+                padding: "10px 22px",
+                borderRadius: 999,
+                background: C.card,
+                border: `1px solid ${PALETTE.borderEmerald}`,
+                fontFamily: MONO,
+                fontVariantNumeric: "tabular-nums",
+                fontSize: 18,
+                fontWeight: 700,
+                color: PALETTE.accentMintPill,
+                letterSpacing: "0.05em",
+              }}
+            >
+              ● 390×844 MOBILE 3D · 3X FAST PLAY
+            </div>
+          </div>
+
+          <DrawnCheckBadge at={45} x={clickX} y={clickY} />
+          <Eyebrow n={2} title="OTC Bargaining & Mobile 3D" />
+        </AbsoluteFill>
+      </CursorTrack>
+    </SolaceGround>
   );
 }
 
-/** SCENE 4 (f390..559 | 13.0s..18.63s): Signature 6-Year Zodiac Vertical Ring Count-Up + White Whip Flash (f557) */
-function Scene4ZodiacCountUp() {
-  const f = useCurrentFrame(); // 0..169 (global 390..559)
+const KICK_CARDS = [
+  { at: 0, tag: "YEAR 1 · SNAKE", stat: "+240 $wif", sub: "Connected corner harvest", accent: PALETTE.accentEmerald },
+  { at: 23, tag: "YEAR 3 · GOAT", stat: "4-Lot Chain", sub: "District multiplier active", accent: PALETTE.accentGold },
+  { at: 36, tag: "YEAR 5 · ROOSTER", stat: "1.20x Yield", sub: "500 $wif staked on 46631", accent: PALETTE.accentJade },
+  { at: 59, tag: "YEAR 6 · DOG", stat: "926 Tests", sub: "120 tiles conserved", accent: PALETTE.accentMintPill },
+] as const;
+
+/** I05b (f483..559 = 76f): Live Payday Harvest locked to exact bass kicks f483, f506, f519, f542 -> f557 whip. */
+function IntroBassKickPayday() {
+  const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const gf = f + 390;
 
-  // Glides along a 3D S-curve of 6 numbered Zodiac Year nodes (1 Snake -> 6 Dog),
-  // hitting bass accents at gf=483, 506, 519, 542 and ending on Year 6 Finale Card + white whip flash at gf=555..559!
-  const years = [
-    { num: 6, zodiac: "Year 6 · Dog", yieldLabel: "+276 $wif / yr", x: 0, y: 0 },
-    { num: 5, zodiac: "Year 5 · Rooster", yieldLabel: "+240 $wif / yr", x: 180, y: 210 },
-    { num: 4, zodiac: "Year 4 · Monkey", yieldLabel: "+195 $wif / yr", x: -150, y: 420 },
-    { num: 3, zodiac: "Year 3 · Goat", yieldLabel: "+145 $wif / yr", x: 165, y: 630 },
-    { num: 2, zodiac: "Year 2 · Horse", yieldLabel: "+95 $wif / yr", x: -140, y: 840 },
-    { num: 1, zodiac: "Year 1 · Snake", yieldLabel: "+50 $wif / yr", x: 90, y: 1050 },
-  ];
-
-  const travel = prog(gf, 390, 130, easeInOut);
-  const camY = interpolate(travel, [0, 1], [-980, 40]);
-  const camScale = interpolate(gf, [515, 558], [1, 1.38], CLAMP);
-
-  // Beat pulse on heavy kicks (483, 506, 519, 542)
-  const beatFrames = [483, 506, 519, 542];
-  let beatBoost = 0;
-  for (const bf of beatFrames) {
-    if (gf >= bf && gf <= bf + 10) {
-      beatBoost = Math.max(beatBoost, interpolate(gf, [bf, bf + 10], [1, 0], CLAMP));
-    }
-  }
-
-  const cardPop = spring({
-    frame: Math.max(0, gf - 504),
-    fps,
-    config: { damping: 13, stiffness: 150 },
-  });
-
-  const whipFlash =
-    gf >= 551 ? interpolate(gf, [551, 558], [0, 1], CLAMP) : 0;
+  // Subtle camera punch on each of the 4 bass kicks (sub-local 0, 23, 36, 59) + kinetic whip out at 73..76
+  const kickImpulse = KICK_CARDS.reduce((acc, k) => {
+    const dt = frame - k.at;
+    if (dt < 0 || dt > 10) return acc;
+    return acc + Math.sin((dt / 10) * Math.PI) * 0.018;
+  }, 0);
+  const whip = interpolate(frame, [72, 76], [0, 1], { ...CLAMP, easing: inCubic });
 
   return (
-    <AbsoluteFill>
-      <StudioSpotlight
-        intensity={1.1 + 0.35 * beatBoost}
-        cx={50}
-        cy={46}
-        goldMix={0.35 + 0.55 * beatBoost}
-      />
-
-      <div
+    <SolaceGround>
+      <AbsoluteFill
         style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          perspective: 1300,
+          transform: `scale(${1 + kickImpulse + whip * 0.14}) translateX(${-whip * 90}px)`,
         }}
       >
+        {/* Top Live Payday Gameplay Stage (x: 84..1836, y: 48..864) */}
         <div
           style={{
-            width: 900,
-            height: 900,
-            position: "relative",
-            transformStyle: "preserve-3d",
-            transform: `scale(${camScale}) rotateX(${interpolate(travel, [0, 1], [54, 34])}deg) rotateZ(${interpolate(travel, [0, 1], [-8, 0])}deg) translateY(${camY}px)`,
+            position: "absolute",
+            left: 84,
+            top: 48,
+            width: 1752,
+            height: 816,
+            borderRadius: 22,
+            overflow: "hidden",
+            border: `1px solid ${C.line}`,
+            background: PALETTE.bgCityStage,
+            boxShadow: "0 16px 24px rgba(8, 22, 16, 0.72)",
           }}
         >
-          {years.map((yr) => {
-            const dist = Math.abs(yr.y + camY - 260);
-            const active = dist < 210 || (yr.num === 6 && gf >= 500);
+          <OffthreadVideo
+            src={staticFile("clips/clip-03-payday-harvest.mp4")}
+            trimBefore={122}
+            playbackRate={1.15}
+            muted
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        </div>
+
+        {/* Bottom 4-Card Beat-Synced Zodiac Progression Dock (y: 884..1032, >= 48px safe margin) */}
+        <div
+          style={{
+            position: "absolute",
+            left: 84,
+            top: 884,
+            width: 1752,
+            height: 148,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 18,
+          }}
+        >
+          {KICK_CARDS.map((card) => {
+            const active = frame >= card.at;
+            const pop = spring({
+              frame: Math.max(0, frame - card.at),
+              fps,
+              config: { damping: 17, stiffness: 220 },
+            });
             return (
               <div
-                key={yr.num}
+                key={card.tag}
                 style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: 220 + yr.y,
-                  transform: `translate(-50%, -50%) translateX(${yr.x}px)`,
+                  background: active ? C.card : "rgba(16, 42, 32, 0.48)",
+                  border: `1px solid ${active ? card.accent : C.line}`,
+                  borderRadius: 18,
+                  padding: "16px 22px",
                   display: "flex",
-                  alignItems: "center",
-                  gap: 20,
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  opacity: active ? 1 : 0.38,
+                  transform: `translateY(${active ? (1 - pop) * 16 : 8}px) scale(${active ? 0.94 + 0.06 * pop : 0.96})`,
+                  boxShadow: active ? "0 12px 24px rgba(8, 22, 16, 0.72)" : "none",
                 }}
               >
                 <div
                   style={{
-                    width: 124,
-                    height: 124,
-                    borderRadius: 999,
-                    background: active
-                      ? "radial-gradient(circle, rgba(44,165,109,0.42) 0%, rgba(12,32,24,0.95) 75%)"
-                      : "rgba(14, 30, 24, 0.85)",
-                    border: active
-                      ? `3px solid ${PALETTE.accentGold}`
-                      : "2px solid rgba(139, 245, 181, 0.25)",
-                    boxShadow: active
-                      ? "0 0 55px rgba(238, 195, 83, 0.42)"
-                      : "0 18px 40px rgba(0,0,0,0.65)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontFamily: BE_VIETNAM,
-                    fontWeight: 800,
-                    fontSize: 48,
-                    color: active ? PALETTE.parchmentLight : PALETTE.inkMuted,
+                    fontFamily: MONO,
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: card.accent,
+                    letterSpacing: "0.06em",
                   }}
                 >
-                  {yr.num}
+                  ● {card.tag}
                 </div>
                 <div
                   style={{
-                    padding: "10px 18px",
-                    borderRadius: 14,
-                    background: "rgba(10, 26, 20, 0.9)",
-                    border: "1px solid rgba(203, 185, 142, 0.25)",
+                    marginTop: 4,
+                    fontFamily: BE_VIETNAM,
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: 30,
+                    fontWeight: 700,
+                    color: C.ink,
+                    lineHeight: 1.1,
                   }}
                 >
-                  <div
-                    style={{
-                      fontFamily: BE_VIETNAM,
-                      fontWeight: 800,
-                      fontSize: 18,
-                      color: PALETTE.parchmentLight,
-                    }}
-                  >
-                    {yr.zodiac}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontWeight: 700,
-                      fontSize: 15,
-                      color: PALETTE.accentGold,
-                    }}
-                  >
-                    {yr.yieldLabel}
-                  </div>
+                  {card.stat}
+                </div>
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontFamily: BE_VIETNAM,
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: 17,
+                    fontWeight: 500,
+                    color: C.muted,
+                  }}
+                >
+                  {card.sub}
                 </div>
               </div>
             );
           })}
-
-          {/* Year 6 Finale CTA Card floating above Ring 6 (matching Studdly Sloth + "Rozpocznij naukę" card!) */}
-          {gf >= 502 && (
-            <div
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: 90,
-                transform: `translate(-50%, -50%) translateZ(50px) scale(${0.75 + 0.25 * cardPop})`,
-                opacity: cardPop,
-                width: 480,
-                padding: "24px 28px",
-                borderRadius: 24,
-                background: "rgba(12, 31, 24, 0.96)",
-                border: `2px solid ${PALETTE.accentGold}`,
-                boxShadow: "0 30px 80px rgba(0,0,0,0.88), 0 0 60px rgba(44,165,109,0.35)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <TownMark size={58} />
-              <div
-                style={{
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 800,
-                  fontSize: 22,
-                  color: PALETTE.parchmentLight,
-                }}
-              >
-                Year 6 Final Harvest Ready
-              </div>
-              <div
-                style={{
-                  width: "100%",
-                  padding: "13px 20px",
-                  borderRadius: 14,
-                  background: `linear-gradient(90deg, ${PALETTE.accentEmerald}, #39b97c)`,
-                  textAlign: "center",
-                  fontFamily: BE_VIETNAM,
-                  fontWeight: 800,
-                  fontSize: 18,
-                  color: "#04120c",
-                }}
-              >
-                Settle 4,000 $wif Ranked Pot
-              </div>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Exact kinetic white whip-flash at gf 551..559 matching Studdly reference */}
-      {whipFlash > 0 && (
-        <AbsoluteFill
-          style={{
-            backgroundColor: PALETTE.parchmentLight,
-            opacity: whipFlash,
-            pointerEvents: "none",
-          }}
-        />
-      )}
-    </AbsoluteFill>
+        <DrawnCheckBadge at={2} x={1620} y={820} />
+      </AbsoluteFill>
+    </SolaceGround>
   );
 }
 
-/** SCENE 5 (f559..700 | 18.63s..23.33s): 3D $wif Flywheel Phone + Tactile Hand Click at f677 */
-function Scene5FlywheelAndClick() {
-  const f = useCurrentFrame(); // 0..141 (global 559..700)
+const CONSERVATION_BARS = [
+  {
+    pct: "90%",
+    amount: "3,600 $wif",
+    label: "Podium Purse (1st 60% · 2nd 25% · 3rd 15%)",
+    fill: 0.9,
+    color: PALETTE.accentEmerald,
+  },
+  {
+    pct: "5%",
+    amount: "200 $wif",
+    label: "Permanently Burned to 0x0000...dEaD",
+    fill: 0.34,
+    color: PALETTE.accentCoral,
+  },
+  {
+    pct: "5%",
+    amount: "200 $wif",
+    label: "Staking Vault (Funds 1.20x Shopkeeper Boost)",
+    fill: 0.34,
+    color: PALETTE.accentGold,
+  },
+] as const;
+
+/** I06a (f559..612 = 53f): Fast MetricMorph conservation split for Ranked Arena 4,000 $wif Pool. */
+function IntroMetricMorph() {
+  const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const gf = f + 559;
 
-  const flashOut = gf <= 566 ? interpolate(gf, [559, 566], [0.9, 0], CLAMP) : 0;
+  const pillCollapse = interpolate(frame, [6, 14], [0, 1], { ...CLAMP, easing: inCubic });
+  const chartOpen = spring({
+    frame: Math.max(0, frame - 11),
+    fps,
+    config: { damping: 19, stiffness: 185 },
+  });
 
-  // Sub-shot A (gf 559..638): Angled 3D iPhone inspecting $wif Flywheel & Live Bot Economy
-  // Sub-shot B (gf 638..700): Macro close-up on "Finish & Crown Winner" button + Pointer Hand Tap at gf=677!
-  const isMacro = gf >= 638;
+  return (
+    <SolaceGround>
+      {pillCollapse < 1 ? (
+        <AbsoluteFill
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: 1 - pillCollapse,
+            transform: `scale(${1 - 0.32 * pillCollapse})`,
+          }}
+        >
+          <div
+            style={{
+              padding: "24px 48px",
+              borderRadius: 999,
+              background: C.card,
+              border: `1.5px solid ${PALETTE.accentGold}`,
+              fontFamily: BE_VIETNAM,
+              fontVariantNumeric: "tabular-nums",
+              fontSize: 46,
+              fontWeight: 700,
+              color: C.ink,
+              boxShadow: "0 16px 24px rgba(8, 22, 16, 0.72)",
+            }}
+          >
+            Ranked Arena · <span style={{ color: PALETTE.accentGold }}>4,000 $wif Pool</span>
+          </div>
+        </AbsoluteFill>
+      ) : null}
 
-  if (!isMacro) {
-    const p = prog(gf, 559, 79, easeOut);
-    const tabTap = gf >= 605; // Synced to screen-tap cue at gf=605!
-    return (
-      <AbsoluteFill>
-        <StudioSpotlight intensity={1.08} cx={52} cy={48} goldMix={tabTap ? 0.65 : 0.3} />
-        <IPhone3D
-          rotateX={interpolate(p, [0, 1], [12, 6])}
-          rotateY={interpolate(p, [0, 1], [-34, -22])}
-          rotateZ={interpolate(p, [0, 1], [4, 2])}
-          scale={interpolate(p, [0, 1], [0.92, 1.18])}
-          tx={0}
-          ty={12}
-          glarePos={interpolate(p, [0, 1], [0.25, 0.68])}
+      {frame >= 10 ? (
+        <AbsoluteFill
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 140px",
+            opacity: chartOpen,
+            transform: `scale(${0.93 + 0.07 * chartOpen})`,
+          }}
         >
           <div
             style={{
               width: "100%",
-              height: "100%",
-              background: "linear-gradient(180deg, #0b1f18 0%, #06110d 100%)",
-              padding: "20px 26px 26px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
+              maxWidth: 1520,
+              background: C.card,
+              border: `1px solid ${C.line}`,
+              borderRadius: 26,
+              padding: "42px 52px",
+              boxShadow: "0 16px 24px rgba(8, 22, 16, 0.76)",
             }}
           >
-            <div style={{ fontFamily: BUNGEE, fontSize: 22, color: PALETTE.brandWordmarkGold }}>
-              ROBIN TOWN
-            </div>
             <div
               style={{
-                fontFamily: BE_VIETNAM,
-                fontWeight: 800,
-                fontSize: 22,
-                color: PALETTE.parchmentLight,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "baseline",
+                marginBottom: 28,
               }}
             >
-              Deflationary $wif Flywheel
-            </div>
-            <div
-              style={{
-                fontFamily: BE_VIETNAM,
-                fontSize: 13.5,
-                lineHeight: 1.55,
-                color: PALETTE.inkMuted,
-              }}
-            >
-              Every 4-player Ranked Arena pools 4,000 $wif. Winners take 3,600 $wif across 1st,
-              2nd, and 3rd place while 200 $wif is burned forever and 200 $wif rewards stakers.
-            </div>
-
-            <div
-              style={{
-                height: 220,
-                borderRadius: 16,
-                overflow: "hidden",
-                border: `1.5px solid ${tabTap ? PALETTE.accentGold : "rgba(139,245,181,0.28)"}`,
-              }}
-            >
-              <Img
-                src={staticFile(
-                  tabTap
-                    ? "intro/fast_play_4_completed_3d_city.png"
-                    : "intro/retina_5_wif_hub.png",
-                )}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div
-                style={{
-                  padding: "12px",
-                  borderRadius: 12,
-                  background: "rgba(44,165,109,0.16)",
-                  border: "1px solid rgba(139,245,181,0.3)",
-                }}
-              >
-                <div style={{ fontFamily: MONO, fontSize: 11, color: PALETTE.accentMintPill }}>
-                  PODIUM PURSE
-                </div>
+              <div>
                 <div
                   style={{
                     fontFamily: MONO,
-                    fontWeight: 800,
-                    fontSize: 18,
-                    color: PALETTE.parchmentLight,
+                    fontVariantNumeric: "tabular-nums",
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: PALETTE.accentMintPill,
+                    letterSpacing: "0.08em",
                   }}
                 >
-                  3,600 $wif
+                  RANKED ARENA CONSERVATION · VERIFIED $WIF 0xE49A1C…0F9B
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontFamily: BE_VIETNAM,
+                    fontSize: 44,
+                    fontWeight: 700,
+                    color: C.ink,
+                  }}
+                >
+                  Zero inflation. Every single $wif accounted for.
                 </div>
               </div>
               <div
                 style={{
-                  padding: "12px",
-                  borderRadius: 12,
-                  background: "rgba(220,111,87,0.18)",
-                  border: "1px solid rgba(255,184,153,0.35)",
+                  fontFamily: MONO,
+                  fontVariantNumeric: "tabular-nums",
+                  fontSize: 32,
+                  fontWeight: 700,
+                  color: PALETTE.accentGold,
                 }}
               >
-                <div style={{ fontFamily: MONO, fontSize: 11, color: PALETTE.burnText }}>
-                  BURNED + VAULT
-                </div>
-                <div
-                  style={{
-                    fontFamily: MONO,
-                    fontWeight: 800,
-                    fontSize: 18,
-                    color: PALETTE.accentGold,
-                  }}
-                >
-                  400 $wif
-                </div>
+                Σ = 4,000 $wif
               </div>
             </div>
 
-            <div
-              style={{
-                marginTop: "auto",
-                padding: "15px",
-                borderRadius: 14,
-                background: `linear-gradient(90deg, ${PALETTE.accentEmerald}, #39b97c)`,
-                textAlign: "center",
-                fontFamily: BE_VIETNAM,
-                fontWeight: 800,
-                fontSize: 16,
-                color: "#05140e",
-              }}
-            >
-              Crown Year 6 Winner
-            </div>
-          </div>
-        </IPhone3D>
-
-        {flashOut > 0 && (
-          <AbsoluteFill style={{ backgroundColor: PALETTE.parchmentLight, opacity: flashOut }} />
-        )}
-      </AbsoluteFill>
-    );
-  }
-
-  // Sub-shot B (gf 638..700): Macro button + tactile pointer click at gf=677!
-  const approach = prog(gf, 642, 34, easeOut);
-  const clicked = gf >= 677;
-  const pressScale =
-    gf >= 676 && gf <= 685
-      ? interpolate(gf, [676, 679, 685], [1, 0.93, 1.03], CLAMP)
-      : 1;
-  const ripple = clicked ? prog(gf, 677, 20, easeOut) : 0;
-  const handSpring = spring({
-    frame: Math.max(0, gf - 645),
-    fps,
-    config: { damping: 15, stiffness: 140 },
-  });
-
-  return (
-    <AbsoluteFill>
-      <StudioSpotlight intensity={1.15} cx={50} cy={54} goldMix={clicked ? 0.9 : 0.4} />
-
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          perspective: 1100,
-        }}
-      >
-        {/* Bottom bezel edge of 3D phone in macro view */}
-        <div
-          style={{
-            width: 820,
-            height: 460,
-            borderRadius: 48,
-            background: "linear-gradient(180deg, rgba(12, 30, 24, 0.96) 0%, #06100c 100%)",
-            border: "2px solid rgba(139, 245, 181, 0.24)",
-            boxShadow: "0 50px 130px rgba(0,0,0,0.9)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 22,
-            transform: `scale(${0.94 + 0.08 * approach}) rotateX(12deg)`,
-            position: "relative",
-          }}
-        >
-          <div style={{ fontFamily: MONO, fontSize: 16, color: PALETTE.inkMuted }}>
-            YEAR 6 COMPLETE · ALL 4 PLAYERS SETTLED
-          </div>
-
-          <div
-            style={{
-              padding: "24px 64px",
-              borderRadius: 20,
-              background: clicked
-                ? `linear-gradient(90deg, ${PALETTE.accentGold}, ${PALETTE.accentMintPill})`
-                : `linear-gradient(90deg, ${PALETTE.accentEmerald}, #3cc483)`,
-              boxShadow: clicked
-                ? "0 0 70px rgba(238, 195, 83, 0.65)"
-                : "0 18px 50px rgba(44, 165, 109, 0.45)",
-              transform: `scale(${pressScale})`,
-              fontFamily: BE_VIETNAM,
-              fontWeight: 800,
-              fontSize: 30,
-              color: "#05140e",
-              position: "relative",
-            }}
-          >
-            Reveal Ranked Podium
-
-            {/* Expanding golden click shockwave right on gf=677 */}
-            {clicked && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: "68%",
-                  top: "58%",
-                  width: 140,
-                  height: 140,
-                  borderRadius: 999,
-                  border: `3px solid ${PALETTE.accentGold}`,
-                  transform: `translate(-50%, -50%) scale(${0.3 + 1.8 * ripple})`,
-                  opacity: 1 - ripple,
-                  pointerEvents: "none",
-                }}
-              />
-            )}
-          </div>
-
-          {/* Crisp white/dark vector pointer hand gliding in to tap (matching t=22.5s!) */}
-          <svg
-            width="68"
-            height="68"
-            viewBox="0 0 64 64"
-            style={{
-              position: "absolute",
-              left: interpolate(handSpring, [0, 1], [640, 515]),
-              top: interpolate(handSpring, [0, 1], [390, 250]),
-              transform: `scale(${clicked ? 0.9 : 1}) rotate(-14deg)`,
-              filter: "drop-shadow(0 12px 20px rgba(0,0,0,0.75))",
-            }}
-          >
-            <path
-              d="M26 10 C26 7, 31 7, 31 10 V28 H34 C36 25, 40 26, 40 29 V31 H43 C45 29, 49 30, 49 33 V42 C49 50, 42 56, 33 56 H27 C20 56, 16 50, 16 43 V35 C16 32, 20 31, 22 34 L26 38 Z"
-              fill="#0a1410"
-              stroke={PALETTE.parchmentLight}
-              strokeWidth="3.2"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-}
-
-/** SCENE 6 (f700..848 | 23.33s..28.27s): Mascot Crest + Lens Flare + 4-Player Podium Showdown (Chime at f812!) */
-function Scene6PodiumShowdown() {
-  const f = useCurrentFrame(); // 0..148 (global 700..848)
-  const { fps } = useVideoConfig();
-  const gf = f + 700;
-
-  // Sub-shot A (gf 700..768): Mascot Crest Spotlight + Warm Bullion Lens-Flare Sweep (peaks gf 724..730!)
-  // Sub-shot B (gf 768..848): 4-Row Ranked Podium Showdown -> Row 1 (#1 YOU) lights up on gf=812 victory chime!
-  if (gf < 768) {
-    const pop = spring({ frame: f, fps, config: { damping: 12, stiffness: 135 } });
-    const flare =
-      gf >= 714 && gf <= 744
-        ? interpolate(gf, [714, 726, 744], [0, 0.92, 0.12], CLAMP)
-        : 0.12;
-
-    return (
-      <AbsoluteFill>
-        <StudioSpotlight intensity={1.25} cx={50} cy={45} goldMix={0.85} />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 28,
-            perspective: 1200,
-          }}
-        >
-          <div style={{ transform: `scale(${0.7 + 0.35 * pop}) rotateY(${interpolate(gf, [700, 768], [-16, 12])}deg)` }}>
-            <TownMark size={156} />
-          </div>
-
-          <div
-            style={{
-              padding: "26px 44px",
-              borderRadius: 24,
-              background: "rgba(12, 30, 24, 0.94)",
-              border: `2px solid ${PALETTE.accentGold}`,
-              boxShadow: "0 30px 90px rgba(0,0,0,0.85)",
-              textAlign: "center",
-              transform: `rotateX(10deg) scale(${0.85 + 0.15 * pop})`,
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ fontFamily: MONO, fontSize: 15, color: PALETTE.accentMintPill }}>
-              YEAR 6 FINAL AUDIT · 4,000 $WIF ARENA POT
-            </div>
-            <div
-              style={{
-                fontFamily: BE_VIETNAM,
-                fontWeight: 800,
-                fontSize: 34,
-                color: PALETTE.parchmentLight,
-                marginTop: 8,
-              }}
-            >
-              Who Claims the Harbor Crown?
-            </div>
-          </div>
-
-          {/* Warm volumetric lens flare matching Studdly t=24s flare */}
-          <div
-            style={{
-              position: "absolute",
-              left: `${interpolate(gf, [710, 755], [32, 68], CLAMP)}%`,
-              top: "46%",
-              width: 560,
-              height: 560,
-              transform: "translate(-50%, -50%)",
-              background:
-                "radial-gradient(circle, rgba(255,250,230,0.95) 0%, rgba(238,195,83,0.45) 28%, transparent 68%)",
-              opacity: flare,
-              pointerEvents: "none",
-              mixBlendMode: "screen",
-            }}
-          />
-        </div>
-      </AbsoluteFill>
-    );
-  }
-
-  // Sub-shot B (gf 768..848): 4-Player Ranked Standings Rows (matching A/B/C/D layout + StuddlyCorrect chime at gf=812!)
-  const winnerLit = gf >= 811;
-  const winPop = spring({
-    frame: Math.max(0, gf - 811),
-    fps,
-    config: { damping: 11, stiffness: 180 },
-  });
-  const camTiltY = interpolate(gf, [768, 848], [-12, 4], CLAMP);
-
-  const standings = [
-    {
-      rank: "1",
-      name: "YOU (Alice)",
-      detail: "1,029 $wif Town Value · +2,160 $wif 1st Purse",
-      color: PALETTE.accentEmerald,
-      winner: true,
-    },
-    {
-      rank: "2",
-      name: "COLE (Bot)",
-      detail: "876 $wif Town Value · +1,080 $wif 2nd Purse",
-      color: PALETTE.accentGold,
-      winner: false,
-    },
-    {
-      rank: "3",
-      name: "MAYA (Bot)",
-      detail: "830 $wif Town Value · +540 $wif 3rd Purse",
-      color: PALETTE.accentCoral,
-      winner: false,
-    },
-    {
-      rank: "4",
-      name: "CLARA (Bot)",
-      detail: "798 $wif · 200 $wif Burned + 200 $wif Staking Vault",
-      color: "#7fb5cf",
-      winner: false,
-    },
-  ];
-
-  return (
-    <AbsoluteFill>
-      <StudioSpotlight intensity={1.15} cx={50} cy={50} goldMix={winnerLit ? 0.85 : 0.3} />
-
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          perspective: 1300,
-        }}
-      >
-        <div
-          style={{
-            width: 960,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            transform: `rotateX(12deg) rotateY(${camTiltY}deg)`,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 6,
-              padding: "0 8px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <TownMark size={44} />
-              <span
-                style={{
-                  fontFamily: BUNGEE,
-                  fontSize: 22,
-                  color: PALETTE.brandWordmarkGold,
-                }}
-              >
-                YEAR 6 PODIUM
-              </span>
-            </div>
-            <span style={{ fontFamily: MONO, fontSize: 15, color: PALETTE.accentMintPill }}>
-              90% PURSE · 5% BURN · 5% VAULT
-            </span>
-          </div>
-
-          {standings.map((row, idx) => {
-            const rowIn = spring({
-              frame: Math.max(0, gf - 768 - idx * 4),
-              fps,
-              config: { damping: 14, stiffness: 150 },
-            });
-            const isHighlighted = row.winner && winnerLit;
-            const rowStyle: CSSProperties = {
-              padding: "20px 28px",
-              borderRadius: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              opacity: rowIn,
-              transform: `translateX(${(1 - rowIn) * 60}px) scale(${
-                isHighlighted ? 1 + 0.045 * winPop : 1
-              })`,
-              background: isHighlighted
-                ? "linear-gradient(90deg, rgba(44, 165, 109, 0.42) 0%, rgba(238, 195, 83, 0.26) 100%)"
-                : "rgba(12, 28, 22, 0.9)",
-              border: isHighlighted
-                ? `2.5px solid ${PALETTE.accentGold}`
-                : "1.5px solid rgba(203, 185, 142, 0.18)",
-              boxShadow: isHighlighted
-                ? "0 18px 60px rgba(44, 165, 109, 0.45), 0 0 40px rgba(238, 195, 83, 0.35)"
-                : "0 14px 36px rgba(0,0,0,0.6)",
-            };
-
-            return (
-              <div key={row.rank} style={rowStyle}>
-                <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                  <div
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      background: isHighlighted ? PALETTE.accentGold : "rgba(255,255,255,0.07)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: MONO,
-                      fontWeight: 800,
-                      fontSize: 20,
-                      color: isHighlighted ? "#07150f" : PALETTE.inkMuted,
-                    }}
-                  >
-                    #{row.rank}
-                  </div>
-                  <StoolBadge color={row.color} size={38} />
-                  <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {CONSERVATION_BARS.map((b, idx) => {
+                const grow = interpolate(frame, [13 + idx * 4, 28 + idx * 4], [0, 1], {
+                  ...CLAMP,
+                  easing: outCubic,
+                });
+                return (
+                  <div key={b.label}>
                     <div
                       style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                        marginBottom: 8,
                         fontFamily: BE_VIETNAM,
-                        fontWeight: 800,
-                        fontSize: 22,
-                        color: PALETTE.parchmentLight,
+                        fontVariantNumeric: "tabular-nums",
                       }}
                     >
-                      {row.name}
+                      <span style={{ fontSize: 25, fontWeight: 600, color: C.ink }}>
+                        {b.label}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: MONO,
+                          fontVariantNumeric: "tabular-nums",
+                          fontSize: 26,
+                          fontWeight: 700,
+                          color: b.color,
+                        }}
+                      >
+                        {b.pct} · {b.amount}
+                      </span>
                     </div>
                     <div
                       style={{
-                        fontFamily: MONO,
-                        fontSize: 15,
-                        color: isHighlighted ? PALETTE.accentMintPill : PALETTE.inkMuted,
-                        marginTop: 2,
+                        height: 22,
+                        borderRadius: 999,
+                        background: PALETTE.bgCityStage,
+                        border: `1px solid ${C.line}`,
+                        overflow: "hidden",
                       }}
                     >
-                      {row.detail}
+                      <div
+                        style={{
+                          width: `${b.fill * grow * 100}%`,
+                          height: "100%",
+                          borderRadius: 999,
+                          background: b.color,
+                        }}
+                      />
                     </div>
                   </div>
-                </div>
-
-                {isHighlighted && (
-                  <div
-                    style={{
-                      padding: "8px 16px",
-                      borderRadius: 999,
-                      background: PALETTE.accentGold,
-                      fontFamily: BUNGEE,
-                      fontSize: 15,
-                      color: "#081711",
-                      letterSpacing: 0.8,
-                    }}
-                  >
-                    CHAMPION
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </AbsoluteFill>
+                );
+              })}
+            </div>
+          </div>
+        </AbsoluteFill>
+      ) : null}
+    </SolaceGround>
   );
 }
 
-/** SCENE 7 (f848..1011 | 28.27s..33.70s): Pure Obsidian Hero Brand Finale Lockup (1:1 Studdly End Card) */
-function Scene7BrandFinale() {
-  const f = useCurrentFrame(); // 0..163 (global 848..1011)
-  const { fps } = useVideoConfig();
-  const gf = f + 848;
-
-  // Phase A (gf 848..893): Minimal white-cream center tagline on pure #030504 black
-  // Phase B (gf 893..1011): Brand Wordmark -> TownMark Crest -> Two sleek glass badges at bottom!
-  const isLockup = gf >= 893;
-
-  if (!isLockup) {
-    const fadeIn = prog(gf, 850, 14, easeOut);
-    const fadeOut = gf >= 884 ? interpolate(gf, [884, 892], [1, 0], CLAMP) : 1;
-    return (
-      <AbsoluteFill
-        style={{
-          backgroundColor: "#020403",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            fontFamily: BE_VIETNAM,
-            fontWeight: 600,
-            fontSize: 34,
-            letterSpacing: -0.3,
-            color: PALETTE.parchmentLight,
-            opacity: fadeIn * fadeOut,
-            transform: `translateY(${(1 - fadeIn) * 14}px)`,
-          }}
-        >
-          Bargain for corners, build in 3D, and put $wif to work.
-        </div>
-      </AbsoluteFill>
-    );
-  }
-
-  const wordSpring = spring({
-    frame: Math.max(0, gf - 893),
-    fps,
-    config: { damping: 15, stiffness: 150 },
-  });
-  const logoSpring = spring({
-    frame: Math.max(0, gf - 915),
-    fps,
-    config: { damping: 13, stiffness: 150 },
-  });
-  const badgeSpring = spring({
-    frame: Math.max(0, gf - 932),
-    fps,
-    config: { damping: 15, stiffness: 140 },
-  });
-  const endFade = gf >= 998 ? interpolate(gf, [998, 1010], [1, 0], CLAMP) : 1;
+/**
+ * I06b (f612..700 = 88f): Live $wif Flywheel on Desktop (clip-04) + Live Mobile $wif Hub (@snapcn/phone-frame)
+ * + Tactile @snapcn/button-press clicking frame-accurately on global f677 (local 65: (65 - 50) * 2.40 = 36 = CLICK_AT).
+ */
+function IntroWifFlywheelAndTap() {
+  const frame = useCurrentFrame();
+  const enter = interpolate(frame, [0, 16], [0, 1], { ...CLAMP, easing: outCubic });
+  const staked = frame >= 79; // Locks right as ButtonPress finishes Chain 46631 spinner -> 1.20x Active!
 
   return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: "#020403",
-        backgroundImage:
-          "radial-gradient(45% 42% at 50% 48%, rgba(44, 165, 109, 0.14) 0%, transparent 72%)",
-        opacity: endFade,
-      }}
-    >
-      {/* Top hackathon attribution whisper (matching "edited by keewinek" slot) */}
+    <SolaceGround>
+      {/* Left Column (x: 52..616, y: 72..904): Live Desktop $wif Hub Modal (clip-04-wif-flywheel.mp4), clear of Eyebrow */}
       <div
         style={{
           position: "absolute",
-          top: 52,
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          fontFamily: MONO,
-          fontSize: 13,
-          letterSpacing: 2.2,
-          color: "rgba(189, 216, 200, 0.68)",
-          opacity: logoSpring,
+          left: 52,
+          top: 72,
+          width: 564,
+          height: 832,
+          borderRadius: 24,
+          overflow: "hidden",
+          border: `1px solid ${C.line}`,
+          background: PALETTE.bgCityStage,
+          boxShadow: "0 16px 24px rgba(8, 22, 16, 0.72)",
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * 24}px)`,
         }}
       >
-        WORLD IS FLAT HACKATHON · BUILD WITH $WIF
+        <OffthreadVideo
+          src={staticFile("clips/clip-04-wif-flywheel.mp4")}
+          trimBefore={251}
+          muted
+          style={{
+            width: "210%",
+            height: "100%",
+            maxWidth: "none",
+            marginLeft: "-55%",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
       </div>
 
-      {/* Center Mascot Crest + ROBIN TOWN Wordmark */}
+      {/* Center Column Top Header Card (x: 680..1240, y: 128..396) cleanly above ButtonPress (y: 483..597) */}
       <div
         style={{
           position: "absolute",
-          inset: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 18,
+          left: 680,
+          top: 128,
+          width: 560,
+          padding: "26px 30px",
+          borderRadius: 22,
+          background: C.card,
+          border: `1px solid ${staked ? PALETTE.accentGold : PALETTE.borderEmerald}`,
+          boxShadow: "0 14px 24px rgba(8, 22, 16, 0.72)",
+          opacity: enter,
+          transform: `translateY(${(1 - enter) * -18}px)`,
         }}
       >
-        <div
-          style={{
-            opacity: logoSpring,
-            transform: `scale(${0.65 + 0.35 * logoSpring}) translateY(${(1 - logoSpring) * 14}px)`,
-          }}
-        >
-          <TownMark size={86} />
-        </div>
-
-        <div
-          style={{
-            fontFamily: BUNGEE,
-            fontSize: 66,
-            letterSpacing: 3.5,
-            color: PALETTE.parchmentLight,
-            opacity: wordSpring,
-            transform: `scale(${0.88 + 0.12 * wordSpring})`,
-            textShadow: "0 12px 44px rgba(44, 165, 109, 0.32)",
-          }}
-        >
-          ROBIN TOWN
-        </div>
-
         <div
           style={{
             fontFamily: MONO,
+            fontVariantNumeric: "tabular-nums",
             fontSize: 16,
-            color: PALETTE.accentGold,
-            opacity: logoSpring,
-            letterSpacing: 0.6,
+            fontWeight: 700,
+            color: PALETTE.accentMintPill,
+            letterSpacing: "0.08em",
           }}
         >
-          robin-town-production.up.railway.app
+          ● CHAIN ID 46631 · STAKING VAULT
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            fontFamily: BE_VIETNAM,
+            fontVariantNumeric: "tabular-nums",
+            fontSize: 34,
+            fontWeight: 700,
+            color: C.ink,
+            lineHeight: 1.18,
+          }}
+        >
+          Lock 500 <span style={{ color: PALETTE.accentGold }}>$wif</span> for{" "}
+          <span style={{ color: PALETTE.accentMintPill }}>1.20x</span> paydays.
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            fontFamily: BE_VIETNAM,
+            fontVariantNumeric: "tabular-nums",
+            fontSize: 21,
+            fontWeight: 500,
+            color: C.muted,
+            lineHeight: 1.32,
+          }}
+        >
+          4,600,001 $wif burned on 0x…dEaD · Play free or connect live.
         </div>
       </div>
 
-      {/* Bottom stacked sleek dark-glass badges (matching Google Play / App Store stack) */}
+      {/* Center Bottom Status Pill (x: 680..1240, y: 668) cleanly below ButtonPress */}
       <div
         style={{
           position: "absolute",
-          bottom: 58,
-          left: 0,
-          right: 0,
+          left: 680,
+          top: 668,
+          width: 560,
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 12,
-          opacity: badgeSpring,
-          transform: `translateY(${(1 - badgeSpring) * 20}px)`,
+          justifyContent: "center",
+          opacity: enter,
         }}
       >
         <div
           style={{
-            width: 290,
-            padding: "11px 18px",
-            borderRadius: 12,
-            background: "rgba(16, 42, 32, 0.85)",
-            border: "1.5px solid rgba(251, 246, 232, 0.26)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
+            padding: "12px 26px",
+            borderRadius: 999,
+            background: staked ? PALETTE.bgFelt : C.card,
+            border: `1px solid ${staked ? PALETTE.accentEmerald : C.line}`,
+            fontFamily: MONO,
+            fontVariantNumeric: "tabular-nums",
+            fontSize: 19,
+            fontWeight: 700,
+            color: staked ? PALETTE.accentMintPill : PALETTE.accentGold,
           }}
         >
-          <span
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 99,
-              background: PALETTE.accentMintPill,
-            }}
-          />
-          <span
-            style={{
-              fontFamily: BE_VIETNAM,
-              fontWeight: 800,
-              fontSize: 14,
-              color: PALETTE.parchmentLight,
-              letterSpacing: 0.4,
-            }}
-          >
-            PLAY LIVE · WEB & MOBILE
-          </span>
-        </div>
-
-        <div
-          style={{
-            width: 290,
-            padding: "11px 18px",
-            borderRadius: 12,
-            background: "rgba(22, 36, 30, 0.72)",
-            border: `1.5px solid rgba(238, 195, 83, 0.45)`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: MONO,
-              fontWeight: 700,
-              fontSize: 13,
-              color: PALETTE.accentGold,
-            }}
-          >
-            10,000 $WIF READY · 5% BURN
-          </span>
+          {staked ? "✓ 1.20x SHOPKEEPER BOOST VERIFIED" : "0xE49A1C…0F9B · READY TO STAKE"}
         </div>
       </div>
-    </AbsoluteFill>
+
+      {/* Right Column (x: 1320..1868): Live Mobile $wif Hub inside @snapcn/phone-frame (showDynamicIsland=false) */}
+      <div
+        style={{
+          position: "absolute",
+          left: 1320,
+          top: 24,
+          width: 548,
+          height: 1032,
+        }}
+      >
+        <PhoneFrame
+          variant="tilt"
+          tiltAngle={-11}
+          entrance="rotate-in"
+          scale={1.32}
+          bezelColor={PALETTE.bgHudDark}
+          screenColor={PALETTE.bgCityStage}
+          shadow="0 16px 24px rgba(8, 22, 16, 0.72)"
+          showDynamicIsland={false}
+          theme={ROBIN_THEME}
+          mode="dark"
+        >
+          {/* trimBefore=79 -> clip frame 144 (Stake 500 $wif -> Active 1.20x) hits on local 65 = global f677! */}
+          <OffthreadVideo
+            src={staticFile("clips/clip-mobile-wif-hub.mp4")}
+            trimBefore={79}
+            muted
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              maxWidth: "none",
+              objectFit: "cover",
+            }}
+          />
+        </PhoneFrame>
+      </div>
+
+      {/* Pre-click resting button preview (local 0..53 = f612..665) */}
+      {frame < 53 ? (
+        <AbsoluteFill
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: enter,
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              width: 320 * 1.5,
+              height: 76 * 1.5,
+              borderRadius: 19 * 1.5,
+              background: PALETTE.accentEmerald,
+              boxShadow: "0 14px 24px rgba(8, 22, 16, 0.72)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: BE_VIETNAM,
+              fontVariantNumeric: "tabular-nums",
+              fontSize: 28 * 1.5,
+              fontWeight: 600,
+              color: PALETTE.bgCityStage,
+            }}
+          >
+            Stake 500 $wif
+          </div>
+        </AbsoluteFill>
+      ) : null}
+
+      {/* Native @snapcn/button-press (local 53..88 = global f665..700):
+          (677 - 665) * 3.0 = 12 * 3.0 = 36.0 === CLICK_AT -> exact screen-tap on f677, settled by f693! */}
+      <Sequence from={53} durationInFrames={35}>
+        <ButtonPress
+          label="Stake 500 $wif"
+          pending="Chain 46631"
+          done="1.20x Active"
+          width={320}
+          speed={3.0}
+          theme={{ ...ROBIN_THEME, background: "transparent" }}
+          mode="dark"
+        />
+      </Sequence>
+
+      <Eyebrow n={3} title="$wif Economic Flywheel" />
+    </SolaceGround>
+  );
+}
+
+/**
+ * I08 (f848..1011 = 163f):
+ * - Local 0..45 (f848..893): @snapcn/phone-stack fly-by with real 780x1688 Retina mobile captures
+ * - Local 29..59 (f877..907): @snapcn/dot-bloom halftone wipe whose DOT_BLOOM_CUT (16) lands on exact f893 chime!
+ * - Local 45..163 (f893..1011 = 3.93s): Fable EndLockup settling in 8f and holding 100% motionless for 3.67s (>= 3.5s)!
+ */
+function IntroOutroAndEndLockup() {
+  const frame = useCurrentFrame();
+  // Lockup unveils at local 45 (f893 chime) and settles completely by local 53 (f901),
+  // leaving 110 frames (3.67s >= 3.5s) 100% motionless through f1011!
+  const settle = interpolate(frame, [41, 53], [0, 1], { ...CLAMP, easing: outCubic });
+  const stackBadge = interpolate(frame, [0, 14], [0, 1], { ...CLAMP, easing: outCubic });
+
+  return (
+    <SolaceGround>
+      {frame < 45 ? (
+        <AbsoluteFill>
+          <PhoneStack
+            videos={[
+              staticFile("clips/mobile-street-2x.png"),
+              staticFile("clips/clip-mobile-wif-hub.mp4"),
+              staticFile("clips/mobile-sunset-2x.png"),
+              staticFile("clips/clip-mobile-3d-fastplay.mp4"),
+            ]}
+            stagger={9}
+            speed={1.35}
+            background={PALETTE.bgDeep}
+            glowColor={PALETTE.accentEmerald}
+            statusColor={PALETTE.parchmentLight}
+            time="46631"
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: 64,
+              top: 64,
+              maxWidth: 480,
+              opacity: stackBadge,
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: MONO,
+                fontSize: 17,
+                fontWeight: 700,
+                color: PALETTE.accentMintPill,
+                letterSpacing: "0.12em",
+              }}
+            >
+              LIVE DESKTOP + MOBILE + WEBSOCKET
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                fontFamily: BE_VIETNAM,
+                fontSize: 42,
+                fontWeight: 700,
+                color: C.ink,
+                lineHeight: 1.15,
+              }}
+            >
+              Four seats.
+              <br />
+              <span style={{ color: PALETTE.accentGold }}>Instant room codes.</span>
+            </div>
+          </div>
+        </AbsoluteFill>
+      ) : null}
+
+      {frame >= 45 - (DOT_BLOOM_CUT - 12) ? (
+        <AbsoluteFill
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: settle,
+            transform: `translateY(${(1 - settle) * 14}px)`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 24,
+              textAlign: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+              <TownMark size={96} />
+              <div
+                style={{
+                  fontFamily: BUNGEE,
+                  fontSize: 108,
+                  lineHeight: 1,
+                  color: PALETTE.brandWordmarkGold,
+                  letterSpacing: "0.03em",
+                }}
+              >
+                ROBIN <span style={{ color: PALETTE.accentEmerald }}>TOWN</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontFamily: BE_VIETNAM,
+                fontSize: 34,
+                fontWeight: 600,
+                color: C.ink,
+              }}
+            >
+              Bargain for corners, build in 3D, and put{" "}
+              <span style={{ color: PALETTE.accentGold }}>$wif</span> to work.
+            </div>
+
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                flexWrap: "wrap",
+                justifyContent: "center",
+              }}
+            >
+              <div
+                style={{
+                  padding: "14px 28px",
+                  borderRadius: 999,
+                  background: C.card,
+                  border: `1px solid ${C.line}`,
+                  fontFamily: MONO,
+                  fontSize: 24,
+                  fontWeight: 600,
+                  color: PALETTE.parchmentLight,
+                }}
+              >
+                robin-town-production.up.railway.app
+              </div>
+              <div
+                style={{
+                  padding: "14px 28px",
+                  borderRadius: 999,
+                  background: PALETTE.bgFelt,
+                  border: `1px solid ${PALETTE.accentEmerald}`,
+                  fontFamily: MONO,
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: PALETTE.accentMintPill,
+                }}
+              >
+                10,000 $wif Ready · Chain ID 46631
+              </div>
+            </div>
+          </div>
+        </AbsoluteFill>
+      ) : null}
+
+      {/* DotBloom starts at local 29 (f877) so DOT_BLOOM_CUT (16) lands on local 45 = exact f893 chime! */}
+      <Sequence from={45 - DOT_BLOOM_CUT} durationInFrames={36}>
+        <DotBloom
+          groundColor={PALETTE.bgDeep}
+          dotColors={[
+            PALETTE.accentGold,
+            PALETTE.accentEmerald,
+            PALETTE.accentJade,
+            PALETTE.brandWordmarkGold,
+            PALETTE.accentMintPill,
+          ]}
+        />
+      </Sequence>
+    </SolaceGround>
   );
 }
 
 export function RobinTownIntro() {
   return (
     <FontGate>
-      <AbsoluteFill style={{ backgroundColor: "#040709" }}>
-        {/* Exact 1:1 Raylight Studdly App mixed soundtrack + SFX */}
-        <Audio src={staticFile("audio/raylight-intro.mp3")} volume={1} />
+      <AbsoluteFill style={{ backgroundColor: PALETTE.bgDeep }}>
+        {CALLOUT_MODE !== "rings" ? (
+          <Audio src={staticFile("audio/raylight-intro.wav")} volume={1} />
+        ) : null}
 
-        <Sequence from={0} durationInFrames={150} name="Intro-S1-HeroReveal">
-          <Scene1HeroReveal />
+        {/* f0..95 (3.17s): @snapcn/orb-swarm fast hook */}
+        <Sequence from={0} durationInFrames={95}>
+          <IntroOrbHook />
         </Sequence>
 
-        <Sequence from={150} durationInFrames={127} name="Intro-S2-ShutterAndCards">
-          <Scene2ShutterAndCards />
+        {/* f95..140 (1.50s): @snapcn/block-wordmark + TownMark + Chain 46631 */}
+        <Sequence from={95} durationInFrames={45}>
+          <IntroBrandWordmark />
         </Sequence>
 
-        <Sequence from={277} durationInFrames={113} name="Intro-S3-FloatingDealPill">
-          <Scene3FloatingDealPill />
+        {/* f140..168 (0.93s): @snapcn/laptop-frame bezel dive -> f168 shutter snap */}
+        <Sequence from={140} durationInFrames={28}>
+          <IntroLaptopDive />
         </Sequence>
 
-        <Sequence from={390} durationInFrames={169} name="Intro-S4-ZodiacCountUp">
-          <Scene4ZodiacCountUp />
+        {/* f168..277 (3.63s): Live 3D Harbor Diorama + f218 double-ding Callout I1 */}
+        <Sequence from={168} durationInFrames={109}>
+          <Footage shot={INTRO_SHOT_I03} />
         </Sequence>
 
-        <Sequence from={559} durationInFrames={141} name="Intro-S5-FlywheelAndClick">
-          <Scene5FlywheelAndClick />
+        {/* f277..390 (3.77s): Live Two-Way OTC Bargaining + Live Mobile 3D Fast Play */}
+        <Sequence from={277} durationInFrames={113}>
+          <IntroOtcAndMobileStage />
         </Sequence>
 
-        <Sequence from={700} durationInFrames={148} name="Intro-S6-PodiumShowdown">
-          <Scene6PodiumShowdown />
+        {/* f390..483 (3.10s): OrbitFlow 6-Year Zodiac Compounding Loop */}
+        <Sequence from={390} durationInFrames={93}>
+          <OrbitFlow frames={93} />
         </Sequence>
 
-        <Sequence from={848} durationInFrames={163} name="Intro-S7-BrandFinale">
-          <Scene7BrandFinale />
+        {/* f483..559 (2.53s): Live Payday Harvest synced to Bass Kicks f483, 506, 519, 542 -> f557 whip */}
+        <Sequence from={483} durationInFrames={76}>
+          <IntroBassKickPayday />
+        </Sequence>
+
+        {/* f559..612 (1.77s): MetricMorph 4,000 $wif Ranked Arena conservation split */}
+        <Sequence from={559} durationInFrames={53}>
+          <IntroMetricMorph />
+        </Sequence>
+
+        {/* f612..700 (2.93s): Live Desktop & Mobile $wif Hub + @snapcn/button-press click on f677 */}
+        <Sequence from={612} durationInFrames={88}>
+          <IntroWifFlywheelAndTap />
+        </Sequence>
+
+        {/* f700..848 (4.93s): Live Year 6 Standings + Victory Chime Callout I2 on f812 */}
+        <Sequence from={700} durationInFrames={148}>
+          <Footage shot={INTRO_SHOT_I07} />
+        </Sequence>
+
+        {/* f848..1011 (5.43s): @snapcn/phone-stack fly-by -> @snapcn/dot-bloom at f893 -> motionless EndLockup */}
+        <Sequence from={848} durationInFrames={163}>
+          <IntroOutroAndEndLockup />
         </Sequence>
       </AbsoluteFill>
     </FontGate>

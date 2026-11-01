@@ -59,30 +59,39 @@ CALLOUTS = [
     {"comp": "RobinTownXClip", "scope": "X06Flywheel", "id": "X2", "from": 0, "mid": 980, "side": "right",
      "what": "1.20x staking and $wif burns",
      "why": "Play free or compete live on Chain 46631."},
+    {"comp": "RobinTownIntro", "scope": "I03", "id": "I1", "from": 50, "mid": 240, "side": "right",
+     "what": "2D tabletop to 3D harbor",
+     "why": "72 plots across 6 districts, Day to Night."},
+    {"comp": "RobinTownIntro", "scope": "I07", "id": "I2", "from": 112, "mid": 826, "side": "right",
+     "what": "Ranked #1 podium settlement",
+     "why": "Win +2,160 $wif while 4.6M+ $wif burns live."},
 ]
 
+force_render = "--force" in __import__("sys").argv
 jobs = []
 for c in CALLOUTS:
     key = f"{c['scope']}:{c['id']}@{c['from']}"
     c["key"] = key
     c["base_png"] = str(OUT_RINGS / f"{c['id']}-base.png")
     c["ring_png"] = str(OUT_RINGS / f"{c['id']}-ring.png")
-    jobs.append({
-        "comp": c["comp"],
-        "frame": c["mid"],
-        "out": c["base_png"],
-        "inputProps": {"calloutMode": "rings", "only": "__none__"},
-    })
-    jobs.append({
-        "comp": c["comp"],
-        "frame": c["mid"],
-        "out": c["ring_png"],
-        "inputProps": {"calloutMode": "rings", "only": key},
-    })
+    if force_render or not Path(c["base_png"]).exists():
+        jobs.append({
+            "comp": c["comp"],
+            "frame": c["mid"],
+            "out": c["base_png"],
+            "inputProps": {"calloutMode": "rings", "only": "__none__"},
+        })
+    if force_render or not Path(c["ring_png"]).exists():
+        jobs.append({
+            "comp": c["comp"],
+            "frame": c["mid"],
+            "out": c["ring_png"],
+            "inputProps": {"calloutMode": "rings", "only": key},
+        })
 
 manifest_file = OUT_RINGS / "manifest.json"
 manifest_file.write_text(json.dumps(jobs, indent=2))
-if "--solve-only" not in __import__("sys").argv:
+if jobs and "--solve-only" not in __import__("sys").argv:
     subprocess.run(["npx", "tsx", "scripts/stills.mjs", str(manifest_file)], cwd=VIDEO, check=True)
 
 
@@ -173,19 +182,20 @@ for c in CALLOUTS:
     ring_arr = np.array(Image.open(c["ring_png"]).convert("RGB"))
     rx0, ry0, rx1, ry1 = detect_ring_box(base_arr, ring_arr)
     edge_margin = min(rx0, ry0, W - rx1, H - ry1)
-    is_modal = c["id"] in {"C3", "C4", "C6", "C7", "X2"}
+    is_modal = c["id"] in {"C3", "C4", "C6", "C7", "X2", "I2"}
     text_grid = detect_text_cells(base_arr, is_modal)
 
     cw = CARD_W
     ch = card_height(c["why"])
     pref_x, pref_y = anchor_for_side(rx0, ry0, rx1, ry1, cw, ch, c["side"])
-    has_eyebrow = c["comp"] == "RobinTownMaster"
+    has_eyebrow = c["comp"] in {"RobinTownMaster", "RobinTownIntro"}
 
     best = None
+    ring_pad = 56 if c["comp"] == "RobinTownIntro" else 18
     for y in range(MARGIN, H - MARGIN - ch + 1, 16):
         for x in range(MARGIN, W - MARGIN - cw + 1, 16):
             cand = (x, y, x + cw, y + ch)
-            if rects_overlap(cand, (rx0, ry0, rx1, ry1), pad=18):
+            if rects_overlap(cand, (rx0, ry0, rx1, ry1), pad=ring_pad):
                 continue
             if has_eyebrow and rects_overlap(cand, EYEBROW, pad=12):
                 continue

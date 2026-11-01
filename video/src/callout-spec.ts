@@ -1,6 +1,6 @@
 export type Side = "above" | "below" | "left" | "right";
 
-export type TargetId = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "C7" | "C8" | "X1" | "X2";
+export type TargetId = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "C7" | "C8" | "X1" | "X2" | "I1" | "I2";
 
 export interface CalloutSpec {
   id: TargetId;
