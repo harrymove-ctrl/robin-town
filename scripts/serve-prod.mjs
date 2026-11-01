@@ -80,6 +80,7 @@ function sendFile(req, res, filePath, isHashedAsset) {
 const server = http.createServer((req, res) => {
   const rawUrl = (req.url || '/').split('?')[0] || '/';
   if (rawUrl === '/healthz' || rawUrl === '/health') {
+    const summary = relay.walletRegistry.publicSummary();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(
       JSON.stringify({
@@ -87,6 +88,10 @@ const server = http.createServer((req, res) => {
         service: 'robin-town',
         wsMultiplayer: true,
         activeRooms: relay.rooms.size,
+        storePersistent: summary.storePersistent,
+        totalUniqueWallets: summary.totalUniqueWallets,
+        verifiedWallets: summary.verifiedWallets,
+        totalMatchesPlayed: summary.totalMatchesPlayed,
       }),
     );
     return;
@@ -143,4 +148,15 @@ server.on('upgrade', (req, socket, head) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`[robin-town] Production server + WebSocket multiplayer relay listening on http://${HOST}:${PORT}`);
+  console.log(`[robin-town] Wallet registry store path: ${relay.walletRegistry.storePath}`);
 });
+
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    try {
+      relay.walletRegistry.flushToDisk();
+    } catch {}
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2000).unref();
+  });
+}

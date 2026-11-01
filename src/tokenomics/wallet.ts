@@ -51,6 +51,172 @@ export interface OnChainWifProof {
   fetchedAt: string;
 }
 
+export interface HarborLeaderboardRow {
+  rank: number;
+  shortAddress: string;
+  verified: boolean;
+  chainId: number;
+  onChainWifBalance: number;
+  matchesPlayed: number;
+  wins: number;
+  bestNetWorthWif: number;
+  totalBurnedWif: number;
+  lastSeenAt: string;
+}
+
+export interface RecentHarborWalletRow {
+  shortAddress: string;
+  verified: boolean;
+  chainId: number;
+  source: string;
+  onChainWifBalance: number;
+  matchesPlayed: number;
+  bestNetWorthWif: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface MyHarborWalletStanding {
+  address: string;
+  shortAddress: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  rank: number | null;
+  onChainWifBalance: number;
+  matchesPlayed: number;
+  wins: number;
+  bestNetWorthWif: number;
+  totalBurnedWif: number;
+  challengeMessage: string;
+}
+
+export interface HarborWalletRegistrySummary {
+  ok: boolean;
+  storePersistent: boolean;
+  totalUniqueWallets: number;
+  verifiedWallets: number;
+  totalMatchesPlayed: number;
+  walletMatchesPlayed: number;
+  guestMatchesPlayed: number;
+  totalWifBurnedInGame: number;
+  leaderboard: HarborLeaderboardRow[];
+  recentWallets: RecentHarborWalletRow[];
+  me: MyHarborWalletStanding | null;
+}
+
+export function detectEip1193WalletSource(): string {
+  if (typeof window === 'undefined') return 'eip1193';
+  const eth = (window as unknown as {
+    ethereum?: { isRabby?: boolean; isMetaMask?: boolean; isCoinbaseWallet?: boolean };
+  }).ethereum;
+  if (!eth) return 'eip1193';
+  if (eth.isRabby) return 'rabby';
+  if (eth.isCoinbaseWallet) return 'coinbase';
+  if (eth.isMetaMask) return 'metamask';
+  return 'eip1193';
+}
+
+function canCallLocalWalletApi(): boolean {
+  return (
+    typeof fetch !== 'undefined' &&
+    typeof window !== 'undefined' &&
+    (window.location?.protocol === 'http:' || window.location?.protocol === 'https:')
+  );
+}
+
+export async function fetchWalletRegistrySummary(
+  viewerAddress?: string | null,
+): Promise<HarborWalletRegistrySummary | null> {
+  if (!canCallLocalWalletApi()) return null;
+  try {
+    const query = viewerAddress ? `?address=${encodeURIComponent(viewerAddress)}` : '';
+    const res = await fetch(`/api/wallets${query}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<HarborWalletRegistrySummary>;
+    if (!data.ok || typeof data.totalUniqueWallets !== 'number') return null;
+    return data as HarborWalletRegistrySummary;
+  } catch {
+    return null;
+  }
+}
+
+export async function reportWalletConnected(params: {
+  address: string;
+  chainId: number;
+  source?: string;
+}): Promise<(HarborWalletRegistrySummary & { isFirstConnect?: boolean }) | null> {
+  if (!canCallLocalWalletApi()) return null;
+  try {
+    const res = await fetch('/api/wallets/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address: params.address,
+        chainId: params.chainId,
+        source: params.source ?? detectEip1193WalletSource(),
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as HarborWalletRegistrySummary & { isFirstConnect?: boolean };
+    return data.ok ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function submitWalletSignatureVerification(params: {
+  address: string;
+  signature: string;
+}): Promise<
+  HarborWalletRegistrySummary & {
+    verified?: boolean;
+    firstTimeVerified?: boolean;
+    bonusTownPoints?: number;
+  }
+> {
+  const res = await fetch('/api/wallets/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const data = (await res.json()) as HarborWalletRegistrySummary & {
+    error?: string;
+    verified?: boolean;
+    firstTimeVerified?: boolean;
+    bonusTownPoints?: number;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'Wallet signature verification failed.');
+  }
+  return data;
+}
+
+export async function reportCompletedMatch(params: {
+  address?: string | null;
+  finalNetWorthWif: number;
+  won: boolean;
+  burnedWif?: number;
+}): Promise<HarborWalletRegistrySummary | null> {
+  if (!canCallLocalWalletApi()) return null;
+  try {
+    const res = await fetch('/api/wallets/match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address: params.address ?? null,
+        finalNetWorthWif: params.finalNetWorthWif,
+        won: params.won,
+        burnedWif: params.burnedWif ?? 0,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as HarborWalletRegistrySummary;
+    return data.ok ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 function pad32HexAddress(addr: string): string {
   const cleaned = addr.trim().replace(/^0x/i, '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(cleaned)) {
@@ -888,9 +1054,10 @@ export class WalletAdapter {
       throw new Error('Web3 provider not available for signing.');
     }
 
+    const bytes = new TextEncoder().encode(message);
     let hexMessage = '0x';
-    for (let i = 0; i < message.length; i++) {
-      hexMessage += message.charCodeAt(i).toString(16).padStart(2, '0');
+    for (let i = 0; i < bytes.length; i++) {
+      hexMessage += bytes[i].toString(16).padStart(2, '0');
     }
 
     const sig = (await this.provider.request({
@@ -962,57 +1129,71 @@ export class WalletAdapter {
       if (eth) this.provider = eth;
     }
     if (!this.provider) {
-      throw new Error('No browser Web3 wallet (MetaMask / Rabby) detected.');
+      throw new Error('No browser Web3 wallet (MetaMask or Rabby) detected.');
     }
+    const previousMode = this.mode;
+    const previousAccount = this.web3Account;
+    const previousChainId = this.web3ChainId;
     this.mode = 'web3';
     this.status = 'connecting';
     this.errorMessage = null;
     this.setupProviderListeners();
     this.emitState();
 
-    const accountsResult = await this.provider.request({ method: 'eth_requestAccounts' });
-    const accounts = Array.isArray(accountsResult) ? (accountsResult as string[]) : [];
-    if (!accounts.length) {
-      throw new Error('No wallet account authorized.');
-    }
-    const activeAddress = accounts[0];
-
     try {
-      await this.provider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: ROBINHOOD_MAINNET_CHAIN_ID_HEX }],
-      });
-    } catch (switchErr: unknown) {
-      const err = switchErr as { code?: number };
-      if (err?.code === 4902) {
-        await this.provider.request({
-          method: 'wallet_addEthereumChain',
-          params: [
-            {
-              chainId: ROBINHOOD_MAINNET_CHAIN_ID_HEX,
-              chainName: 'Robinhood Chain',
-              nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-              rpcUrls: [ROBINHOOD_MAINNET_RPC_URL],
-              blockExplorerUrls: [ROBINHOOD_MAINNET_EXPLORER_URL],
-            },
-          ],
-        });
-      } else {
-        throw switchErr;
+      const accountsResult = await this.provider.request({ method: 'eth_requestAccounts' });
+      const accounts = Array.isArray(accountsResult) ? (accountsResult as string[]) : [];
+      if (!accounts.length) {
+        throw new Error('No wallet account authorized.');
       }
-    }
+      const activeAddress = accounts[0];
 
-    this.web3ChainId = ROBINHOOD_MAINNET_CHAIN_ID;
-    const wifBal = await this.getErc20Balance(activeAddress, WIF_TOKEN_CONTRACT_ADDRESS);
-    this.web3Account = {
-      address: activeAddress,
-      name: `${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}`,
-      balance: Number(wifBal.toFixed(4)),
-      isSimulated: false,
-    };
-    this.status = 'connected';
-    this.emitState();
-    return this.web3Account;
+      try {
+        await this.provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: ROBINHOOD_MAINNET_CHAIN_ID_HEX }],
+        });
+      } catch (switchErr: unknown) {
+        const err = switchErr as { code?: number };
+        if (err?.code === 4902) {
+          await this.provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: ROBINHOOD_MAINNET_CHAIN_ID_HEX,
+                chainName: 'Robinhood Chain',
+                nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+                rpcUrls: [ROBINHOOD_MAINNET_RPC_URL],
+                blockExplorerUrls: [ROBINHOOD_MAINNET_EXPLORER_URL],
+              },
+            ],
+          });
+        } else {
+          throw switchErr;
+        }
+      }
+
+      this.web3ChainId = ROBINHOOD_MAINNET_CHAIN_ID;
+      const wifBal = await this.getErc20Balance(activeAddress, WIF_TOKEN_CONTRACT_ADDRESS);
+      this.web3Account = {
+        address: activeAddress,
+        name: `${activeAddress.slice(0, 6)}...${activeAddress.slice(-4)}`,
+        balance: Number(wifBal.toFixed(4)),
+        isSimulated: false,
+      };
+      this.status = 'connected';
+      this.emitState();
+      return this.web3Account;
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      this.mode = previousAccount ? previousMode : 'simulation';
+      this.web3Account = previousAccount;
+      this.web3ChainId = previousChainId;
+      this.status = 'connected';
+      this.errorMessage = errorObj?.message || 'Wallet connection cancelled.';
+      this.emitState();
+      throw err;
+    }
   }
 
   /**
@@ -1102,11 +1283,19 @@ export class WalletAdapter {
   private async refreshWeb3Balance(): Promise<void> {
     if (!this.provider || !this.web3Account) return;
     try {
-      const hexBalance = (await this.provider.request({
-        method: 'eth_getBalance',
-        params: [this.web3Account.address, 'latest'],
-      })) as string;
-      const balance = hexWeiToTokens(hexBalance);
+      const balance =
+        this.web3ChainId === ROBINHOOD_MAINNET_CHAIN_ID
+          ? Number(
+              (
+                await this.getErc20Balance(this.web3Account.address, WIF_TOKEN_CONTRACT_ADDRESS)
+              ).toFixed(4),
+            )
+          : hexWeiToTokens(
+              (await this.provider.request({
+                method: 'eth_getBalance',
+                params: [this.web3Account.address, 'latest'],
+              })) as string,
+            );
       if (this.web3Account) {
         this.web3Account.balance = balance;
         this.emitState();

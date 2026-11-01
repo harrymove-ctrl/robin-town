@@ -1724,3 +1724,326 @@ body[data-qa-debug="1"] .lot {
     bottom: 128px;
   }
 }
+
+/* ============================================================================
+   MetaMask / Rabby Quick-Connect Strip & Live Harbor Traders Registry
+   ============================================================================ */
+
+button.robin-chain-pill.traders-live-pill {
+  cursor: pointer;
+  background: linear-gradient(135deg, #2d240e, #153527);
+  border-color: #d9aa3c;
+  color: #ffe89e;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+button.robin-chain-pill.traders-live-pill:hover {
+  transform: translateY(-1px);
+  border-color: #fff2b8;
+  box-shadow: 0 3px 10px rgba(238, 195, 83, 0.28);
+}
+
+.metamask-connect-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.metamask-cta-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1.5px solid #f6ad55;
+  background: linear-gradient(135deg, #b85616, #7a340b);
+  color: #fffaf0;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #4d1f05;
+  transition: transform 0.14s ease, border-color 0.14s ease, filter 0.14s ease;
+}
+
+.metamask-cta-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #ffe2a8;
+  filter: brightness(1.06);
+}
+
+.metamask-cta-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.metamask-cta-tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(15, 26, 20, 0.58);
+  border: 1px solid rgba(255, 232, 168, 0.5);
+  color: #ffea9f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.metamask-board-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1.5px solid #d9aa3c;
+  background: #17382a;
+  color: #ffea9f;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+
+.metamask-board-btn:hover {
+  transform: translateY(-1px);
+  border-color: #fff2b8;
+}
+
+.metamask-connected-strip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(16, 48, 35, 0.94);
+  border: 1.5px solid #3fa073;
+  box-sizing: border-box;
+}
+
+.metamask-connected-strip button {
+  width: auto !important;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 460px) {
+  .metamask-connected-strip {
+    flex-wrap: wrap;
+  }
+}
+
+.metamask-connected-strip.verified {
+  border-color: #eec353;
+  background: linear-gradient(135deg, rgba(20, 56, 40, 0.96), rgba(47, 36, 13, 0.92));
+}
+
+.metamask-addr-chip {
+  font-size: 12px;
+  font-weight: 800;
+  color: #bdf7d6;
+  font-variant-numeric: tabular-nums;
+  margin-right: auto;
+}
+
+.metamask-addr-chip.verified {
+  color: #ffea9f;
+}
+
+.metamask-verify-btn {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  background: #eec353;
+  color: #1f1706;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.metamask-verify-btn:hover:not(:disabled) {
+  background: #ffe07d;
+}
+
+.metamask-verify-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.traders-hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #2d240e, #163628);
+  border: 1px solid #d4a638;
+  color: #ffea9f;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.traders-hud-pill:hover {
+  border-color: #fff2b8;
+  color: #ffffff;
+}
+
+.traders-hud-pill.verified {
+  border-color: #5eead4;
+  color: #bdf7d6;
+}
+
+/* Harbor Traders & Wallet Registry Modal */
+.traders-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 10px;
+}
+
+.traders-tab-btn {
+  flex: 1 1 auto;
+  padding: 8px 11px;
+  border-radius: 8px;
+  border: 1.5px solid #cbb484;
+  background: #f5ecd6;
+  color: #21392b;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.traders-tab-btn.active {
+  background: #1b4d36;
+  border-color: #153c2a;
+  color: #ffea9f;
+}
+
+.traders-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #d2c19c;
+  background: #fcf7ea;
+}
+
+.traders-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.traders-table th,
+.traders-table td {
+  padding: 8px 9px;
+  text-align: left;
+  border-bottom: 1px solid #e6dac0;
+  color: #1c3125;
+}
+
+.traders-table th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #efe4c8;
+  color: #3d5244;
+}
+
+.traders-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.trader-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.trader-badge.verified {
+  background: #1b5e3f;
+  color: #d1fae5;
+}
+
+.traders-empty-card {
+  padding: 18px 14px;
+  border-radius: 10px;
+  border: 1.5px dashed #bfa97a;
+  background: #faf3e1;
+  text-align: center;
+  color: #243b2e;
+}
+
+.traders-empty-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.traders-empty-card p {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: #4a6052;
+}
+
+.challenge-code-box {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #132a20;
+  color: #bbf7d0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 680px) {
+  .robin-hud-utilities .traders-hud-label {
+    display: none !important;
+  }
+
+  .robin-hud-utilities .traders-hud-pill {
+    min-height: 30px;
+    padding: 4px 7px;
+    gap: 3px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .robin-hud-utilities .wif-hud-pill {
+    max-width: 84px;
+  }
+
+  .metamask-cta-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .metamask-cta-tag {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+}

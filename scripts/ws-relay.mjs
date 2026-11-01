@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createWalletRegistry } from './wallet-registry.mjs';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_FRAME_BYTES = 262_144; // 256 KB cap per packet
@@ -125,9 +126,10 @@ export async function getLiveOnChainWifProof() {
   return snapshot;
 }
 
-export function createMultiplayerRelay() {
+export function createMultiplayerRelay(options = {}) {
   /** @type {Map<string, { code: string, peers: Map<string, import('node:net').Socket>, lastSyncText: string | null, updatedAt: number }>} */
   const rooms = new Map();
+  const walletRegistry = createWalletRegistry(options.walletRegistryOptions || {});
 
   function pruneStaleRooms() {
     const now = Date.now();
@@ -201,6 +203,10 @@ export function createMultiplayerRelay() {
             }),
           );
         });
+      return true;
+    }
+
+    if (walletRegistry.handleRequest(req, res)) {
       return true;
     }
 
@@ -397,5 +403,5 @@ export function createMultiplayerRelay() {
     return true;
   }
 
-  return { handleApiRequest, handleUpgrade, rooms };
+  return { handleApiRequest, handleUpgrade, rooms, walletRegistry };
 }

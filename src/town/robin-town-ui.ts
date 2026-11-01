@@ -63,7 +63,13 @@ import {
   WORLD_IS_FLAT_FAIR_URL,
   WORLD_IS_FLAT_URL,
   WalletAdapter,
+  detectEip1193WalletSource,
   fetchLiveOnChainWifProof,
+  fetchWalletRegistrySummary,
+  reportCompletedMatch,
+  reportWalletConnected,
+  submitWalletSignatureVerification,
+  type HarborWalletRegistrySummary,
   type OnChainWifProof,
 } from '../tokenomics/wallet';
 import {
@@ -238,6 +244,12 @@ export function mountRobinTown(): void {
   let activeRoomUnsub: (() => void) | null = null;
   let onChainProof: OnChainWifProof | null = null;
   let onChainProofLoading = false;
+  let walletStats: HarborWalletRegistrySummary | null = null;
+  let walletStatsOffline = false;
+  let walletFlowState: 'idle' | 'connecting' | 'signing' = 'idle';
+  let tradersTab: 'leaderboard' | 'recent' | 'verify' = 'leaderboard';
+  let lastReportedWeb3Address = '';
+  const claimedConnectBonusWallets = new Set<string>();
 
   // Fast-Time A-to-Z Auto-Play & Live AI Neighbor Feed
   type FastPlaySpeed = 0 | 1 | 3 | 8;
@@ -466,6 +478,144 @@ export function mountRobinTown(): void {
       });
   }
 
+  function currentRealWeb3Address(): string | null {
+    const wState = wallet.getState();
+    if (wState.mode === 'web3' && wState.account && !wState.account.isSimulated) {
+      return wState.account.address;
+    }
+    return null;
+  }
+
+  function isCurrentWalletVerified(): boolean {
+    const realAddr = currentRealWeb3Address();
+    if (!realAddr || !walletStats?.me) return false;
+    return (
+      walletStats.me.address.toLowerCase() === realAddr.toLowerCase() &&
+      Boolean(walletStats.me.verified)
+    );
+  }
+
+  function refreshWalletStats(): void {
+    void fetchWalletRegistrySummary(currentRealWeb3Address()).then((summary) => {
+      if (summary) {
+        walletStats = summary;
+        walletStatsOffline = false;
+        if (menuOpen) renderStartMenu();
+        else render();
+        if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') {
+          openTradersBoard();
+        }
+      } else {
+        walletStatsOffline = true;
+      }
+    });
+  }
+
+  async function syncConnectedWeb3Wallet(address: string, chainId: number): Promise<void> {
+    const norm = address.trim().toLowerCase();
+    lastReportedWeb3Address = norm;
+    const summary = await reportWalletConnected({
+      address,
+      chainId,
+      source: detectEip1193WalletSource(),
+    });
+    if (summary) {
+      walletStats = summary;
+      walletStatsOffline = false;
+      if (summary.isFirstConnect && !claimedConnectBonusWallets.has(norm)) {
+        claimedConnectBonusWallets.add(norm);
+        townPoints += 50;
+        saveEconomy();
+        toast(`Connected ${address.slice(0, 6)}…${address.slice(-4)} on Chain 4663 (+50 Town Points)!`);
+      }
+      if (menuOpen) renderStartMenu();
+      else render();
+      if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') {
+        openTradersBoard();
+      }
+      if (get('#modal').open && get('#modal').dataset.wifHub === 'true') {
+        openWifHub();
+      }
+    }
+  }
+
+  async function connectMetaMaskQuick(): Promise<void> {
+    if (walletFlowState !== 'idle') return;
+    walletFlowState = 'connecting';
+    if (menuOpen) renderStartMenu();
+    else render();
+    if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') {
+      openTradersBoard();
+    }
+    try {
+      const acc = await wallet.connectMainnetWif();
+      toast(`Connected to Robinhood Chain Mainnet (4663) · ${acc.balance} $wif`);
+      saveEconomy();
+      await syncConnectedWeb3Wallet(acc.address, ROBINHOOD_MAINNET_CHAIN_ID);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Wallet connection declined.';
+      toast(msg);
+    } finally {
+      walletFlowState = 'idle';
+      if (menuOpen) renderStartMenu();
+      else render();
+      if (get('#modal').open && get('#modal').dataset.wifHub === 'true') openWifHub();
+      if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+    }
+  }
+
+  async function verifyActiveWalletOwnership(): Promise<void> {
+    if (walletFlowState !== 'idle') return;
+    const realAddr = currentRealWeb3Address();
+    if (!realAddr) {
+      toast('Connect MetaMask or Rabby on Robinhood Chain (4663) first.');
+      return;
+    }
+    walletFlowState = 'signing';
+    if (menuOpen) renderStartMenu();
+    if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+    try {
+      let challenge = walletStats?.me?.challengeMessage;
+      if (!challenge || walletStats?.me?.address.toLowerCase() !== realAddr.toLowerCase()) {
+        const fresh = await reportWalletConnected({
+          address: realAddr,
+          chainId: wallet.getState().chainId ?? ROBINHOOD_MAINNET_CHAIN_ID,
+          source: detectEip1193WalletSource(),
+        });
+        if (fresh) {
+          walletStats = fresh;
+          challenge = fresh.me?.challengeMessage;
+        }
+      }
+      if (!challenge) {
+        throw new Error('Could not fetch verification challenge. Please try again.');
+      }
+      const sig = await wallet.signMessage(challenge);
+      const verified = await submitWalletSignatureVerification({
+        address: realAddr,
+        signature: sig,
+      });
+      walletStats = verified;
+      walletStatsOffline = false;
+      if (verified.bonusTownPoints && verified.bonusTownPoints > 0) {
+        townPoints += verified.bonusTownPoints;
+        saveEconomy();
+        toast(`✓ Wallet verified on Chain 4663 (+${verified.bonusTownPoints} Town Points)!`);
+      } else {
+        toast(`✓ Wallet ${realAddr.slice(0, 6)}…${realAddr.slice(-4)} verified!`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Signature verification cancelled.';
+      toast(msg);
+    } finally {
+      walletFlowState = 'idle';
+      if (menuOpen) renderStartMenu();
+      else render();
+      if (get('#modal').open && get('#modal').dataset.wifHub === 'true') openWifHub();
+      if (get('#modal').open && get('#modal').dataset.tradersBoard === 'true') openTradersBoard();
+    }
+  }
+
   function bindRoomSession(room: NetworkRoom, code: string): void {
     activeRoomUnsub?.();
     activeRoom?.stop();
@@ -603,6 +753,7 @@ export function mountRobinTown(): void {
     dismissPhase();
     delete get('#modal').dataset.settings;
     delete get('#modal').dataset.wifHub;
+    delete get('#modal').dataset.tradersBoard;
     get('#modal').classList.remove('ledger-dialog');
     if (trading.isOpen()) trading.cancel();
     lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -713,6 +864,11 @@ export function mountRobinTown(): void {
         <button class="view-mode-btn ${viewMode === 'tabletop-3d' ? 'active' : ''}" data-action="set-view" data-view-mode="tabletop-3d" title="3D tilted tabletop Aseprite street map">3D Tilt</button>
         <button class="view-mode-btn ${viewMode === 'city-3d' ? 'active' : ''}" data-action="set-view" data-view-mode="city-3d" title="Full Three.js WebGL 3D City diorama">3D City</button>
       </div>
+      <button type="button" class="traders-hud-pill ${isCurrentWalletVerified() ? 'verified' : ''}" data-action="open-traders-board" title="View connected wallets and Harbor Leaderboard" aria-label="Open Harbor Traders and Wallet Registry">
+        <span>${isCurrentWalletVerified() ? '✓' : '🦊'}</span>
+        <span class="traders-hud-count">${(walletStats?.totalUniqueWallets ?? 0).toLocaleString('en-US')}</span>
+        <span class="traders-hud-label">${currentRealWeb3Address() ? `· ${currentRealWeb3Address()!.slice(0, 6)}…` : 'Wallets'}</span>
+      </button>
       <button class="wif-hud-pill" data-action="wif-hub" aria-label="Open $wif Flywheel, Wallet, and Rooms">
         <span class="wif-hud-burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')}</span>
         <span class="wif-hud-mobile-icon" aria-hidden="true">💰</span>
@@ -1232,6 +1388,45 @@ export function mountRobinTown(): void {
     }
 
     const walletBalance = Math.floor(activeWalletBalance());
+    const realAddr = currentRealWeb3Address();
+    const verifiedNow = isCurrentWalletVerified();
+    const uniqueWalletsCount = walletStats?.totalUniqueWallets ?? 0;
+    const matchesPlayedCount = walletStats?.totalMatchesPlayed ?? 0;
+    const shortRealAddr = realAddr ? `${realAddr.slice(0, 6)}…${realAddr.slice(-4)}` : '';
+    const realBalText = realAddr
+      ? Number((wallet.getState().account?.balance ?? 0).toFixed(2)).toLocaleString('en-US')
+      : '0';
+
+    const metaMaskStripHtml =
+      walletFlowState !== 'idle'
+        ? `<div class="metamask-connect-bar">
+            <button type="button" class="metamask-cta-btn" disabled>
+              <span>⏳ ${walletFlowState === 'signing' ? 'Sign ownership message in wallet…' : 'Opening MetaMask / Rabby on Chain 4663…'}</span>
+              <span class="metamask-cta-tag">Chain 4663</span>
+            </button>
+          </div>`
+        : realAddr && verifiedNow
+          ? `<div class="metamask-connect-bar">
+              <div class="metamask-connected-strip verified">
+                <span class="metamask-addr-chip verified">✓ Verified ${escape(shortRealAddr)} · ${realBalText} $wif</span>
+                <button type="button" class="metamask-board-btn" data-action="open-traders-board">🏆 Leaderboard (${uniqueWalletsCount})</button>
+              </div>
+            </div>`
+          : realAddr
+            ? `<div class="metamask-connect-bar">
+                <div class="metamask-connected-strip">
+                  <span class="metamask-addr-chip">🟢 ${escape(shortRealAddr)} · ${realBalText} $wif</span>
+                  <button type="button" class="metamask-verify-btn" data-action="verify-wallet-sig">✍️ Verify (+100 pts · 0 gas)</button>
+                  <button type="button" class="metamask-board-btn" data-action="open-traders-board">🏆 Rank</button>
+                </div>
+              </div>`
+            : `<div class="metamask-connect-bar">
+                <button type="button" class="metamask-cta-btn" data-action="connect-mainnet-wif">
+                  <span>🦊 Connect MetaMask / Rabby</span>
+                  <span class="metamask-cta-tag">Chain 4663 · +50 pts</span>
+                </button>
+                <button type="button" class="metamask-board-btn" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🏆 ${uniqueWalletsCount}</button>
+              </div>`;
 
     menu.innerHTML = `<div class="menu-scene" aria-hidden="true"></div>
       <canvas id="robin-start-shader" class="robin-shader-canvas" aria-hidden="true"></canvas>
@@ -1239,6 +1434,7 @@ export function mountRobinTown(): void {
         <div class="robin-kicker-badges">
           <span class="robin-chain-pill">● ROBINHOOD CHAIN · BUILD WITH $WIF</span>
           <span class="robin-chain-pill burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')} $wif Burned</span>
+          <button type="button" class="robin-chain-pill traders-live-pill" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🦊 ${uniqueWalletsCount.toLocaleString('en-US')} ${uniqueWalletsCount === 1 ? 'Wallet' : 'Wallets'} · ${matchesPlayedCount.toLocaleString('en-US')} ${matchesPlayedCount === 1 ? 'Match' : 'Matches'} · Leaderboard ↗</button>
         </div>
         <h1 class="start-logo">ROBIN<span>TOWN</span></h1>
         <div class="menu-shops" aria-hidden="true">${sprite('shops', 'banhmi')}${sprite('shops', 'coffee')}${sprite('shops', 'pho')}</div>
@@ -1254,6 +1450,8 @@ export function mountRobinTown(): void {
             <small>4,000 $wif pot: 3,600 $wif Podium Purse, 200 $wif burned forever, 200 $wif to Staking Vault.</small>
           </button>
         </div>
+
+        ${metaMaskStripHtml}
 
         <div class="start-actions">
           <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${hasProgress() ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : 'Start free game'} <span>▶</span></button>
@@ -1431,7 +1629,9 @@ export function mountRobinTown(): void {
         </div>
         <div class="wif-row-actions">
           <button type="button" class="primary" data-action="connect-mainnet-wif">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_MAINNET_CHAIN_ID ? `Mainnet 4663: ${activeAddr.slice(0, 8)}…` : 'Connect Robinhood Chain (4663)'}</button>
+          ${currentRealWeb3Address() && !isCurrentWalletVerified() ? `<button type="button" class="secondary" data-action="verify-wallet-sig">✍️ Verify Ownership (+100 pts, 0 gas)</button>` : ''}
           <button type="button" class="secondary" data-action="burn-mainnet-wif">🔥 Burn 0.1 $wif On-Chain (4663)</button>
+          <button type="button" class="secondary" data-action="open-traders-board">🏆 Harbor Leaderboard (${walletStats?.totalUniqueWallets ?? 0} Wallets)</button>
           <button type="button" class="secondary" data-action="connect-web3">${wState.mode === 'web3' && wState.status === 'connected' && wState.chainId === ROBINHOOD_CHAIN_ID ? `Testnet: ${activeAddr.slice(0, 8)}…` : `Testnet (${ROBINHOOD_CHAIN_ID})`}</button>
           <span class="muted" style="font-size:12px">Active Balance: <strong>${activeBal.toLocaleString('en-US')} $wif</strong></span>
           ${
@@ -1496,6 +1696,141 @@ export function mountRobinTown(): void {
       'ROBINHOOD CHAIN · $WIF ECONOMIC ENGINE',
     );
     get('#modal').dataset.wifHub = 'true';
+  }
+
+  function openTradersBoard(nextTab?: 'leaderboard' | 'recent' | 'verify') {
+    if (nextTab) tradersTab = nextTab;
+    if (!walletStats) refreshWalletStats();
+    const realAddr = currentRealWeb3Address();
+    const verifiedNow = isCurrentWalletVerified();
+    const uniqueWallets = walletStats?.totalUniqueWallets ?? 0;
+    const verifiedCount = walletStats?.verifiedWallets ?? 0;
+    const totalMatches = walletStats?.totalMatchesPlayed ?? 0;
+    const walletMatches = walletStats?.walletMatchesPlayed ?? 0;
+    const guestMatches = walletStats?.guestMatchesPlayed ?? 0;
+    const leaderboardRows = walletStats?.leaderboard ?? [];
+    const recentRows = walletStats?.recentWallets ?? [];
+    const me = walletStats?.me ?? null;
+
+    let tabBody = '';
+    if (tradersTab === 'leaderboard') {
+      tabBody =
+        leaderboardRows.length === 0
+          ? `<div class="traders-empty-card">
+              <h3>No wallets on the Harbor Leaderboard yet</h3>
+              <p>Connect MetaMask or Rabby on Robinhood Chain (Chain ID 4663) to claim the #1 harbor seat and earn +50 Town Points immediately.</p>
+              <button type="button" class="primary" data-action="connect-mainnet-wif" ${walletFlowState !== 'idle' ? 'disabled' : ''}>🦊 Connect MetaMask / Rabby (Chain 4663)</button>
+            </div>`
+          : `<div class="traders-table-wrap">
+              <table class="traders-table" aria-label="Harbor Traders Leaderboard">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Trader Wallet</th>
+                    <th>Status</th>
+                    <th>Best Year-6 $wif</th>
+                    <th>Matches</th>
+                    <th>Chain 4663 $wif</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${leaderboardRows
+                    .map(
+                      (row) => `<tr>
+                        <td><strong>#${row.rank}</strong></td>
+                        <td><code>${escape(row.shortAddress)}</code></td>
+                        <td><span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span></td>
+                        <td><strong>${row.bestNetWorthWif.toLocaleString('en-US')} $wif</strong></td>
+                        <td>${row.matchesPlayed} (${row.wins}W)</td>
+                        <td>${row.onChainWifBalance.toLocaleString('en-US')} $wif</td>
+                      </tr>`,
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>`;
+    } else if (tradersTab === 'recent') {
+      tabBody =
+        recentRows.length === 0
+          ? `<div class="traders-empty-card">
+              <h3>Waiting for the first connected wallet</h3>
+              <p>Every unique MetaMask or Rabby address that connects on Robinhood Chain (4663) appears here automatically with shortened privacy-safe formatting.</p>
+              <button type="button" class="primary" data-action="connect-mainnet-wif" ${walletFlowState !== 'idle' ? 'disabled' : ''}>🦊 Connect MetaMask / Rabby</button>
+            </div>`
+          : `<div class="traders-table-wrap">
+              <table class="traders-table" aria-label="Recently Connected Wallets">
+                <thead>
+                  <tr>
+                    <th>Wallet</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>On-Chain $wif</th>
+                    <th>Matches</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recentRows
+                    .map(
+                      (row) => `<tr>
+                        <td><code>${escape(row.shortAddress)}</code></td>
+                        <td>${escape(row.source.toUpperCase())}</td>
+                        <td><span class="trader-badge ${row.verified ? 'verified' : ''}">${row.verified ? '✓ Verified' : 'Connected'}</span></td>
+                        <td>${row.onChainWifBalance.toLocaleString('en-US')} $wif</td>
+                        <td>${row.matchesPlayed}</td>
+                      </tr>`,
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>`;
+    } else {
+      tabBody = `<section class="wif-hub-section">
+        <h3>${realAddr ? (verifiedNow ? `✓ Verified Harbor Trader (${escape(realAddr.slice(0, 6))}…${escape(realAddr.slice(-4))})` : `Connected Wallet (${escape(realAddr.slice(0, 6))}…${escape(realAddr.slice(-4))})`) : 'Connect & Verify Your Wallet (0 Gas)'}</h3>
+        <p>${
+          realAddr
+            ? verifiedNow
+              ? `Your EIP-191 personal_sign signature is verified on Robinhood Chain (4663). Best Year-6 score: ${(me?.bestNetWorthWif ?? 0).toLocaleString('en-US')} $wif across ${me?.matchesPlayed ?? 0} matches.`
+              : 'Sign a gasless off-chain EIP-191 message to prove cryptographic ownership of this 0x address, unlock the ✓ Verified badge on the leaderboard, and earn +100 Town Points.'
+            : 'Step 1: Connect MetaMask or Rabby on Robinhood Chain (4663) (+50 pts). Step 2: Optional 0-gas signature for ✓ Verified badge (+100 pts). Step 3: Finish a 6-year match to post your $wif net worth.'
+        }</p>
+        ${
+          me?.challengeMessage && !verifiedNow
+            ? `<code class="challenge-code-box">${escape(me.challengeMessage)}</code>`
+            : ''
+        }
+        <div class="wif-row-actions">
+          ${
+            !realAddr
+              ? `<button type="button" class="primary" data-action="connect-mainnet-wif" ${walletFlowState !== 'idle' ? 'disabled' : ''}>${walletFlowState === 'connecting' ? '⏳ Connecting…' : '🦊 Connect MetaMask / Rabby (Chain 4663)'}</button>`
+              : !verifiedNow
+                ? `<button type="button" class="primary" data-action="verify-wallet-sig" ${walletFlowState !== 'idle' ? 'disabled' : ''}>${walletFlowState === 'signing' ? '⏳ Waiting for Signature…' : '✍️ Sign & Verify Ownership (+100 pts, 0 gas)'}</button>`
+                : `<span class="robin-chain-pill">✓ Ownership Verified${me?.rank ? ` · Rank #${me.rank}` : ''}</span>`
+          }
+          <button type="button" class="secondary" data-action="refresh-wallet-stats">↻ Refresh Live Telemetry</button>
+          <button type="button" class="secondary" data-action="wif-hub">Open $wif Hub</button>
+        </div>
+      </section>`;
+    }
+
+    modal(
+      'Harbor Traders & Live Wallet Registry',
+      `<div class="wif-hub-grid">
+        <div class="wif-stat-box"><small>🦊 Unique Wallets</small><strong>${uniqueWallets.toLocaleString('en-US')}</strong></div>
+        <div class="wif-stat-box"><small>✓ Signed & Verified</small><strong>${verifiedCount.toLocaleString('en-US')}</strong></div>
+        <div class="wif-stat-box"><small>🎲 Matches Played</small><strong>${totalMatches.toLocaleString('en-US')}</strong></div>
+        <div class="wif-stat-box"><small>📊 Wallet vs Guest</small><strong>${walletMatches}W / ${guestMatches}G</strong></div>
+      </div>
+      ${walletStatsOffline ? `<p class="muted" style="margin:8px 0 0;font-size:12px">Showing cached local state while live telemetry reconnects.</p>` : ''}
+      <div class="traders-tabs" role="tablist" aria-label="Harbor registry views">
+        <button type="button" role="tab" aria-selected="${tradersTab === 'leaderboard'}" class="traders-tab-btn ${tradersTab === 'leaderboard' ? 'active' : ''}" data-action="set-traders-tab" data-tab="leaderboard">🏆 Top Net Worth</button>
+        <button type="button" role="tab" aria-selected="${tradersTab === 'recent'}" class="traders-tab-btn ${tradersTab === 'recent' ? 'active' : ''}" data-action="set-traders-tab" data-tab="recent">🦊 Connected Wallets (${uniqueWallets})</button>
+        <button type="button" role="tab" aria-selected="${tradersTab === 'verify'}" class="traders-tab-btn ${tradersTab === 'verify' ? 'active' : ''}" data-action="set-traders-tab" data-tab="verify">🛡️ My Wallet & Verify</button>
+      </div>
+      ${tabBody}
+      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
+      'ROBINHOOD CHAIN (4663) · LIVE PLAYER TELEMETRY',
+    );
+    get('#modal').dataset.tradersBoard = 'true';
   }
 
   function yearBook() {
@@ -1764,6 +2099,17 @@ export function mountRobinTown(): void {
       burned = pool.burnedAmount;
       if (rankedPayout > 0) adjustActiveWalletBalance(rankedPayout);
     }
+    void reportCompletedMatch({
+      address: currentRealWeb3Address(),
+      finalNetWorthWif: state.players[0].cash,
+      won: rankedOrder[0] === 0,
+      burnedWif: burned,
+    }).then((summary) => {
+      if (summary) {
+        walletStats = summary;
+        walletStatsOffline = false;
+      }
+    });
     save();
     return { bonusPoints, rankedPayout, burned };
   }
@@ -1797,6 +2143,7 @@ export function mountRobinTown(): void {
         }</p>
         <div class="wif-row-actions">
           <button type="button" class="secondary" data-action="wif-hub">Open $wif Hub & Swap Points</button>
+          <button type="button" class="secondary" data-action="open-traders-board">🏆 Harbor Leaderboard</button>
         </div>
       </div>
       <p class="muted">You completed ${state.trades} trades and earned ${income(state, 0, isStaked())} $wif/yr in Year 6.</p>
@@ -1992,6 +2339,21 @@ export function mountRobinTown(): void {
       case 'wif-hub':
         openWifHub();
         break;
+      case 'open-traders-board':
+        openTradersBoard();
+        break;
+      case 'set-traders-tab':
+        if (data.tab === 'leaderboard' || data.tab === 'recent' || data.tab === 'verify') {
+          openTradersBoard(data.tab);
+        }
+        break;
+      case 'verify-wallet-sig':
+        void verifyActiveWalletOwnership();
+        break;
+      case 'refresh-wallet-stats':
+        refreshWalletStats();
+        toast('Refreshing live Harbor Wallet Registry…');
+        break;
       case 'select-sim-wallet':
         if (data.address) {
           const targetAddress = data.address;
@@ -2004,18 +2366,7 @@ export function mountRobinTown(): void {
         }
         break;
       case 'connect-mainnet-wif':
-        void wallet
-          .connectMainnetWif()
-          .then((acc) => {
-            toast(`Connected to Robinhood Chain Mainnet (4663) · ${acc.balance} $wif`);
-            saveEconomy();
-            if (get('#modal').dataset.wifHub === 'true') openWifHub();
-            render();
-          })
-          .catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : 'Wallet connection declined.';
-            toast(msg);
-          });
+        void connectMetaMaskQuick();
         break;
       case 'burn-mainnet-wif':
         void wallet
@@ -2026,6 +2377,7 @@ export function mountRobinTown(): void {
             communityVotes += 1;
             saveEconomy();
             toast(`Burned 0.1 $wif on Robinhood Chain! Tx: ${tx.hash.slice(0, 10)}…`);
+            refreshWalletStats();
             if (get('#modal').dataset.wifHub === 'true') openWifHub();
             render();
           })
@@ -2050,6 +2402,9 @@ export function mountRobinTown(): void {
             toast('No browser Web3 wallet detected. Using instant Simulation Wallet.');
           } else {
             toast(`Connected to ${ROBINHOOD_CHAIN_NAME}!`);
+            if (st.account && !st.account.isSimulated) {
+              await syncConnectedWeb3Wallet(st.account.address, st.chainId ?? ROBINHOOD_CHAIN_ID);
+            }
           }
           saveEconomy();
           if (get('#modal').dataset.wifHub === 'true') openWifHub();
@@ -2951,6 +3306,20 @@ export function mountRobinTown(): void {
   save();
   void warmAssets();
   refreshOnChainProof();
+  refreshWalletStats();
+
+  wallet.subscribe((wState) => {
+    const addr =
+      wState.mode === 'web3' && wState.account && !wState.account.isSimulated
+        ? wState.account.address.trim().toLowerCase()
+        : '';
+    if (addr && addr !== lastReportedWeb3Address) {
+      void syncConnectedWeb3Wallet(
+        wState.account!.address,
+        wState.chainId ?? ROBINHOOD_MAINNET_CHAIN_ID,
+      );
+    }
+  });
 
   // Auto-join cross-device online room if URL contains ?room=CODE6X
   try {
