@@ -1,11 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="14" fill="#0b0f19"/>
-  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#00c805" stroke-width="3"/>
-  <!-- Pixelated Robinhood Cap & Feather Icon -->
-  <path d="M12 40 L52 40 L46 48 L18 48 Z" fill="#00c805"/>
-  <path d="M18 26 L46 26 L52 40 L12 40 Z" fill="#00e806"/>
-  <path d="M26 14 L38 14 L46 26 L18 26 Z" fill="#00c805"/>
-  <!-- Golden Quill / Feather -->
-  <path d="M38 10 L44 10 L48 22 L42 22 Z" fill="#eec353"/>
-  <circle cx="32" cy="33" r="3" fill="#0b0f19"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#102a20" stroke="#2ca56d" stroke-width="2.5"/>
+  <path d="M12 22 L32 10 L52 22 Z" fill="#eec353"/>
+  <rect x="15" y="22" width="34" height="4" fill="#8b5a2b"/>
+  <path d="M13 26 H51 L54 34 H10 Z" fill="#2ca56d"/>
+  <path d="M19 26 H25 L26 34 H18 Z" fill="#fbf6e8"/>
+  <path d="M31 26 H37 L37 34 H31 Z" fill="#fbf6e8"/>
+  <path d="M43 26 H49 L50 34 H44 Z" fill="#fbf6e8"/>
+  <rect x="16" y="34" width="32" height="19" rx="2" fill="#1b4332" stroke="#eec353" stroke-width="1.5"/>
+  <rect x="26" y="38" width="12" height="15" rx="1.5" fill="#eec353"/>
+  <rect x="19" y="38" width="5" height="7" rx="1" fill="#39a883"/>
+  <rect x="40" y="38" width="5" height="7" rx="1" fill="#39a883"/>
+  <circle cx="50" cy="40" r="3.2" fill="#dc6f57"/>
 </svg>
