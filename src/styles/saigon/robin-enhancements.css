@@ -415,6 +415,305 @@
   border-color: #f8df8c;
 }
 
+/* Fast-Time A to Z Auto-Play Controls & Live Neighbor Bot Feed */
+.fast-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #684b14, #3a2909);
+  border: 1px solid #eec353;
+  color: #ffea9f;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.fast-play-btn:hover {
+  transform: translateY(-1px);
+  border-color: #fff3bd;
+  color: #ffffff;
+}
+
+.fast-play-group.running {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid #ffe58f;
+  background: #eec353;
+  box-shadow: 0 0 12px rgba(238, 195, 83, 0.42);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.fast-play-group.running .fast-play-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: #1f1706;
+  padding: 5px 8px;
+  transform: none;
+}
+
+.fast-play-stop {
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid rgba(31, 23, 6, 0.28);
+  background: rgba(16, 38, 28, 0.92);
+  color: #ffea9f;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fast-play-stop:hover {
+  background: #173f2d;
+  color: #ffffff;
+}
+
+.fast-menu-cta {
+  border-color: #d4a638 !important;
+  background: linear-gradient(135deg, #3b3013, #233326) !important;
+  color: #ffe89e !important;
+  font-weight: 800 !important;
+}
+
+.three-city-toolbar button.fast-toolbar-pill {
+  background: rgba(238, 195, 83, 0.2);
+  border-color: #eec353;
+  color: #ffe89e;
+}
+
+.three-city-toolbar button.fast-toolbar-pill.running {
+  background: #eec353;
+  border-color: #fff0a8;
+  color: #1f1706;
+}
+
+.bot-live-feed {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 6;
+  max-width: calc(100% - 132px);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(13, 33, 25, 0.88);
+  border: 1px solid rgba(203, 180, 132, 0.55);
+  box-shadow: 0 4px 14px rgba(6, 18, 13, 0.45);
+  color: #f4ead2;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+.bot-live-feed.fast-active {
+  border-color: #eec353;
+  box-shadow: 0 4px 16px rgba(238, 195, 83, 0.28);
+}
+
+.bot-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.bot-dots i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.bot-feed-tag,
+.bot-feed-speed {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: rgba(57, 168, 131, 0.25);
+  color: #9ef5c8;
+}
+
+.bot-feed-speed {
+  background: #eec353;
+  color: #1f1706;
+}
+
+.bot-feed-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Prevent clipped focus brackets in mini shop inventory and prevent bot name truncation */
+.game-shell .pocket-inventory > button:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.game-shell .pocket-inventory > button:focus-visible {
+  outline: 2px solid #f6d27f;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+@media (min-width: 681px) {
+  .game-shell .pocket-main {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    padding: 4px 8px !important;
+  }
+
+  .game-shell .pocket-token {
+    flex-shrink: 0 !important;
+    min-width: max-content !important;
+    gap: 5px !important;
+  }
+
+  .game-shell .pocket-token img {
+    width: 22px !important;
+    height: 22px !important;
+    flex-shrink: 0;
+  }
+
+  .game-shell .pocket-token b {
+    font-size: 13px !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  .game-shell .wallet {
+    min-width: 0;
+    flex-shrink: 1;
+    justify-items: end;
+  }
+
+  .game-shell .wallet strong {
+    font-size: 15.5px !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .game-shell .wallet small {
+    font-size: 11px !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 1420px) and (min-width: 681px) {
+  .robin-hud-utilities .view-mode-segmented {
+    display: none;
+  }
+}
+
+@media (max-width: 1500px) and (min-width: 681px) {
+  .robin-hud-utilities .wif-hud-burn {
+    display: none;
+  }
+}
+
+@media (max-width: 1380px) and (min-width: 1261px) {
+  .robin-hud-utilities .ipod-hud-btn {
+    display: none;
+  }
+  .game-brand {
+    font-size: 20px;
+  }
+}
+
+/* Two-row responsive desktop/tablet header (681px to 1260px) so YOU, COLE, MAYA, CLARA never truncate */
+@media (max-width: 1260px) and (min-width: 681px) {
+  .game-hud-top {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
+    gap: 6px 12px !important;
+    padding: 6px 12px !important;
+  }
+
+  .game-hud-top .game-brand {
+    grid-row: 1;
+    grid-column: 1;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .game-hud-top .game-brand span {
+    display: inline;
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 3px;
+  }
+
+  .robin-hud-utilities {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .game-hud-top .hud-menu {
+    min-height: 32px;
+    height: 32px;
+    min-width: 38px;
+    padding: 0 8px;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .game-hud-top .hud-menu small {
+    display: none;
+  }
+
+  .game-shell .player-rail {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    width: 100%;
+    gap: 7px;
+  }
+
+  .game-shell .pocket-main {
+    min-height: 36px;
+    padding: 3px 8px !important;
+  }
+
+  .game-shell .pocket-inventory {
+    height: 24px;
+    padding: 0 6px 2px;
+  }
+}
+
+@media (max-width: 820px) and (min-width: 681px) {
+  .game-shell .wallet small {
+    display: none !important;
+  }
+}
+
 /* 3D Tabletop Isometric Street Tilt (Default 3D Tabletop Mode) */
 body[data-view-mode="tabletop-3d"] .board-frame {
   perspective: 1500px;
@@ -947,15 +1246,39 @@ body[data-view-mode="city-3d"] .camera-hint {
     display: none !important;
   }
 
+  .robin-hud-utilities .fast-play-btn {
+    min-height: 30px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .robin-hud-utilities .fast-play-group.running {
+    border-radius: 999px;
+    min-height: 30px;
+  }
+
+  .robin-hud-utilities .fast-play-group.running .fast-play-btn {
+    padding: 4px 7px;
+  }
+
+  .robin-hud-utilities .fast-play-stop {
+    min-height: 30px;
+    padding: 4px 7px;
+    font-size: 10.5px;
+  }
+
   .robin-hud-utilities .wif-hud-pill {
     display: inline-flex !important;
     align-items: center;
     gap: 4px;
     min-height: 30px;
-    max-width: 158px;
-    padding: 4px 8px;
+    max-width: 112px;
+    padding: 4px 7px;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 10.5px;
     font-variant-numeric: tabular-nums;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
@@ -1113,6 +1436,19 @@ body[data-view-mode="city-3d"] .camera-hint {
   }
 
   /* Compact Mini Tear-Off Calendar on Top-Right */
+  .bot-live-feed {
+    top: 6px;
+    left: 6px;
+    max-width: calc(100% - 74px);
+    padding: 3px 8px;
+    gap: 5px;
+    font-size: 10px;
+  }
+
+  .bot-feed-tag {
+    display: none;
+  }
+
   .game-shell .calendar.paper-calendar {
     top: 6px !important;
     right: 6px !important;
@@ -1236,6 +1572,10 @@ body[data-view-mode="city-3d"] .camera-hint {
 
   body[data-view-mode="city-3d"] #toast {
     bottom: calc(env(safe-area-inset-bottom) + 108px);
+  }
+
+  body[data-view-mode="city-3d"][data-phase="build"] #toast {
+    bottom: calc(env(safe-area-inset-bottom) + 178px);
   }
 
   /* Bottom Action Belt: Full Rack Label & Uncrowded Address Strip */
@@ -1377,4 +1717,10 @@ body[data-qa-debug="1"] .lot {
   line-height: 1.35;
   padding: 5px 9px;
   border-radius: 6px;
+}
+
+@media (min-width: 681px) {
+  body[data-view-mode="city-3d"]:not(.menu-open) #toast {
+    bottom: 128px;
+  }
 }

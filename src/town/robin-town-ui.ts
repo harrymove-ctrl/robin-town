@@ -22,6 +22,11 @@ import {
   finishYear,
   nextYear,
   rankings,
+  trade,
+  botTradeRound,
+  chooseSmartDraftPlots,
+  findSmartPlayerTrade,
+  findNextSmartBuild,
   validSave,
   updateBoardLayout,
   migrateEnglishState,
@@ -227,6 +232,216 @@ export function mountRobinTown(): void {
   let activeRoomUnsub: (() => void) | null = null;
   let onChainProof: OnChainWifProof | null = null;
   let onChainProofLoading = false;
+
+  // Fast-Time A-to-Z Auto-Play & Live AI Neighbor Feed
+  type FastPlaySpeed = 0 | 1 | 3 | 8;
+  let autoPlaySpeed: FastPlaySpeed = 0;
+  let autoPlayTimer: Timer | undefined;
+  let liveBotFeed = 'Cole, Maya & Clara are ready at the table';
+
+  function recordTradeTaxToVault(taxAmount: number, tradeCount = 1): void {
+    if (taxAmount <= 0 && tradeCount <= 0) return;
+    flywheel = {
+      ...flywheel,
+      totalStakingYield: flywheel.totalStakingYield + Math.max(0, taxAmount),
+      totalTradesTaxed: flywheel.totalTradesTaxed + (taxAmount > 0 ? Math.max(1, tradeCount) : 0),
+    };
+    saveEconomy();
+  }
+
+  function stepDelayMs(speed: FastPlaySpeed): number {
+    if (speed === 8) return 95;
+    if (speed === 3) return 310;
+    return 860;
+  }
+
+  function setAutoPlaySpeed(next: FastPlaySpeed, silent = false): void {
+    clearTimeout(autoPlayTimer);
+    autoPlayTimer = undefined;
+    autoPlaySpeed = next;
+    if (next > 0) {
+      dismissPhase();
+      if (get('#modal').open) closeModal();
+      liveBotFeed = `Fast Play ${next}x active: You, Cole, Maya & Clara playing Year ${state.year}/6`;
+      if (!silent) {
+        toast(`⚡ Fast Play ${next}x running! Watch You, Cole, Maya & Clara build Year ${state.year} to Year 6.`);
+      }
+      render();
+      scheduleNextAutoStep(Math.min(180, stepDelayMs(next)));
+    } else {
+      if (!silent) {
+        toast('Fast Play paused. Manual control is active.');
+      }
+      render();
+    }
+  }
+
+  function scheduleNextAutoStep(customMs?: number): void {
+    clearTimeout(autoPlayTimer);
+    if (!autoPlaySpeed || view !== 'play' || menuOpen) return;
+    autoPlayTimer = setTimeout(() => {
+      runAutoPlayStep();
+    }, customMs ?? stepDelayMs(autoPlaySpeed));
+  }
+
+  function runAutoPlayStep(): void {
+    if (!autoPlaySpeed || view !== 'play' || menuOpen) {
+      autoPlaySpeed = 0;
+      return;
+    }
+    dismissPhase();
+    if (get('#modal').open && state.phase !== 'ended') {
+      closeModal();
+    }
+
+    if (state.phase === 'receive') {
+      if (chosen.length !== state.draftCount) {
+        chosen = chooseSmartDraftPlots(state);
+        freshLots = [...chosen];
+        if (chosen[0] !== undefined && autoPlaySpeed <= 3) {
+          focusLot(chosen[0]);
+        }
+        liveBotFeed = `Year ${state.year} Draft: Selecting plots ${chosen.map((id) => '#' + (id + 1)).join(', ')}`;
+        playSound('place');
+        render();
+        scheduleNextAutoStep();
+        return;
+      }
+      const ownedBefore = new Set(state.lots.filter((l) => l.owner !== null).map((l) => l.id));
+      const claimed = [...chosen];
+      claimPlots(state, chosen);
+      const botNew = state.lots
+        .filter((l) => l.owner !== null && l.owner !== 0 && !ownedBefore.has(l.id))
+        .map((l) => l.id);
+      freshLots = [...claimed, ...botNew];
+      chosen = [];
+      selectedLot = null;
+      townPoints += 10;
+      liveBotFeed = `Year ${state.year} Receive: You claimed ${claimed.length} plots · Cole, Maya & Clara claimed ${botNew.length} corners`;
+      playSound('build');
+      changed();
+      scheduleFreshClear();
+      scheduleNextAutoStep();
+      return;
+    }
+
+    if (state.phase === 'trade') {
+      const notes: string[] = [];
+      const smartOffer = findSmartPlayerTrade(state);
+      if (smartOffer) {
+        const res = trade(state, smartOffer);
+        if (res.accepted) {
+          townPoints += 15;
+          if ((res.taxAmount ?? 0) > 0) recordTradeTaxToVault(res.taxAmount ?? 0, 1);
+          notes.push(`You traded with ${state.players[smartOffer.partner].name}`);
+        }
+      }
+      const botRound = botTradeRound(state);
+      if (botRound.totalTax > 0) {
+        recordTradeTaxToVault(botRound.totalTax, botRound.deals.length);
+      }
+      for (const d of botRound.deals) {
+        notes.push(d.summary);
+      }
+      beginBuild(state);
+      selectedLot = null;
+      selectedShop = null;
+      liveBotFeed =
+        notes.length > 0
+          ? `Year ${state.year} Deals: ${notes.join(' · ')}`
+          : `Year ${state.year} Bargain: Neighbors held onto their tiles, opening Build`;
+      playSound('tap');
+      changed();
+      scheduleNextAutoStep();
+      return;
+    }
+
+    if (state.phase === 'build') {
+      if (autoPlaySpeed === 8) {
+        const placedIds: number[] = [];
+        let guard = 0;
+        while (guard++ < 20) {
+          const next = findNextSmartBuild(state);
+          if (!next) break;
+          placeShop(state, next.id, next.shop, 0);
+          placedIds.push(next.id);
+          townPoints += 10;
+        }
+        const builtBefore = new Set(state.lots.filter((l) => l.shop !== null).map((l) => l.id));
+        const cashBefore = state.players.map((p) => p.cash);
+        finishYear(state, isStaked());
+        townPoints += Math.max(15, Math.floor((state.lastIncome[0] ?? 0) / 2));
+        const botBuiltIds = state.lots
+          .filter((l) => l.shop !== null && !builtBefore.has(l.id))
+          .map((l) => l.id);
+        freshLots = [...placedIds, ...botBuiltIds];
+        selectedLot = null;
+        selectedShop = null;
+        liveBotFeed = `Year ${state.year} Payday: You +${state.lastIncome[0]} · Cole +${state.lastIncome[1]} · Maya +${state.lastIncome[2]} · Clara +${state.lastIncome[3]} $wif`;
+        changed();
+        scheduleFreshClear();
+        celebratePayday(cashBefore);
+        scheduleNextAutoStep(state.year === 6 ? 220 : 140);
+        return;
+      }
+
+      const next = findNextSmartBuild(state);
+      if (next) {
+        placeShop(state, next.id, next.shop, 0);
+        freshLots = [next.id];
+        selectedLot = null;
+        townPoints += 10;
+        focusLot(next.id);
+        liveBotFeed = `Year ${state.year} Build: You opened ${SHOPS[next.shop].name} on plot #${next.id + 1}`;
+        playSound('build');
+        changed();
+        scheduleFreshClear();
+        scheduleNextAutoStep();
+        return;
+      }
+
+      const builtBefore = new Set(state.lots.filter((l) => l.shop !== null).map((l) => l.id));
+      const cashBefore = state.players.map((p) => p.cash);
+      finishYear(state, isStaked());
+      townPoints += Math.max(15, Math.floor((state.lastIncome[0] ?? 0) / 2));
+      const botBuiltIds = state.lots
+        .filter((l) => l.shop !== null && !builtBefore.has(l.id))
+        .map((l) => l.id);
+      freshLots = botBuiltIds;
+      selectedLot = null;
+      selectedShop = null;
+      liveBotFeed = `Year ${state.year} Payday: Bots opened ${botBuiltIds.length} shops · You +${state.lastIncome[0]}, Cole +${state.lastIncome[1]}, Maya +${state.lastIncome[2]}, Clara +${state.lastIncome[3]} $wif`;
+      changed();
+      scheduleFreshClear();
+      celebratePayday(cashBefore);
+      scheduleNextAutoStep(state.year === 6 ? 420 : Math.max(360, stepDelayMs(autoPlaySpeed)));
+      return;
+    }
+
+    if (state.phase === 'income') {
+      cancelAnimationFrame(cashFrame);
+      payout = null;
+      get('#effects').innerHTML = '';
+      nextYear(state);
+      chosen = [];
+      selectedLot = null;
+      selectedShop = null;
+      liveBotFeed = `Year ${state.year} (${ZODIAC[state.year - 1][0]}): Fresh plots & tiles dealt to You, Cole, Maya & Clara`;
+      changed();
+      scheduleNextAutoStep();
+      return;
+    }
+
+    if (state.phase === 'ended') {
+      autoPlaySpeed = 0;
+      clearTimeout(autoPlayTimer);
+      autoPlayTimer = undefined;
+      const topPlayer = rankings(state)[0];
+      liveBotFeed = `Six years complete! ${topPlayer.id === 0 ? 'You won' : topPlayer.name + ' won'} with ${topPlayer.cash} $wif`;
+      render();
+      results();
+    }
+  }
 
   function refreshOnChainProof(): void {
     if (onChainProofLoading) return;
@@ -469,11 +684,19 @@ export function mountRobinTown(): void {
       ended: 'Final',
     }[state.phase];
     const phaseCode = { receive: '01', trade: '02', build: '03', income: '04', ended: '★' }[state.phase];
+    const fastControl =
+      autoPlaySpeed > 0
+        ? `<div class="fast-play-group running" role="group" aria-label="Fast Play speed controls">
+            <button type="button" class="fast-play-btn active" data-action="cycle-fast-speed" title="Cycle Fast Play speed (1x, 3x, 8x)" aria-label="Fast Play running at ${autoPlaySpeed}x speed. Tap to cycle speed">⚡ ${autoPlaySpeed}x</button>
+            <button type="button" class="fast-play-stop" data-action="stop-fast-play" title="Pause Fast Play (Hotkey: F)" aria-label="Pause Fast Play">⏸</button>
+          </div>`
+        : `<button type="button" class="fast-play-btn" data-action="toggle-fast-play" title="Auto-play full 6-year match A to Z with AI bots (Hotkey: F)" aria-label="Start Fast Play A to Z">⚡ <span class="fast-play-label">Fast</span></button>`;
     return `<div class="robin-hud-utilities">
       <button type="button" class="mobile-phase-pill" data-action="guide" aria-label="${phaseName()}. Tap for phase guide">
         <span class="mobile-phase-num">${phaseCode}</span>
         <span class="mobile-phase-name">${phaseShort}</span>
       </button>
+      ${fastControl}
       <button class="view-toggle-btn" data-action="view-toggle" title="Toggle 3D City / Tabletop view (Hotkey: V)" aria-label="Toggle 3D City and Tabletop board view">
         <span class="view-toggle-icon">${viewMode === 'city-3d' ? '🏙️' : '🗺️'}</span>
         <span class="view-toggle-label">${viewMode === 'city-3d' ? '3D City' : 'Board'}</span>
@@ -626,6 +849,12 @@ export function mountRobinTown(): void {
       zenBtn.classList.toggle('active', mobileZenMode);
       zenBtn.setAttribute('aria-pressed', String(mobileZenMode));
     }
+    const fastToolbarBtn = stage.querySelector<HTMLButtonElement>('button.fast-toolbar-pill');
+    if (fastToolbarBtn) {
+      fastToolbarBtn.textContent = autoPlaySpeed > 0 ? `⏸ Fast ${autoPlaySpeed}x` : '⚡ Fast A→Z';
+      fastToolbarBtn.classList.toggle('running', autoPlaySpeed > 0);
+      fastToolbarBtn.setAttribute('aria-pressed', String(autoPlaySpeed > 0));
+    }
   }
 
   function buildIPodActions(): iPodAction[] {
@@ -764,11 +993,13 @@ export function mountRobinTown(): void {
                 <button type="button" data-action="set-3d-atmo" data-atmo="sunset" aria-label="Golden Sunset atmosphere">Sunset</button>
                 <button type="button" data-action="set-3d-atmo" data-atmo="night" aria-label="Lantern Night atmosphere">Night</button>
                 <span class="three-city-sep" aria-hidden="true"></span>
+                <button type="button" class="fast-toolbar-pill" data-action="toggle-fast-play" aria-pressed="false" title="Run or pause full A to Z Fast Play">⚡ Fast A→Z</button>
                 <button type="button" data-action="view-toggle">2D Map</button>
                 <button type="button" class="mobile-zen-pill" data-action="toggle-mobile-zen" aria-pressed="false" aria-label="Toggle compact full-screen 3D HUD">⛶ Full</button>
               </div>
             </div>
           </div>
+          <div class="bot-live-feed" role="status" aria-live="polite"></div>
           <div class="calendar-layer"></div>
           <span class="camera-hint"></span>
           <div class="inspector-layer"></div>
@@ -858,6 +1089,16 @@ export function mountRobinTown(): void {
     get('.game-hud-top').innerHTML = `<div class="game-brand">ROBIN<span>TOWN</span></div>${playerCard()}${hudUtilities()}`;
     get('.plot-layer').innerHTML = board();
     get('.calendar-layer').innerHTML = calendar();
+    const botFeedEl = $('.bot-live-feed');
+    if (botFeedEl) {
+      const botDots = `<span class="bot-dots" aria-hidden="true"><i style="background:${TOKEN_COLORS[0]}"></i><i style="background:${TOKEN_COLORS[1]}"></i><i style="background:${TOKEN_COLORS[2]}"></i><i style="background:${TOKEN_COLORS[3]}"></i></span>`;
+      const speedBadge =
+        autoPlaySpeed > 0
+          ? `<span class="bot-feed-speed">⚡ ${autoPlaySpeed}x</span>`
+          : `<span class="bot-feed-tag">LIVE TABLE</span>`;
+      botFeedEl.innerHTML = `${botDots}${speedBadge}<span class="bot-feed-text">${escape(liveBotFeed)}</span>`;
+      botFeedEl.classList.toggle('fast-active', autoPlaySpeed > 0);
+    }
     get('.camera-hint').textContent =
       viewMode === 'city-3d'
         ? '3D City Mode · Click glowing gold parcels to draft or build'
@@ -884,7 +1125,7 @@ export function mountRobinTown(): void {
     if (phaseChanged) {
       observedPhase = key;
       dismissPhase();
-      if (!['income', 'ended'].includes(state.phase)) {
+      if (!autoPlaySpeed && !['income', 'ended'].includes(state.phase)) {
         clearTimeout(phaseDelay);
         phaseDelay = setTimeout(() => showPhase(), oldYear === state.year ? 200 : 1100);
       }
@@ -1010,6 +1251,7 @@ export function mountRobinTown(): void {
 
         <div class="start-actions">
           <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${hasProgress() ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : 'Start free game'} <span>▶</span></button>
+          <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Fast Play A to Z (Watch You + Cole, Maya & Clara)</button>
           ${hasProgress() ? `<span class="save-caption">Year ${state.year}/6 · ${phaseName()} · ${state.players[0].cash} $wif (${state.entryMode === 'ranked' ? 'Ranked Arena' : 'Casual Town'})</span><button class="menu-option" data-action="new">New game</button>` : ''}
           <button class="menu-option" data-action="wif-hub">$wif Wallet, Staking & Online Rooms (${walletBalance.toLocaleString('en-US')} $wif)</button>
           <button class="menu-option" data-action="rules">How to play</button>
@@ -1065,12 +1307,14 @@ export function mountRobinTown(): void {
     const label = root.querySelector<HTMLElement>('[data-load-label]'),
       progress = root.querySelector('progress'),
       start = root.querySelector<HTMLButtonElement>('[data-action="resume"]'),
+      fastStart = root.querySelector<HTMLButtonElement>('[data-action="launch-fast-play"]'),
       retry = root.querySelector<HTMLButtonElement>('[data-action="retry-assets"]');
     if (progress) {
       progress.value = loadingCount;
       progress.hidden = assetsReady;
     }
     if (start) start.disabled = !assetsReady;
+    if (fastStart) fastStart.disabled = !assetsReady;
     if (retry) retry.hidden = !assetFailures.length;
     if (label)
       label.textContent = assetFailures.length
@@ -1100,6 +1344,11 @@ export function mountRobinTown(): void {
   }
 
   function gameMenu() {
+    if (autoPlaySpeed > 0) {
+      clearTimeout(autoPlayTimer);
+      autoPlayTimer = undefined;
+      autoPlaySpeed = 0;
+    }
     cancelMapGesture();
     cancelDrag();
     dismissPhase();
@@ -1252,7 +1501,7 @@ export function mountRobinTown(): void {
 
   function showPhase() {
     clearTimeout(phaseDelay);
-    if (view !== 'play' || menuOpen || get('#modal').open) return;
+    if (autoPlaySpeed > 0 || view !== 'play' || menuOpen || get('#modal').open) return;
     clearTimeout(phaseTimer);
     const descriptions: Record<GamePhase, string> = {
       receive: `Choose ${state.draftCount} glowing addresses. Place your green stools, then keep your selection.`,
@@ -1561,6 +1810,9 @@ export function mountRobinTown(): void {
   }
 
   function startFreshSession() {
+    clearTimeout(autoPlayTimer);
+    autoPlayTimer = undefined;
+    autoPlaySpeed = 0;
     if (selectedEntryMode === 'ranked') {
       const ok = adjustActiveWalletBalance(-DEFAULT_FLYWHEEL_CONFIG.buyInAmount);
       if (!ok) {
@@ -1573,6 +1825,7 @@ export function mountRobinTown(): void {
     payout = null;
     get('#effects').innerHTML = '';
     state = newGame(Math.random, selectedEntryMode);
+    liveBotFeed = 'Year 1 (Snake): You, Cole, Maya & Clara pulled up stools at the table';
     observedPhase = '';
     selectedLot = null;
     selectedShop = null;
@@ -1937,15 +2190,21 @@ export function mountRobinTown(): void {
         openTrade();
         break;
       case 'claim': {
-        freshLots = [...chosen];
+        const ownedBefore = new Set(state.lots.filter((l) => l.owner !== null).map((l) => l.id));
+        const claimed = [...chosen];
         claimPlots(state, chosen);
+        const botNew = state.lots
+          .filter((l) => l.owner !== null && l.owner !== 0 && !ownedBefore.has(l.id))
+          .map((l) => l.id);
+        freshLots = [...claimed, ...botNew];
         chosen = [];
         selectedLot = null;
         townPoints += 10;
+        liveBotFeed = `Year ${state.year}: You claimed ${claimed.length} plots · Cole, Maya & Clara claimed ${botNew.length} corners`;
         changed();
         scheduleFreshClear();
         playSound('build');
-        toast('Addresses claimed! Bargain with neighbors or head to Build.');
+        toast('Addresses claimed! Cole, Maya & Clara placed their stools too.');
         break;
       }
       case 'trade':
@@ -1961,13 +2220,24 @@ export function mountRobinTown(): void {
           phaseName('build'),
         );
         break;
-      case 'confirm-build':
+      case 'confirm-build': {
+        const botRound = botTradeRound(state);
+        if (botRound.totalTax > 0) {
+          recordTradeTaxToVault(botRound.totalTax, botRound.deals.length);
+        }
         beginBuild(state);
         selectedLot = null;
         selectedShop = null;
         closeModal();
+        if (botRound.deals.length > 0) {
+          liveBotFeed = `Neighbor Deals: ${botRound.deals.map((d) => d.summary).join(' · ')}`;
+          toast(`${botRound.deals[0].summary}. Time to build!`);
+        } else {
+          liveBotFeed = `Year ${state.year} Build: Cole, Maya & Clara are ready to open storefronts`;
+        }
         changed();
         break;
+      }
       case 'quick-build': {
         const id = Number(data.id),
           shop = Number(data.index);
@@ -2004,13 +2274,50 @@ export function mountRobinTown(): void {
           cash = state.players.map((p) => p.cash);
         finishYear(state, isStaked());
         townPoints += Math.max(15, Math.floor((state.lastIncome[0] ?? 0) / 2));
-        freshLots = state.lots.filter((l) => l.shop !== null && !built.has(l.id)).map((l) => l.id);
+        const newShops = state.lots.filter((l) => l.shop !== null && !built.has(l.id)).map((l) => l.id);
+        freshLots = newShops;
+        liveBotFeed = `Year ${state.year} Payday: Bots opened ${newShops.length} shops · Cole +${state.lastIncome[1]}, Maya +${state.lastIncome[2]}, Clara +${state.lastIncome[3]} $wif`;
         selectedLot = null;
         selectedShop = null;
         closeModal();
         changed();
         scheduleFreshClear();
         celebratePayday(cash);
+        break;
+      }
+      case 'toggle-fast-play': {
+        if (autoPlaySpeed > 0) {
+          setAutoPlaySpeed(0);
+        } else {
+          if (state.phase === 'ended') {
+            startFreshSession();
+          }
+          setAutoPlaySpeed(3);
+        }
+        break;
+      }
+      case 'cycle-fast-speed': {
+        const nextSpeed: FastPlaySpeed =
+          autoPlaySpeed === 1 ? 3 : autoPlaySpeed === 3 ? 8 : 1;
+        setAutoPlaySpeed(nextSpeed);
+        break;
+      }
+      case 'stop-fast-play': {
+        setAutoPlaySpeed(0);
+        break;
+      }
+      case 'launch-fast-play': {
+        if (!assetsReady) return;
+        void gameAudio.unlock();
+        if (!hasProgress() || state.phase === 'ended') {
+          startFreshSession();
+        } else {
+          menuOpen = false;
+          sessionStarted = true;
+          view = 'play';
+          render();
+        }
+        setAutoPlaySpeed(3);
         break;
       }
       case 'income':
@@ -2064,8 +2371,38 @@ export function mountRobinTown(): void {
     }
   }
 
+  const FAST_PLAY_SAFE_ACTIONS = new Set([
+    'toggle-fast-play',
+    'cycle-fast-speed',
+    'stop-fast-play',
+    'launch-fast-play',
+    'set-3d-preset',
+    'reset-3d-camera',
+    'set-3d-atmo',
+    'toggle-3d-touch-mode',
+    'toggle-mobile-zen',
+    'view-toggle',
+    'set-view',
+    'sound',
+    'music',
+    'toggle-ipod',
+    'dismiss-phase',
+  ]);
+
   function preserveControlFocus(el: HTMLElement) {
-    if (document.activeElement !== document.body) return;
+    if (!keyboardNavigation || document.activeElement !== document.body) return;
+    if (
+      el.dataset.action === 'glance-shop' &&
+      el.dataset.player !== undefined &&
+      el.dataset.shopIndex !== undefined
+    ) {
+      document
+        .querySelector<HTMLElement>(
+          `[data-action="glance-shop"][data-player="${el.dataset.player}"][data-shop-index="${el.dataset.shopIndex}"]`,
+        )
+        ?.focus({ preventScroll: true });
+      return;
+    }
     for (const attr of ['data-lot', 'data-shop', 'data-action'])
       if (el.hasAttribute(attr)) {
         document
@@ -2093,12 +2430,21 @@ export function mountRobinTown(): void {
     }
     const barter = eventElement(e)?.closest<HTMLElement>('[data-bargain]');
     if (barter) {
+      if (autoPlaySpeed > 0) setAutoPlaySpeed(0, true);
       trading.handle(barter);
       return;
     }
     const el = eventElement(e)?.closest<HTMLElement>('[data-action],[data-lot],[data-shop]');
     if (!el || el.hasAttribute('disabled')) return;
     try {
+      if (
+        autoPlaySpeed > 0 &&
+        (el.dataset.lot !== undefined ||
+          el.dataset.shop !== undefined ||
+          (el.dataset.action !== undefined && !FAST_PLAY_SAFE_ACTIONS.has(el.dataset.action)))
+      ) {
+        setAutoPlaySpeed(0, true);
+      }
       playSound('tap');
       if (el.dataset.lot !== undefined) {
         clickLot(Number(el.dataset.lot));
@@ -2436,7 +2782,21 @@ export function mountRobinTown(): void {
         return;
       }
     }
+    if (e.key === 'f' || e.key === 'F') {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.getAttribute('contenteditable') === 'true');
+      if (!isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        act('toggle-fast-play');
+        return;
+      }
+    }
     if (e.key === 'Escape') {
+      if (autoPlaySpeed > 0) setAutoPlaySpeed(0);
       dismissPhase();
       cancelDrag();
       selectedShop = null;

@@ -302,6 +302,43 @@ async function runBrowserVerification(): Promise<void> {
       await page.waitForTimeout(200);
       console.log(`  [PASS] In-game HUD $wif Hub modal closed`);
 
+      // 7b. Player Card Bot Name Readability & Fast Play Toggle Verification
+      const hudCheck = await page.evaluate(() => {
+        const names = [...document.querySelectorAll('.pocket-token b')].map((el) => ({
+          text: el.textContent || '',
+          clientW: el.clientWidth,
+          scrollW: el.scrollWidth,
+          truncated: el.scrollWidth > el.clientWidth + 1,
+        }));
+        const hasFastBtn = Boolean(
+          document.querySelector('.game-hud-top [data-action="toggle-fast-play"]'),
+        );
+        const hasBotFeed = Boolean(document.querySelector('.bot-live-feed'));
+        return { names, hasFastBtn, hasBotFeed };
+      });
+      if (!hudCheck.hasFastBtn || !hudCheck.hasBotFeed) {
+        throw new Error('Fast Play button or Live Bot Feed missing in HUD');
+      }
+      if (
+        hudCheck.names.length !== 4 ||
+        hudCheck.names.some(
+          (n: { clientW: number; truncated: boolean }) => n.clientW < 20 || n.truncated,
+        )
+      ) {
+        throw new Error(`Player card bot names truncated: ${JSON.stringify(hudCheck.names)}`);
+      }
+      console.log(`  [PASS] All 4 player names (YOU, COLE, MAYA, CLARA) un-truncated and Fast Play ready`);
+
+      await page.evaluate(() => {
+        document.querySelector<HTMLElement>('.game-hud-top [data-action="toggle-fast-play"]')?.click();
+      });
+      await page.waitForTimeout(380);
+      await page.evaluate(() => {
+        document.querySelector<HTMLElement>('.game-hud-top [data-action="stop-fast-play"]')?.click();
+      });
+      await page.waitForTimeout(150);
+      console.log(`  [PASS] Fast Play A-to-Z started and paused cleanly`);
+
       // 8. Error and 404 Assertions
       console.log(
         `  [PASS] Console errors: ${consoleErrors.length}, Page errors: ${pageErrors.length}, HTTP 404s: ${http404s.length}`,

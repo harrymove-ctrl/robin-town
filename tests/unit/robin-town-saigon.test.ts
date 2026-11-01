@@ -8,9 +8,14 @@ import {
   KEEP,
   SHOPS,
   beginBuild,
+  botTradeRound,
+  chooseSmartDraftPlots,
   claimPlots,
   emptyOffer,
+  findNextSmartBuild,
+  findSmartPlayerTrade,
   finishYear,
+  holdings,
   income,
   migrateEnglishState,
   newGame,
@@ -179,5 +184,67 @@ describe('Robin-Town Authentic Saigon-Town Clone & $wif Integration', () => {
       'Cole opened Bakery in Sherwood.',
       'Maya traded Noodles in Lantern Hall with Clara.',
     ]);
+  });
+
+  it('executes bot-to-bot OTC deals in botTradeRound and smart A-to-Z 6-year Fast Play', () => {
+    const setup = newGame(() => 0.37, 'casual');
+    claimPlots(setup, chooseSmartDraftPlots(setup), () => 0.37);
+    // Give Cole (1) 2 Coffee tiles + 1 surplus Tailor, and Maya (2) 2 Tailor tiles + 1 surplus Coffee
+    setup.players[1].tiles = [2, 0, 0, 0, 1, 0];
+    setup.players[2].tiles = [1, 0, 0, 0, 2, 0];
+    const round = botTradeRound(setup);
+    assert.ok(round.deals.length >= 1, 'Cole and Maya should swap surplus tiles to grow their sets');
+    assert.ok(
+      round.deals[0].summary.includes('Cole') && round.deals[0].summary.includes('Maya'),
+      'Bot deal summary must name both AI neighbors',
+    );
+
+    // Run full 6-year A-to-Z smart Fast Play simulation with You + Cole + Maya + Clara
+    let seed = 17;
+    const rng = () => {
+      seed = (seed * 48271) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
+    const sim = newGame(rng, 'ranked');
+    for (let yr = 1; yr <= 6; yr++) {
+      assert.equal(sim.year, yr);
+      assert.equal(sim.phase, 'receive');
+      const smartDraft = chooseSmartDraftPlots(sim);
+      assert.equal(smartDraft.length, KEEP[yr - 1]);
+      claimPlots(sim, smartDraft, rng);
+      assert.equal(sim.phase, 'trade');
+
+      const offer = findSmartPlayerTrade(sim);
+      if (offer) {
+        const res = trade(sim, offer);
+        assert.equal(res.accepted, true);
+      }
+      botTradeRound(sim);
+      beginBuild(sim);
+      assert.equal(sim.phase, 'build');
+
+      let buildGuard = 0;
+      while (buildGuard++ < 20) {
+        const step = findNextSmartBuild(sim);
+        if (!step) break;
+        placeShop(sim, step.id, step.shop, 0);
+      }
+
+      finishYear(sim, true);
+      if (yr < 6) {
+        assert.equal(sim.phase, 'income');
+        nextYear(sim, rng);
+      } else {
+        assert.equal(sim.phase, 'ended');
+      }
+    }
+
+    assert.equal(sim.phase, 'ended');
+    assert.ok(validSave(sim), 'A-to-Z Fast Play final state must pass validSave');
+    for (let p = 0; p < 4; p++) {
+      const builtCount = holdings(sim, p).filter((l) => l.shop !== null).length;
+      assert.ok(builtCount >= 8, `Player ${sim.players[p].name} must actively build shops across 6 years`);
+      assert.ok(sim.players[p].cash > 150, `Player ${sim.players[p].name} must earn $wif income`);
+    }
   });
 });

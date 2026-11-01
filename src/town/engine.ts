@@ -505,6 +505,266 @@ export function trade(state: GameState, offer: TradeOffer): TradeEvaluation {
   return { ...result, taxAmount: totalTax };
 }
 
+export interface BotTradeSummary {
+  from: number;
+  to: number;
+  summary: string;
+  taxAmount: number;
+}
+
+function isSurplusTileFor(state: GameState, player: number, shop: number): boolean {
+  const held = state.players[player].tiles[shop];
+  if (held <= 0) return false;
+  const openGroups = groups(state, player).filter(
+    (g) => g.shop === shop && g.size < SHOPS[shop].size,
+  ).length;
+  return openGroups === 0 && held < SHOPS[shop].size;
+}
+
+function wantsTile(state: GameState, player: number, shop: number): number {
+  const openGroups = groups(state, player).filter(
+    (g) => g.shop === shop && g.size < SHOPS[shop].size,
+  );
+  const held = state.players[player].tiles[shop];
+  if (openGroups.length > 0) {
+    const largest = Math.max(...openGroups.map((g) => g.size));
+    return 14 + largest * 8 + held * 3;
+  }
+  if (held >= 2) {
+    return 8 + held * 4;
+  }
+  return 0;
+}
+
+export function botTradeRound(state: GameState): {
+  deals: BotTradeSummary[];
+  totalTax: number;
+} {
+  if (state.phase !== 'trade') return { deals: [], totalTax: 0 };
+
+  const deals: BotTradeSummary[] = [];
+  let totalTax = 0;
+  const pairs: [number, number][] = [
+    [1, 2],
+    [2, 3],
+    [1, 3],
+  ];
+
+  for (const [a, b] of pairs) {
+    if (!state.players[a] || !state.players[b]) continue;
+    const playerA = state.players[a];
+    const playerB = state.players[b];
+
+    let bestSwap: {
+      shopFromA: number;
+      shopFromB: number;
+      cashFromA: number;
+      cashFromB: number;
+      score: number;
+    } | null = null;
+
+    for (let sA = 0; sA < SHOPS.length; sA++) {
+      if (!isSurplusTileFor(state, a, sA)) continue;
+      const bDesire = wantsTile(state, b, sA);
+      if (bDesire <= 0) continue;
+
+      for (let sB = 0; sB < SHOPS.length; sB++) {
+        if (sA === sB || !isSurplusTileFor(state, b, sB)) continue;
+        const aDesire = wantsTile(state, a, sB);
+        if (aDesire <= 0) continue;
+
+        const diff = aDesire - bDesire;
+        let cashFromA = 0;
+        let cashFromB = 0;
+        if (diff > 4) {
+          cashFromA = Math.min(20, Math.floor(playerA.cash * 0.25), Math.round(diff));
+        } else if (diff < -4) {
+          cashFromB = Math.min(20, Math.floor(playerB.cash * 0.25), Math.round(-diff));
+        }
+        const score = aDesire + bDesire;
+        if (!bestSwap || score > bestSwap.score) {
+          bestSwap = { shopFromA: sA, shopFromB: sB, cashFromA, cashFromB, score };
+        }
+      }
+    }
+
+    if (bestSwap) {
+      const taxA = calculateTradeTax(bestSwap.cashFromA);
+      const taxB = calculateTradeTax(bestSwap.cashFromB);
+      playerA.tiles[bestSwap.shopFromA]--;
+      playerB.tiles[bestSwap.shopFromA]++;
+      playerB.tiles[bestSwap.shopFromB]--;
+      playerA.tiles[bestSwap.shopFromB]++;
+      playerA.cash += taxB.netCash - bestSwap.cashFromA;
+      playerB.cash += taxA.netCash - bestSwap.cashFromB;
+
+      const dealTax = taxA.taxAmount + taxB.taxAmount;
+      totalTax += dealTax;
+      state.trades++;
+
+      const cashPart =
+        bestSwap.cashFromA > 0
+          ? ` (+${bestSwap.cashFromA} $wif)`
+          : bestSwap.cashFromB > 0
+            ? ` (+${bestSwap.cashFromB} $wif)`
+            : '';
+      const summary = `${playerA.name} and ${playerB.name} swapped ${SHOPS[bestSwap.shopFromA].name} for ${SHOPS[bestSwap.shopFromB].name}${cashPart}`;
+      log(state, `Deal ${state.trades}: ${summary}.`);
+      deals.push({ from: a, to: b, summary, taxAmount: dealTax });
+      continue;
+    }
+
+    // Fallback: isolated empty plot swap when each bot holds a plot next to the other bot
+    const isoA = holdings(state, a).find(
+      (lot) =>
+        lot.shop === null &&
+        neighbors(lot.id).every((n) => state.lots[n].owner !== a) &&
+        neighbors(lot.id).some((n) => state.lots[n].owner === b),
+    );
+    const isoB = holdings(state, b).find(
+      (lot) =>
+        lot.shop === null &&
+        neighbors(lot.id).every((n) => state.lots[n].owner !== b) &&
+        neighbors(lot.id).some((n) => state.lots[n].owner === a),
+    );
+    if (isoA && isoB) {
+      isoA.owner = b;
+      isoB.owner = a;
+      state.trades++;
+      const summary = `${playerA.name} and ${playerB.name} swapped plots #${isoA.id + 1} and #${isoB.id + 1}`;
+      log(state, `Deal ${state.trades}: ${summary}.`);
+      deals.push({ from: a, to: b, summary, taxAmount: 0 });
+    }
+  }
+
+  return { deals, totalTax };
+}
+
+export function chooseSmartDraftPlots(state: GameState): number[] {
+  if (state.phase !== 'receive' || state.pending.length === 0) return [];
+  const pendingSet = new Set(state.pending);
+  const ownedDistricts = new Set(
+    holdings(state, 0).map((lot) => Math.floor(lot.id / 12)),
+  );
+
+  return [...state.pending]
+    .map((id) => {
+      const adjMine = neighbors(id).filter((n) => state.lots[n].owner === 0).length;
+      const adjPending = neighbors(id).filter((n) => pendingSet.has(n)).length;
+      const adjFree = neighbors(id).filter((n) => state.lots[n].owner === null).length;
+      const sameDistrict = ownedDistricts.has(Math.floor(id / 12)) ? 2 : 0;
+      return {
+        id,
+        score: adjMine * 7 + adjPending * 4 + sameDistrict + adjFree,
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.id - b.id)
+    .slice(0, state.draftCount)
+    .map((entry) => entry.id);
+}
+
+export function findSmartPlayerTrade(state: GameState): TradeOffer | null {
+  if (state.phase !== 'trade') return null;
+  const you = state.players[0];
+
+  for (let partnerId = 1; partnerId < state.players.length; partnerId++) {
+    const partner = state.players[partnerId];
+    for (let wantedShop = 0; wantedShop < SHOPS.length; wantedShop++) {
+      if (partner.tiles[wantedShop] <= 0) continue;
+      const myDesire = wantsTile(state, 0, wantedShop);
+      if (myDesire <= 0) continue;
+
+      for (let giveShop = 0; giveShop < SHOPS.length; giveShop++) {
+        if (giveShop === wantedShop || !isSurplusTileFor(state, 0, giveShop)) continue;
+        const giveTiles = [0, 0, 0, 0, 0, 0];
+        const takeTiles = [0, 0, 0, 0, 0, 0];
+        giveTiles[giveShop] = 1;
+        takeTiles[wantedShop] = 1;
+
+        const baseOffer: TradeOffer = {
+          partner: partnerId,
+          give: { cash: 0, tiles: giveTiles, lots: [] },
+          take: { cash: 0, tiles: takeTiles, lots: [] },
+        };
+        const check = evaluateOffer(state, baseOffer);
+        if (check.accepted) return baseOffer;
+        if (check.shortfall > 0 && check.shortfall <= 25 && you.cash - check.shortfall >= 30) {
+          const sweetened: TradeOffer = {
+            partner: partnerId,
+            give: { cash: check.shortfall, tiles: giveTiles, lots: [] },
+            take: { cash: 0, tiles: takeTiles, lots: [] },
+          };
+          if (evaluateOffer(state, sweetened).accepted) return sweetened;
+        }
+      }
+    }
+
+    // Check if neighbor holds an empty plot directly adjacent to one of our plots
+    const targetLot = holdings(state, partnerId).find(
+      (lot) =>
+        lot.shop === null &&
+        neighbors(lot.id).some((n) => state.lots[n].owner === 0) &&
+        neighbors(lot.id).every((n) => state.lots[n].owner !== partnerId),
+    );
+    const myIsolated = holdings(state, 0).find(
+      (lot) =>
+        lot.shop === null &&
+        neighbors(lot.id).every((n) => state.lots[n].owner !== 0),
+    );
+    if (targetLot && myIsolated) {
+      const lotSwap: TradeOffer = {
+        partner: partnerId,
+        give: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [myIsolated.id] },
+        take: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [targetLot.id] },
+      };
+      const evalSwap = evaluateOffer(state, lotSwap);
+      if (evalSwap.accepted) return lotSwap;
+      if (evalSwap.shortfall > 0 && evalSwap.shortfall <= 30 && you.cash - evalSwap.shortfall >= 30) {
+        const sweetenedSwap: TradeOffer = {
+          partner: partnerId,
+          give: { cash: evalSwap.shortfall, tiles: [0, 0, 0, 0, 0, 0], lots: [myIsolated.id] },
+          take: { cash: 0, tiles: [0, 0, 0, 0, 0, 0], lots: [targetLot.id] },
+        };
+        if (evaluateOffer(state, sweetenedSwap).accepted) return sweetenedSwap;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function findNextSmartBuild(state: GameState): { id: number; shop: number } | null {
+  if (state.phase !== 'build') return null;
+  let best: { id: number; shop: number; score: number } | null = null;
+
+  for (const lot of holdings(state, 0).filter((candidate) => candidate.shop === null)) {
+    for (let shop = 0; shop < SHOPS.length; shop++) {
+      if (!canPlace(state, 0, lot.id, shop)) continue;
+
+      const adjacent = neighbors(lot.id).filter(
+        (id) => state.lots[id].owner === 0 && state.lots[id].shop === shop,
+      ).length;
+      const possible = neighbors(lot.id).filter(
+        (id) => state.lots[id].owner === 0 && state.lots[id].shop === null,
+      ).length;
+      const before = income(state, 0);
+      lot.shop = shop;
+      const delta = income(state, 0) - before;
+      lot.shop = null;
+      const score =
+        delta * 2 +
+        adjacent * 8 +
+        possible * 2 +
+        state.players[0].tiles[shop] -
+        SHOPS[shop].size;
+
+      if (!best || score > best.score) best = { id: lot.id, shop, score };
+    }
+  }
+
+  return best ? { id: best.id, shop: best.shop } : null;
+}
+
 export function rankings(state: GameState): Player[] {
   return [...state.players].sort(
     (a, b) =>
