@@ -19,6 +19,7 @@ import {
   createPlasticStool3D,
 } from '../../src/town/city-3d/shop-models-3d';
 import { RobinCity3DRenderer } from '../../src/town/city-3d/robin-city-3d';
+import { SCROLLABLE_SELECTOR, installMobileGuards, type MobileTouchListener } from '../../src/town/mobile';
 
 function createMockContainer(): HTMLElement {
   const listeners = new Map<string, Set<unknown>>();
@@ -360,5 +361,88 @@ describe('RobinCity3DRenderer 2D-to-3D Neighborhood Parity', () => {
     world.update(5.0, 0.05);
     world.setAtmosphere?.('day');
     world.dispose();
+  });
+
+  it('adapts 3D portrait FOV and touch drag mode cleanly for mobile viewports and allows horizontal 3D toolbar swipe', () => {
+    assert.ok(
+      SCROLLABLE_SELECTOR.includes('.three-city-toolbar'),
+      'Expected .three-city-toolbar in mobile SCROLLABLE_SELECTOR',
+    );
+    assert.ok(
+      SCROLLABLE_SELECTOR.includes('.robin-hud-utilities'),
+      'Expected .robin-hud-utilities in mobile SCROLLABLE_SELECTOR',
+    );
+
+    const mobileContainer = {
+      ...createMockContainer(),
+      clientWidth: 390,
+      clientHeight: 690,
+      getBoundingClientRect() {
+        return { left: 0, top: 0, width: 390, height: 690, right: 390, bottom: 690 };
+      },
+    } as unknown as HTMLElement;
+
+    const renderer = new RobinCity3DRenderer({
+      container: mobileContainer,
+      width: 390,
+      height: 690,
+      initialPreset: 'neighborhood',
+    });
+    renderer.mount();
+
+    const portraitFov = renderer.getCamera().fov;
+    assert.ok(
+      portraitFov > 44 && portraitFov <= 50,
+      `Expected widened portrait FOV between 44 and 50 deg on 390x690, got ${portraitFov}`,
+    );
+    assert.equal(renderer.getTouchDragMode(), 'pan', 'Expected default mobile 1-finger mode to be pan');
+
+    renderer.setTouchDragMode('orbit');
+    assert.equal(renderer.getTouchDragMode(), 'orbit');
+    renderer.setTouchDragMode('pan');
+    assert.equal(renderer.getTouchDragMode(), 'pan');
+
+    renderer.resize(1440, 760);
+    assert.equal(renderer.getCamera().fov, 38, 'Expected desktop landscape FOV to remain 38 deg');
+
+    renderer.unmount();
+
+    // Verify installMobileGuards permits horizontal swipe inside .three-city-toolbar
+    const touchListeners = new Map<string, MobileTouchListener>();
+    installMobileGuards({
+      addEventListener(type: string, listener: unknown) {
+        if (type === 'touchstart' || type === 'touchmove') {
+          touchListeners.set(type, listener as MobileTouchListener);
+        }
+      },
+    });
+    const toolbarRegion = {
+      scrollLeft: 10,
+      scrollWidth: 520,
+      clientWidth: 374,
+      scrollTop: 0,
+      scrollHeight: 38,
+      clientHeight: 38,
+    };
+    const fakeTarget = {
+      closest(sel: string) {
+        return sel.includes('.three-city-toolbar') ? toolbarRegion : null;
+      },
+    };
+    let prevented = false;
+    touchListeners.get('touchstart')?.({
+      target: fakeTarget,
+      touches: [{ clientX: 200, clientY: 740 }],
+      preventDefault() {},
+    });
+    touchListeners.get('touchmove')?.({
+      target: fakeTarget,
+      cancelable: true,
+      touches: [{ clientX: 140, clientY: 741 }],
+      preventDefault() {
+        prevented = true;
+      },
+    });
+    assert.equal(prevented, false, 'Horizontal swipe inside .three-city-toolbar must not be blocked');
   });
 });

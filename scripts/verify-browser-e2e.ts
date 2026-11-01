@@ -13,6 +13,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+// @ts-expect-error ESM helper script
+import { createMultiplayerRelay } from './ws-relay.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,7 +78,11 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 function createStaticServer(): http.Server {
+  const relay = createMultiplayerRelay();
   return http.createServer((req, res) => {
+    if (relay.handleApiRequest(req, res)) {
+      return;
+    }
     let reqPath = (req.url || '/').split('?')[0];
     if (reqPath === '/') reqPath = '/index.html';
     const filePath = path.join(distDir, reqPath);
@@ -128,7 +134,12 @@ async function runBrowserVerification(): Promise<void> {
 
   for (const vp of VIEWPORTS) {
     console.log(`\n=================== Verifying ${vp.name} (${vp.width}x${vp.height}) ===================`);
-    const browser = await chromium.launch({ headless: true });
+    const chromeExecutable = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const browser = await chromium.launch({
+      headless: true,
+      ...(fs.existsSync(chromeExecutable) ? { executablePath: chromeExecutable } : {}),
+      args: ['--use-gl=angle', '--use-angle=metal', '--enable-webgl', '--ignore-gpu-blocklist'],
+    });
     const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
 
     const consoleErrors: string[] = [];
@@ -279,19 +290,17 @@ async function runBrowserVerification(): Promise<void> {
         console.log(`  [PASS] Mobile responsive layout verified (iPod dock hidden to prevent obstruction)`);
       }
 
-      // 7. In-Game HUD $wif Hub Modal
-      if (vp.width >= 600) {
-        await page.click('.game-hud-top button[data-action="wif-hub"]');
-        await page.waitForTimeout(300);
-        const inGameModal = await page.$('#modal');
-        const inGameOpen = inGameModal ? await page.evaluate((el: any) => el.open, inGameModal) : false;
-        if (!inGameOpen) throw new Error('In-game HUD $wif Hub failed to open dialog');
-        console.log(`  [PASS] In-game HUD $wif Hub modal opened`);
+      // 7. In-Game HUD $wif Hub Modal (Desktop and Mobile)
+      await page.click('.game-hud-top button[data-action="wif-hub"]');
+      await page.waitForTimeout(300);
+      const inGameModal = await page.$('#modal');
+      const inGameOpen = inGameModal ? await page.evaluate((el: any) => el.open, inGameModal) : false;
+      if (!inGameOpen) throw new Error('In-game HUD $wif Hub failed to open dialog');
+      console.log(`  [PASS] In-game HUD $wif Hub modal opened`);
 
-        await page.click('#modal button[data-action="close"]');
-        await page.waitForTimeout(200);
-        console.log(`  [PASS] In-game HUD $wif Hub modal closed`);
-      }
+      await page.click('#modal button[data-action="close"]');
+      await page.waitForTimeout(200);
+      console.log(`  [PASS] In-game HUD $wif Hub modal closed`);
 
       // 8. Error and 404 Assertions
       console.log(

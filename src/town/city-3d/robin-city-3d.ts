@@ -34,13 +34,15 @@ const MAX_ELEVATION = 1.48;
 const MIN_RADIUS = 320;
 const MAX_RADIUS = 1650;
 
-const PAN_LIMIT_X = 460;
-const PAN_LIMIT_Z = 300;
+const PAN_LIMIT_X = 560;
+const PAN_LIMIT_Z = 380;
 
 const CLICK_TRAVEL_LIMIT_PX = 6;
+const TOUCH_CLICK_TRAVEL_LIMIT_PX = 10;
 const ORBIT_SENSITIVITY = 0.0054;
 const GROUND_PICK_Y = 1.5;
 
+export type TouchDragMode = 'pan' | 'orbit';
 type DragMode = 'orbit' | 'pan' | 'pinch' | null;
 
 interface PointerSample {
@@ -142,6 +144,7 @@ export class RobinCity3DRenderer {
   private dropTargetLotId: number | null = null;
 
   private readonly activePointers = new Map<number, PointerSample>();
+  private touchDragMode: TouchDragMode = 'pan';
   private dragMode: DragMode = null;
   private primaryPointerId: number | null = null;
   private pointerDownPos: PointerSample = { x: 0, y: 0 };
@@ -150,6 +153,7 @@ export class RobinCity3DRenderer {
   private pinchStartDistance = 1;
   private pinchStartRadius = 1280;
   private pinchLastMidpoint: PointerSample = { x: 0, y: 0 };
+  private pinchLastAngle = 0;
 
   private readonly onFrameBound: (nowMs: number) => void;
   private readonly onPointerDownBound: (event: PointerEvent) => void;
@@ -175,7 +179,7 @@ export class RobinCity3DRenderer {
     this.atmosphere = options.initialAtmosphere ?? 'day';
 
     this.camera = new THREE.PerspectiveCamera(
-      CAMERA_FOV_DEG,
+      this.computeCameraFov(),
       this.width / Math.max(1, this.height),
       CAMERA_NEAR,
       CAMERA_FAR,
@@ -223,7 +227,7 @@ export class RobinCity3DRenderer {
         });
         const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
         glRenderer.setPixelRatio(dpr);
-        glRenderer.setSize(this.width, this.height);
+        glRenderer.setSize(this.width, this.height, false);
         glRenderer.outputColorSpace = THREE.SRGBColorSpace;
         glRenderer.toneMapping = THREE.ACESFilmicToneMapping;
         glRenderer.toneMappingExposure = 1.12;
@@ -371,22 +375,27 @@ export class RobinCity3DRenderer {
     this.width = Math.max(1, Math.round(width));
     this.height = Math.max(1, Math.round(height));
 
+    this.camera.fov = this.computeCameraFov();
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
 
     if (this.renderer) {
       const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
       this.renderer.setPixelRatio(dpr);
-      this.renderer.setSize(this.width, this.height);
+      this.renderer.setSize(this.width, this.height, false);
     } else if (this.canvas) {
       this.canvas.width = this.width;
       this.canvas.height = this.height;
     }
 
     if (!this.hasCustomZoom) {
-      this.desiredRadius = this.radiusForPreset(this.cameraPreset);
-      if (!this.renderer || this.isPaused) {
-        this.currentRadius = this.desiredRadius;
+      if (this.focusedLotId === null) {
+        this.applyPresetTargets(this.cameraPreset, !this.renderer || this.isPaused);
+      } else {
+        this.desiredRadius = this.radiusForPreset(this.cameraPreset);
+        if (!this.renderer || this.isPaused) {
+          this.currentRadius = this.desiredRadius;
+        }
       }
     } else {
       this.desiredRadius = THREE.MathUtils.clamp(this.desiredRadius, MIN_RADIUS, MAX_RADIUS);
@@ -410,6 +419,14 @@ export class RobinCity3DRenderer {
 
   public getCameraPreset(): CameraPresetMode {
     return this.cameraPreset;
+  }
+
+  public setTouchDragMode(mode: TouchDragMode): void {
+    this.touchDragMode = mode;
+  }
+
+  public getTouchDragMode(): TouchDragMode {
+    return this.touchDragMode;
   }
 
   public setAtmosphere(mode: CityAtmosphereMode): void {
@@ -794,9 +811,21 @@ export class RobinCity3DRenderer {
     }
   }
 
+  private isPortraitCompact(): boolean {
+    return this.width < this.height && this.width <= 680;
+  }
+
+  private computeCameraFov(): number {
+    const aspect = Math.max(0.35, this.width / Math.max(1, this.height));
+    if (aspect < 0.9) {
+      return THREE.MathUtils.clamp(CAMERA_FOV_DEG + (0.9 - aspect) * 30, CAMERA_FOV_DEG, 50);
+    }
+    return CAMERA_FOV_DEG;
+  }
+
   private computeFitRadius(): number {
     const aspect = Math.max(0.35, this.width / Math.max(1, this.height));
-    const fovRad = THREE.MathUtils.degToRad(this.camera.fov);
+    const fovRad = THREE.MathUtils.degToRad(this.computeCameraFov());
     const tanHalfV = Math.tan(fovRad * 0.5);
     const tanHalfH = tanHalfV * aspect;
 
@@ -807,43 +836,57 @@ export class RobinCity3DRenderer {
 
   private radiusForPreset(preset: CameraPresetMode): number {
     const fitRadius = this.computeFitRadius();
+    const portrait = this.isPortraitCompact();
     switch (preset) {
       case 'street':
-        return THREE.MathUtils.clamp(fitRadius * 0.48, MIN_RADIUS, MAX_RADIUS);
+        return portrait
+          ? THREE.MathUtils.clamp(fitRadius * 0.34, MIN_RADIUS, 490)
+          : THREE.MathUtils.clamp(fitRadius * 0.48, MIN_RADIUS, MAX_RADIUS);
       case 'isometric':
-        return THREE.MathUtils.clamp(fitRadius * 1.04, MIN_RADIUS, MAX_RADIUS);
+        return portrait
+          ? THREE.MathUtils.clamp(fitRadius * 0.56, 720, 820)
+          : THREE.MathUtils.clamp(fitRadius * 1.04, MIN_RADIUS, MAX_RADIUS);
       case 'topdown':
-        return THREE.MathUtils.clamp(fitRadius * 1.08, MIN_RADIUS, MAX_RADIUS);
+        return portrait
+          ? THREE.MathUtils.clamp(fitRadius * 0.86, 840, 1280)
+          : THREE.MathUtils.clamp(fitRadius * 1.08, MIN_RADIUS, MAX_RADIUS);
       case 'neighborhood':
       default:
-        return THREE.MathUtils.clamp(fitRadius, MIN_RADIUS, MAX_RADIUS);
+        return portrait
+          ? THREE.MathUtils.clamp(fitRadius * 0.52, 690, 755)
+          : THREE.MathUtils.clamp(fitRadius, MIN_RADIUS, MAX_RADIUS);
     }
   }
 
   private applyPresetTargets(preset: CameraPresetMode, snapImmediate: boolean): void {
     const radius = this.radiusForPreset(preset);
+    const portrait = this.isPortraitCompact();
     let targetAzimuth = -0.04;
     let targetElevation = 0.90;
 
     if (preset === 'neighborhood') {
-      targetAzimuth = -0.04;
-      targetElevation = 0.90;
-      this.desiredTarget.set(0, 4, 14);
+      targetAzimuth = portrait ? -0.05 : -0.04;
+      targetElevation = portrait ? 0.72 : 0.90;
+      if (portrait && this.focusedLotId !== null) {
+        this.desiredTarget.copy(this.focusedLotWorldPos);
+      } else {
+        this.desiredTarget.set(0, portrait ? 8 : 4, portrait ? 18 : 14);
+      }
     } else if (preset === 'isometric') {
-      targetAzimuth = 0.48;
-      targetElevation = 0.68;
-      this.desiredTarget.set(0, 4, 0);
+      targetAzimuth = portrait ? 0.42 : 0.48;
+      targetElevation = portrait ? 0.64 : 0.68;
+      this.desiredTarget.set(0, portrait ? 8 : 4, portrait ? 16 : 0);
     } else if (preset === 'topdown') {
       targetAzimuth = 0;
       targetElevation = 1.44;
       this.desiredTarget.set(0, 0, 0);
     } else if (preset === 'street') {
-      targetAzimuth = -0.18;
-      targetElevation = 0.44;
+      targetAzimuth = portrait ? -0.15 : -0.18;
+      targetElevation = portrait ? 0.48 : 0.44;
       if (this.focusedLotId !== null) {
         this.desiredTarget.copy(this.focusedLotWorldPos);
       } else {
-        this.desiredTarget.set(0, 8, 25);
+        this.desiredTarget.set(0, portrait ? 10 : 8, portrait ? 38 : 25);
       }
     }
 
@@ -1008,6 +1051,7 @@ export class RobinCity3DRenderer {
         x: (pair[0].x + pair[1].x) * 0.5,
         y: (pair[0].y + pair[1].y) * 0.5,
       };
+      this.pinchLastAngle = Math.atan2(pair[1].y - pair[0].y, pair[1].x - pair[0].x);
       if (this.canvas) {
         this.canvas.style.cursor = 'grabbing';
       }
@@ -1020,9 +1064,13 @@ export class RobinCity3DRenderer {
       this.lastDragPos = { x: event.clientX, y: event.clientY };
       this.pointerTravelPx = 0;
 
-      const isPanGesture =
-        event.button === 2 || event.button === 1 || (event.button === 0 && event.shiftKey);
-      this.dragMode = isPanGesture ? 'pan' : 'orbit';
+      if (event.pointerType === 'touch') {
+        this.dragMode = this.touchDragMode;
+      } else {
+        const isPanGesture =
+          event.button === 2 || event.button === 1 || (event.button === 0 && event.shiftKey);
+        this.dragMode = isPanGesture ? 'pan' : 'orbit';
+      }
     }
   }
 
@@ -1035,6 +1083,7 @@ export class RobinCity3DRenderer {
         const dist = Math.max(12, Math.hypot(pair[1].x - pair[0].x, pair[1].y - pair[0].y));
         const midX = (pair[0].x + pair[1].x) * 0.5;
         const midY = (pair[0].y + pair[1].y) * 0.5;
+        const angle = Math.atan2(pair[1].y - pair[0].y, pair[1].x - pair[0].x);
 
         const zoomRatio = this.pinchStartDistance / dist;
         this.hasCustomZoom = true;
@@ -1045,6 +1094,15 @@ export class RobinCity3DRenderer {
         );
         this.currentRadius = this.desiredRadius;
 
+        let angleDelta = angle - this.pinchLastAngle;
+        if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+        if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+        this.pinchLastAngle = angle;
+        if (Math.abs(angleDelta) > 0.004) {
+          this.desiredAzimuth -= angleDelta * 0.85;
+          this.currentAzimuth = this.desiredAzimuth;
+        }
+
         const panDx = midX - this.pinchLastMidpoint.x;
         const panDy = midY - this.pinchLastMidpoint.y;
         this.pinchLastMidpoint = { x: midX, y: midY };
@@ -1054,6 +1112,8 @@ export class RobinCity3DRenderer {
       }
 
       if (event.pointerId === this.primaryPointerId) {
+        const travelLimit =
+          event.pointerType === 'touch' ? TOUCH_CLICK_TRAVEL_LIMIT_PX : CLICK_TRAVEL_LIMIT_PX;
         const travelFromStart = Math.hypot(
           event.clientX - this.pointerDownPos.x,
           event.clientY - this.pointerDownPos.y,
@@ -1064,7 +1124,7 @@ export class RobinCity3DRenderer {
         const stepDy = event.clientY - this.lastDragPos.y;
         this.lastDragPos = { x: event.clientX, y: event.clientY };
 
-        if (this.pointerTravelPx > CLICK_TRAVEL_LIMIT_PX) {
+        if (this.pointerTravelPx > travelLimit) {
           if (this.canvas) {
             this.canvas.style.cursor = 'grabbing';
           }
@@ -1106,20 +1166,25 @@ export class RobinCity3DRenderer {
     }
 
     const wasTracked = this.activePointers.delete(event.pointerId);
+    const travelLimit =
+      event.pointerType === 'touch' ? TOUCH_CLICK_TRAVEL_LIMIT_PX : CLICK_TRAVEL_LIMIT_PX;
+    const isSelectableDragMode =
+      this.dragMode === 'orbit' || (event.pointerType === 'touch' && this.dragMode === 'pan');
     const wasCleanPrimaryClick =
       wasTracked &&
       event.pointerId === this.primaryPointerId &&
       event.button === 0 &&
       !event.shiftKey &&
-      this.dragMode === 'orbit' &&
-      this.pointerTravelPx <= CLICK_TRAVEL_LIMIT_PX;
+      isSelectableDragMode &&
+      this.pointerTravelPx <= travelLimit;
 
     if (this.activePointers.size === 1) {
       const remainingEntry = this.activePointers.entries().next().value;
       if (remainingEntry) {
         this.primaryPointerId = remainingEntry[0];
         this.lastDragPos = { x: remainingEntry[1].x, y: remainingEntry[1].y };
-        this.dragMode = 'orbit';
+        this.pointerTravelPx = CLICK_TRAVEL_LIMIT_PX + 100;
+        this.dragMode = event.pointerType === 'touch' ? this.touchDragMode : 'orbit';
       }
       return;
     }

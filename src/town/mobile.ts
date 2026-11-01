@@ -48,8 +48,8 @@ export interface MobileScrollRegion {
 }
 
 const EDITABLE_SELECTOR = 'input,textarea,[contenteditable="true"]';
-const SCROLLABLE_SELECTOR =
-  '.shop-tray,.address-strip,.plot-inspector,.quick-build>div,.offer-tray,.barter-plots,.phase-announcement,.modal-body,dialog,.research,#app,.start-screen,.apple-carousel-viewport';
+export const SCROLLABLE_SELECTOR =
+  '.shop-tray,.address-strip,.plot-inspector,.quick-build>div,.offer-tray,.barter-plots,.phase-announcement,.modal-body,dialog,.research,#app,.start-screen,.apple-carousel-viewport,.three-city-toolbar,.robin-hud-utilities';
 const SCROLL_METRICS = [
   'scrollLeft',
   'scrollTop',

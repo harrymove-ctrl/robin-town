@@ -857,6 +857,14 @@ body[data-view-mode="city-3d"] .camera-hint {
   font-size: 0.88em;
 }
 
+/* Mobile-only controls stay hidden on desktop viewports */
+.mobile-phase-pill,
+.wif-hud-mobile-icon,
+.three-city-toolbar .touch-only-pill,
+.three-city-toolbar .mobile-zen-pill {
+  display: none;
+}
+
 @media (max-width: 860px) {
   .entry-mode-grid {
     grid-template-columns: 1fr;
@@ -872,36 +880,478 @@ body[data-view-mode="city-3d"] .camera-hint {
   }
 }
 
-@media (max-width: 600px) {
+/* Native Mobile App Shell (Variant A 2-Row HUD + Variant B Fullscreen Toggle) */
+@media (max-width: 680px) {
   .game-hud-top {
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    grid-template-rows: auto !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto !important;
     gap: 5px !important;
+    padding: 5px 8px 6px !important;
+    border-bottom-width: 2px;
   }
+
+  .game-hud-top .game-brand {
+    display: none !important;
+  }
+
+  /* Row 1: Phase Badge + 1-Tap $wif Wallet Pill + 2D/3D Toggle + Menu */
+  .robin-hud-utilities {
+    grid-row: 1 !important;
+    grid-column: 1 / -1 !important;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .mobile-phase-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: auto;
+    min-height: 30px;
+    padding: 3px 9px 3px 4px;
+    border-radius: 999px;
+    background: rgba(14, 38, 28, 0.92);
+    border: 1px solid #b59257;
+    color: #ffe7a8;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-phase-num {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #eec353;
+    color: #1a2418;
+    font-size: 10px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+
   .robin-hud-utilities .view-mode-segmented,
-  .robin-hud-utilities .wif-hud-pill,
+  .robin-hud-utilities .ipod-hud-btn,
+  .robin-hud-utilities .wif-hud-burn,
+  .robin-hud-utilities .wif-hud-acct,
   .robin-hud-utilities .view-toggle-label {
+    display: none !important;
+  }
+
+  .robin-hud-utilities .wif-hud-pill {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    min-height: 30px;
+    max-width: 158px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .robin-hud-utilities .wif-hud-mobile-icon {
+    display: inline;
+    font-size: 11px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .robin-hud-utilities .wif-hud-balance {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .robin-hud-utilities .view-toggle-btn {
+    min-height: 30px;
+    padding: 4px 8px;
+    gap: 4px;
+    border-radius: 999px;
+    font-size: 11px;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .game-hud-top .hud-menu {
+    position: static !important;
+    grid-row: auto !important;
+    grid-column: auto !important;
+    align-self: center !important;
+    margin: 0 !important;
+    min-width: 32px !important;
+    width: 32px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    display: inline-grid !important;
+    place-items: center;
+    font-size: 16px !important;
+    border-radius: 8px;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .game-hud-top .hud-menu small {
+    display: none !important;
+  }
+
+  /* Row 2: Full-Width 4-Player Ribbon (zero text collision) */
+  .game-shell .player-rail {
+    grid-row: 2 !important;
+    grid-column: 1 / -1 !important;
+    width: 100%;
+    height: auto !important;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .game-shell .player-pocket {
+    position: relative;
+    min-height: 0;
+    border-radius: 6px;
+    border-top-width: 2.5px;
+    overflow: hidden;
+  }
+
+  .game-shell .pocket-inventory {
+    display: none !important;
+  }
+
+  .game-shell .pocket-main {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    height: auto !important;
+    min-height: 40px !important;
+    padding: 4px 6px !important;
+    gap: 2px !important;
+  }
+
+  .game-shell .pocket-token {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .game-shell .pocket-token img {
+    width: 13px !important;
+    height: 13px !important;
+    flex-shrink: 0;
+  }
+
+  .game-shell .pocket-token b {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+    letter-spacing: 0.02em;
+  }
+
+  .game-shell .wallet {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: baseline !important;
+    justify-content: space-between !important;
+    gap: 4px !important;
+    width: 100%;
+    min-width: 0;
+    margin: 0 !important;
+  }
+
+  .game-shell .wallet strong {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.2px;
+    color: #fff6d6;
+  }
+
+  .game-shell .wallet .hand-total {
+    display: inline-block !important;
+    font-size: 9.5px !important;
+    line-height: 1.1 !important;
+    color: #d8c79a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .game-shell .wallet small {
+    display: none !important;
+  }
+
+  /* Variant B: Ultra-clean Fullscreen 3D HUD toggle */
+  body[data-mobile-zen="1"] .game-shell .player-rail {
+    display: none !important;
+  }
+
+  body[data-mobile-zen="1"] .game-hud-top {
+    grid-template-rows: auto !important;
+    padding-bottom: 5px !important;
+  }
+
+  body[data-mobile-zen="1"] .game-shell .calendar.paper-calendar {
+    transform: scale(0.84);
+    transform-origin: top right;
+  }
+
+  /* Compact Mini Tear-Off Calendar on Top-Right */
+  .game-shell .calendar.paper-calendar {
+    top: 6px !important;
+    right: 6px !important;
+    width: 58px !important;
+    height: 76px !important;
+    z-index: 6;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-heading {
+    top: 20%;
+    left: 8%;
+    right: 8%;
+    font-size: 5px !important;
+    letter-spacing: 0.02em !important;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-caption {
+    top: 34%;
+    left: 12%;
+    right: 12%;
+    font-size: 5.5px;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-digit {
+    top: 43%;
+    left: 12%;
+    right: 12%;
+    font-size: 17px;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-animal {
+    top: 68%;
+    left: 6%;
+    right: 6%;
+    gap: 2px;
+    font-size: 7.5px;
+    line-height: 1;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-animal img {
+    width: 10px;
+    height: 10px;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-footnote {
     display: none;
   }
-  .robin-hud-utilities .view-toggle-btn {
-    padding: 5px 7px;
-    gap: 3px;
-  }
+
+  /* Single-Row Horizontally Swipeable 3D Camera & Atmosphere Bar */
   .three-city-toolbar {
-    left: 8px;
+    left: 6px;
+    right: 6px;
     bottom: 8px;
-    max-width: calc(100% - 16px);
-    border-radius: 14px;
-    padding: 4px 7px;
-    gap: 4px;
+    max-width: none;
+    width: auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-radius: 999px;
+    padding: 4px 6px;
+    gap: 5px;
+    background: rgba(18, 38, 30, 0.92);
+    backdrop-filter: blur(8px);
   }
+
+  .three-city-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .three-city-toolbar .three-city-label,
   .three-city-toolbar .three-city-sep {
     display: none;
   }
+
+  .three-city-toolbar .touch-only-pill,
+  .three-city-toolbar .mobile-zen-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+  }
+
   .three-city-toolbar button {
-    padding: 3px 7px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 1;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .three-city-toolbar button.touch-only-pill {
+    background: rgba(57, 168, 131, 0.22);
+    border-color: #58c991;
+    color: #bdf7d6;
+  }
+
+  .three-city-toolbar button.touch-only-pill.active-touch {
+    background: #eec353;
+    color: #231906;
+    border-color: #ffe38f;
+  }
+
+  body[data-view-mode="city-3d"] .game-shell .plot-inspector {
+    bottom: 50px !important;
+    max-height: calc(100% - 66px) !important;
+    z-index: 8;
+  }
+
+  body[data-view-mode="city-3d"] #toast {
+    bottom: calc(env(safe-area-inset-bottom) + 108px);
+  }
+
+  /* Bottom Action Belt: Full Rack Label & Uncrowded Address Strip */
+  .action-belt {
+    min-height: 54px;
+    padding: 5px 8px;
+    gap: 6px;
+  }
+
+  .belt-button {
+    width: auto !important;
+    min-width: 52px !important;
+    height: 44px;
+    padding: 3px 6px;
+  }
+
+  .selected-piece-label {
+    max-width: 64px;
+    font-size: 10.5px;
+  }
+
+  .game-shell .turn-scroll .phase-heading {
+    display: none !important;
+  }
+
+  /* Start Screen & $wif Hub Mobile Refinements */
+  #start-screen .start-panel {
+    padding: 14px 12px 20px;
+  }
+
+  .robin-kicker-badges .robin-chain-pill {
     font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  .start-carousel-header span:last-child {
+    display: none;
+  }
+
+  .apple-carousel-slide {
+    flex: 0 0 186px;
+    height: auto;
+    min-height: 82px;
+  }
+
+  .apple-carousel-card {
+    gap: 3px;
+    padding: 8px 10px;
+  }
+
+  .wif-hub-section .robin-chain-pill {
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: 10px;
+    padding: 6px 10px;
+    line-height: 1.35;
+    gap: 4px;
+  }
+
+  .wif-row-actions button {
+    min-height: 36px;
+  }
+}
+
+/* Single-Column Stacked OTC Bargaining Table on Narrow Phones */
+@media (max-width: 560px) {
+  .trade-dialog .barter-table {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .trade-dialog .barter-side {
+    padding: 10px !important;
+    border-radius: 8px;
+  }
+
+  .trade-dialog .barter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .trade-dialog .cash-stepper {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    width: 100%;
+  }
+
+  .trade-dialog .cash-stepper > span {
+    display: none !important;
+  }
+
+  .trade-dialog .cash-stepper > span:first-child {
+    display: inline !important;
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: auto;
+  }
+
+  .trade-dialog .cash-stepper input {
+    width: 64px !important;
+    min-height: 38px;
+    font-size: 15px !important;
+    text-align: center;
+  }
+
+  .trade-dialog .cash-stepper button {
+    min-width: 40px !important;
+    min-height: 38px !important;
+    font-size: 13px !important;
+  }
+
+  .trade-dialog .barter-plots {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 

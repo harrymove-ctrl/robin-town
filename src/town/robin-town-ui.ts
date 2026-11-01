@@ -63,7 +63,7 @@ import {
   normalizeRoomCode,
 } from '../network/room';
 import { isWebGLAvailable } from '../ui/board-3d';
-import { RobinCity3DRenderer } from './city-3d/robin-city-3d';
+import { RobinCity3DRenderer, type TouchDragMode } from './city-3d/robin-city-3d';
 import type { CameraPresetMode, CityAtmosphereMode } from './city-3d/types-3d';
 import { AppleCarousel, type CarouselItem } from '../ui/carousel';
 import { ExposureGrid } from '../ui/exposure-grid';
@@ -209,6 +209,8 @@ export function mountRobinTown(): void {
   // Interactive 3D & Gadget Subsystems
   let board3D: RobinCity3DRenderer | null = null;
   let cameraPreset3D: CameraPresetMode = 'neighborhood';
+  let touchDragMode3D: TouchDragMode = 'pan';
+  let mobileZenMode = false;
   let atmosphere3D: CityAtmosphereMode = 'day';
   try {
     const savedAtmo = localStorage.getItem(ATMO_3D_KEY);
@@ -459,7 +461,19 @@ export function mountRobinTown(): void {
       wState.mode === 'web3' && wState.account
         ? `${wState.account.address.slice(0, 6)}…`
         : `${wState.account?.name ?? 'Sim'}`;
+    const phaseShort = {
+      receive: 'Receive',
+      trade: 'Bargain',
+      build: 'Build',
+      income: 'Payday',
+      ended: 'Final',
+    }[state.phase];
+    const phaseCode = { receive: '01', trade: '02', build: '03', income: '04', ended: '★' }[state.phase];
     return `<div class="robin-hud-utilities">
+      <button type="button" class="mobile-phase-pill" data-action="guide" aria-label="${phaseName()}. Tap for phase guide">
+        <span class="mobile-phase-num">${phaseCode}</span>
+        <span class="mobile-phase-name">${phaseShort}</span>
+      </button>
       <button class="view-toggle-btn" data-action="view-toggle" title="Toggle 3D City / Tabletop view (Hotkey: V)" aria-label="Toggle 3D City and Tabletop board view">
         <span class="view-toggle-icon">${viewMode === 'city-3d' ? '🏙️' : '🗺️'}</span>
         <span class="view-toggle-label">${viewMode === 'city-3d' ? '3D City' : 'Board'}</span>
@@ -472,7 +486,8 @@ export function mountRobinTown(): void {
       </div>
       <button class="wif-hud-pill" data-action="wif-hub" aria-label="Open $wif Flywheel, Wallet, and Rooms">
         <span class="wif-hud-burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')}</span>
-        <span>${escape(shortLabel)}: ${balance.toLocaleString('en-US')} $wif</span>
+        <span class="wif-hud-mobile-icon" aria-hidden="true">💰</span>
+        <span class="wif-hud-balance"><span class="wif-hud-acct">${escape(shortLabel)}: </span>${balance.toLocaleString('en-US')} $wif</span>
         ${isStaked() ? '<span class="wif-hud-boost">1.20x</span>' : ''}
       </button>
       <button class="ipod-hud-btn ${ipodOpen ? 'active' : ''}" data-action="toggle-ipod" aria-pressed="${ipodOpen}" aria-label="Toggle iPod Classic controller">♫ iPod</button>
@@ -560,10 +575,12 @@ export function mountRobinTown(): void {
 
     if (!board3D && isWebGLAvailable()) {
       const rect = stage.getBoundingClientRect();
+      const fallbackW = typeof window !== 'undefined' ? window.innerWidth || 390 : 1000;
+      const fallbackH = typeof window !== 'undefined' ? Math.round((window.innerHeight || 680) * 0.72) : 620;
       board3D = new RobinCity3DRenderer({
         container: host,
-        width: Math.max(640, rect.width || 1000),
-        height: Math.max(420, rect.height || 620),
+        width: Math.max(280, rect.width || fallbackW),
+        height: Math.max(240, rect.height || fallbackH),
         initialPreset: cameraPreset3D,
         initialAtmosphere: atmosphere3D,
         onSelectLot: (lotId) => {
@@ -571,8 +588,10 @@ export function mountRobinTown(): void {
           clickLot(lotId);
         },
       });
+      board3D.setTouchDragMode(touchDragMode3D);
       board3D.mount();
     } else if (board3D) {
+      board3D.setTouchDragMode(touchDragMode3D);
       board3D.resume();
       const rect = stage.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
@@ -595,6 +614,18 @@ export function mountRobinTown(): void {
       .forEach((btn) => {
         btn.classList.toggle('active-atmo', btn.dataset.atmo === atmosphere3D);
       });
+    const touchBtn = stage.querySelector<HTMLButtonElement>('button[data-action="toggle-3d-touch-mode"]');
+    if (touchBtn) {
+      touchBtn.textContent = touchDragMode3D === 'pan' ? '✋ Pan' : '🔄 Orbit';
+      touchBtn.classList.toggle('active-touch', touchDragMode3D === 'orbit');
+      touchBtn.setAttribute('aria-pressed', String(touchDragMode3D === 'orbit'));
+    }
+    const zenBtn = stage.querySelector<HTMLButtonElement>('button[data-action="toggle-mobile-zen"]');
+    if (zenBtn) {
+      zenBtn.textContent = mobileZenMode ? '⊞ HUD' : '⛶ Full';
+      zenBtn.classList.toggle('active', mobileZenMode);
+      zenBtn.setAttribute('aria-pressed', String(mobileZenMode));
+    }
   }
 
   function buildIPodActions(): iPodAction[] {
@@ -720,8 +751,9 @@ export function mountRobinTown(): void {
             <div class="three-city-stage">
               <canvas id="robin-city-shader" class="robin-shader-canvas" aria-hidden="true"></canvas>
               <div class="three-city-canvas-host"></div>
-              <div class="three-city-toolbar">
+              <div class="three-city-toolbar" role="toolbar" aria-label="3D City camera and atmosphere controls">
                 <span class="three-city-label">3D Neighborhood</span>
+                <button type="button" class="touch-only-pill" data-action="toggle-3d-touch-mode" aria-pressed="false" aria-label="Toggle 1-finger touch drag between Pan and Orbit">✋ Pan</button>
                 <button type="button" data-action="set-3d-preset" data-preset="neighborhood" class="active">2D Match</button>
                 <button type="button" data-action="set-3d-preset" data-preset="isometric">Iso</button>
                 <button type="button" data-action="set-3d-preset" data-preset="street">Street</button>
@@ -733,6 +765,7 @@ export function mountRobinTown(): void {
                 <button type="button" data-action="set-3d-atmo" data-atmo="night" aria-label="Lantern Night atmosphere">Night</button>
                 <span class="three-city-sep" aria-hidden="true"></span>
                 <button type="button" data-action="view-toggle">2D Map</button>
+                <button type="button" class="mobile-zen-pill" data-action="toggle-mobile-zen" aria-pressed="false" aria-label="Toggle compact full-screen 3D HUD">⛶ Full</button>
               </div>
             </div>
           </div>
@@ -765,6 +798,11 @@ export function mountRobinTown(): void {
     document.documentElement.lang = 'en';
     document.body.dataset.phase = state.phase;
     document.body.dataset.viewMode = viewMode;
+    if (mobileZenMode) {
+      document.body.dataset.mobileZen = '1';
+    } else {
+      delete document.body.dataset.mobileZen;
+    }
     const qaDebug = new URLSearchParams(window.location.search).get('debug') === '1';
     if (qaDebug) {
       document.body.dataset.qaDebug = '1';
@@ -1654,6 +1692,22 @@ export function mountRobinTown(): void {
               btn.classList.toggle('active-atmo', btn.dataset.atmo === atmosphere3D);
             });
         }
+        break;
+      }
+      case 'toggle-3d-touch-mode': {
+        touchDragMode3D = touchDragMode3D === 'pan' ? 'orbit' : 'pan';
+        board3D?.setTouchDragMode(touchDragMode3D);
+        ensure3DCityMounted();
+        toast(
+          touchDragMode3D === 'pan'
+            ? '1-finger touch: Pan across streets (2 fingers zoom and rotate)'
+            : '1-finger touch: Orbit 3D camera (2 fingers zoom and pan)',
+        );
+        break;
+      }
+      case 'toggle-mobile-zen': {
+        mobileZenMode = !mobileZenMode;
+        render();
         break;
       }
       case 'toggle-ipod':
