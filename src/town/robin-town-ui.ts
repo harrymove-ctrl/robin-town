@@ -1901,6 +1901,14 @@ export function mountRobinTown(): void {
                 <button type="button" class="metamask-board-btn" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🏆 ${uniqueWalletsCount}</button>
               </div>`;
 
+    const savedModeLabel =
+      state.entryMode === 'ranked'
+        ? 'Ranked Arena'
+        : state.entryMode === 'daily'
+          ? `Daily Seed #${state.dailySeed ?? ''}`
+          : 'Casual Town';
+    const progressActive = hasProgress();
+
     menu.innerHTML = `<div class="menu-scene" aria-hidden="true"></div>
       <canvas id="robin-start-shader" class="robin-shader-canvas" aria-hidden="true"></canvas>
       <div class="start-panel">
@@ -1909,52 +1917,68 @@ export function mountRobinTown(): void {
           <span class="robin-chain-pill burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')} $wif Burned</span>
           <button type="button" class="robin-chain-pill traders-live-pill" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🦊 ${uniqueWalletsCount.toLocaleString('en-US')} ${uniqueWalletsCount === 1 ? 'Wallet' : 'Wallets'} · ${matchesPlayedCount.toLocaleString('en-US')} ${matchesPlayedCount === 1 ? 'Match' : 'Matches'} · Leaderboard ↗</button>
         </div>
-        <h1 class="start-logo">ROBIN<span>TOWN</span></h1>
-        <div class="menu-shops" aria-hidden="true">${sprite('shops', 'banhmi')}${sprite('shops', 'coffee')}${sprite('shops', 'pho')}</div>
-        <p class="start-description">Pull up a stool. Bargain for street corners, open neighborhood shops, and put $wif to work in a 6-year trading board game.</p>
 
-        <div class="entry-mode-grid entry-mode-grid-3" role="group" aria-label="Choose match entry mode">
-          <button type="button" class="entry-mode-card ${selectedEntryMode === 'casual' ? 'active' : ''}" data-action="select-entry" data-entry-mode="casual">
-            <strong>Casual Town <span class="entry-tag">FREE</span></strong>
-            <small>Zero $wif needed. Beat AI neighbors, earn Town Points, and swap points to $wif (3% burn).</small>
-          </button>
-          <button type="button" class="entry-mode-card ${selectedEntryMode === 'daily' ? 'active' : ''}" data-action="select-entry" data-entry-mode="daily">
-            <strong>📅 Daily Seed <span class="entry-tag daily">${escape((walletStats?.todaySeed ?? getTodayHarborSeedKey()).slice(5))}</span></strong>
-            <small>Same 6-year plot & shop deck worldwide today. Build your streak & top the Daily Leaderboard!</small>
-          </button>
-          <button type="button" class="entry-mode-card ${selectedEntryMode === 'ranked' ? 'active' : ''}" data-action="select-entry" data-entry-mode="ranked">
-            <strong>Ranked Arena <span class="entry-tag">1,000 $WIF</span></strong>
-            <small>4,000 $wif pot: 3,600 $wif Podium Purse, 200 $wif burned forever, 200 $wif to Staking Vault.</small>
-          </button>
-        </div>
-
-        ${metaMaskStripHtml}
-
-        <div class="start-actions">
-          <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${hasProgress() ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : selectedEntryMode === 'daily' ? `Play Daily Seed (${walletStats?.todaySeed ?? getTodayHarborSeedKey()})` : 'Start free game'} <span>▶</span></button>
-          <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Fast Play A to Z (Watch You + Cole, Maya & Clara)</button>
-          ${hasProgress() ? `<span class="save-caption">Year ${state.year}/6 · ${phaseName()} · ${state.players[0].cash} $wif (${state.entryMode === 'ranked' ? 'Ranked Arena' : state.entryMode === 'daily' ? `Daily Seed #${state.dailySeed ?? ''}` : 'Casual Town'})</span><button class="menu-option" data-action="new">New game</button>` : ''}
-          <button class="menu-option" data-action="wif-hub">$wif Wallet, Staking & Online Rooms (${walletBalance.toLocaleString('en-US')} $wif)</button>
-          <button class="menu-option" data-action="rules">How to play</button>
-          <button class="menu-option" data-action="settings">Audio & View Settings</button>
-        </div>
-
-        <div class="start-carousel-wrap">
-          <div class="start-carousel-header">
-            <span>NEIGHBORHOOD DISTRICTS & $WIF YIELDS</span>
-            <span>APPLE AUTOPLAY CAROUSEL</span>
+        <div class="start-layout-grid">
+          <div class="start-brand-hero">
+            <h1 class="start-logo">ROBIN<span>TOWN</span></h1>
+            <div class="menu-shops" aria-hidden="true">${sprite('shops', 'banhmi')}${sprite('shops', 'coffee')}${sprite('shops', 'pho')}</div>
+            <p class="start-description">Pull up a stool. Bargain for street corners, open neighborhood shops, and put $wif to work in a 6-year trading board game.</p>
           </div>
-          <div id="start-apple-carousel"></div>
+
+          <div class="start-command-col">
+            <div class="entry-mode-grid entry-mode-grid-3" role="group" aria-label="Choose match entry mode">
+              <button type="button" class="entry-mode-card ${selectedEntryMode === 'casual' ? 'active' : ''}" data-action="select-entry" data-entry-mode="casual">
+                <strong>Casual Town <span class="entry-tag">FREE</span></strong>
+                <small>Zero $wif needed. Beat AI neighbors, earn Town Points, and swap points to $wif (3% burn).</small>
+              </button>
+              <button type="button" class="entry-mode-card ${selectedEntryMode === 'daily' ? 'active' : ''}" data-action="select-entry" data-entry-mode="daily">
+                <strong>📅 Daily Seed <span class="entry-tag daily">${escape((walletStats?.todaySeed ?? getTodayHarborSeedKey()).slice(5))}</span></strong>
+                <small>Same 6-year plot & shop deck worldwide today. Build your streak & top the Daily Leaderboard!</small>
+              </button>
+              <button type="button" class="entry-mode-card ${selectedEntryMode === 'ranked' ? 'active' : ''}" data-action="select-entry" data-entry-mode="ranked">
+                <strong>Ranked Arena <span class="entry-tag">1,000 $WIF</span></strong>
+                <small>4,000 $wif pot: 3,600 $wif Podium Purse, 200 $wif burned forever, 200 $wif to Staking Vault.</small>
+              </button>
+            </div>
+
+            ${metaMaskStripHtml}
+
+            <div class="start-actions">
+              ${progressActive ? `<span class="save-caption">Saved Match · Year ${state.year}/6 · ${phaseName()} · ${state.players[0].cash} $wif (${escape(savedModeLabel)})</span>` : ''}
+              <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${progressActive ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : selectedEntryMode === 'daily' ? `Play Daily Seed (${walletStats?.todaySeed ?? getTodayHarborSeedKey()})` : 'Start free game'} <span>▶</span></button>
+              <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Fast Play A to Z (Watch You + Cole, Maya & Clara)</button>
+              <div class="start-secondary-grid ${progressActive ? 'has-save' : 'fresh-save'}">
+                ${progressActive ? `<button class="menu-option" data-action="new">↻ New game</button>` : ''}
+                <button class="menu-option wif-menu-btn" data-action="wif-hub">${progressActive ? `💰 $wif Hub (${walletBalance.toLocaleString('en-US')} $wif)` : `💰 $wif Wallet, Staking & Rooms (${walletBalance.toLocaleString('en-US')} $wif)`}</button>
+                <button class="menu-option" data-action="rules">📖 How to play</button>
+                <button class="menu-option" data-action="settings">⚙️ Audio & View</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="start-carousel-wrap">
+            <div class="start-carousel-header">
+              <span>NEIGHBORHOOD DISTRICTS & $WIF YIELDS</span>
+              <span>6 DISTRICTS · LIVE YIELDS</span>
+            </div>
+            <div id="start-apple-carousel"></div>
+          </div>
         </div>
 
-        <div class="load-status" role="status" aria-live="polite">
-          <progress max="${GAME_IMAGES.length}" value="${loadingCount}"></progress>
-          <span data-load-label></span>
-          <button data-action="retry-assets" hidden>Retry</button>
+        <div class="start-footer-bar">
+          <div class="load-status" role="status" aria-live="polite">
+            <progress max="${GAME_IMAGES.length}" value="${loadingCount}"></progress>
+            <span data-load-label></span>
+            <button data-action="retry-assets" hidden>Retry</button>
+          </div>
+          <div class="start-footer-links">
+            <p class="start-foot">Inspired by Chinatown · 2D + 3D Tabletop + Three.js 3D Living City</p>
+            <div class="start-foot-actions">
+              ${progressActive ? `<button class="artbook-link" data-action="businesses">Shop ledger</button> · <button class="artbook-link" data-action="history">Town journal</button> · ` : ''}
+              <button class="artbook-link" data-action="research">Design notebook & Aseprite artbook</button>
+            </div>
+          </div>
         </div>
-        <p class="start-foot">Inspired by Chinatown · 2D + 3D Tabletop + Three.js 3D Living City</p>
-        ${hasProgress() ? `<button class="artbook-link" data-action="businesses">Shop ledger</button> · <button class="artbook-link" data-action="history">Town journal</button> · ` : ''}
-        <button class="artbook-link" data-action="research">Design notebook & Aseprite artbook</button>
       </div>`;
 
     const shaderEl = menu.querySelector<HTMLCanvasElement>('#robin-start-shader');
@@ -2090,7 +2114,8 @@ export function mountRobinTown(): void {
         <div class="wif-stat-box"><small>🌾 Town Points</small><strong>${townPoints.toLocaleString('en-US')} pts</strong></div>
       </div>
 
-      <section class="wif-hub-section">
+      <div class="wif-hub-sections-grid">
+      <section class="wif-hub-section wif-hub-span-full">
         <h3>1. Official World is Flat ($wif) Wallet · Robinhood Chain Mainnet (${ROBINHOOD_MAINNET_CHAIN_ID})</h3>
         <p>Play immediately with pre-funded accounts (0 $wif required to enter) or connect MetaMask / Rabby on <strong>Robinhood Chain Mainnet (${ROBINHOOD_MAINNET_CHAIN_ID})</strong> with official <strong>World is Flat</strong> ERC-20 <code>$wif</code> (<a href="${WIF_BLOCKSCOUT_TOKEN_URL}" target="_blank" rel="noopener"><code>${WIF_TOKEN_CONTRACT_ADDRESS.slice(0, 8)}…${WIF_TOKEN_CONTRACT_ADDRESS.slice(-4)}</code></a>).</p>
         <div class="wif-row-actions" style="margin-bottom:8px">
@@ -2196,6 +2221,7 @@ export function mountRobinTown(): void {
             : ''
         }
       </section>
+      </div>
 
       <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
       'ROBINHOOD CHAIN · $WIF ECONOMIC ENGINE',

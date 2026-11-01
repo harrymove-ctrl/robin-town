@@ -12,15 +12,30 @@
   z-index: 0;
 }
 
+#start-screen[hidden] {
+  display: none !important;
+}
+
 #start-screen {
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
 }
 
 #start-screen .start-panel {
   position: relative;
   z-index: 2;
-  width: min(720px, 94vw) !important;
-  max-width: min(720px, 94vw) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  margin: auto;
+  width: min(760px, 95vw) !important;
+  max-width: min(760px, 95vw) !important;
+  padding: 16px 20px 14px;
   box-sizing: border-box;
 }
 
@@ -2151,10 +2166,11 @@ button.robin-chain-pill.traders-live-pill:hover {
 }
 
 .coachmark-actions {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+  gap: 5px;
+  max-width: 100%;
 }
 
 .coachmark-btn {
@@ -2560,15 +2576,23 @@ button.robin-chain-pill.traders-live-pill:hover {
 
 /* 2-Column Year-6 Final Standings + Score Card Modal (100% Above the Fold on Desktop) */
 dialog#modal.results-dialog {
-  width: min(920px, 95vw);
-  max-width: 920px;
-  max-height: 92vh;
-  padding: 16px 22px 18px;
+  width: min(1040px, calc(100vw - 24px));
+  max-width: min(1040px, calc(100vw - 24px));
+  max-height: calc(var(--available-height, 100dvh) - 20px);
+  padding: 0 !important;
+}
+
+dialog#modal.results-dialog .modal-header {
+  padding: 11px 18px 10px;
+}
+
+dialog#modal.results-dialog .modal-body {
+  padding: 12px 18px 14px;
 }
 
 dialog#modal.results-dialog h2 {
-  margin-bottom: 6px;
-  font-size: clamp(20px, 2.3vw, 25px);
+  margin-bottom: 2px;
+  font-size: clamp(19px, 2.2vw, 24px);
 }
 
 .results-split-grid {
@@ -2618,11 +2642,11 @@ dialog#modal.results-dialog h2 {
 
 .results-right-col .score-card-box {
   margin-top: 0;
-  padding: 9px;
+  padding: 8px;
 }
 
 .results-right-col .score-card-preview {
-  max-height: 232px;
+  max-height: clamp(164px, 26dvh, 236px);
   width: auto;
   max-width: 100%;
   object-fit: contain;
@@ -2635,5 +2659,684 @@ dialog#modal.results-dialog h2 {
 }
 
 dialog#modal.results-dialog .modal-actions {
-  margin-top: 10px;
+  margin-top: 8px;
+}
+
+/* ============================================================================
+   Full-Screen Responsive Layout Across Desktop, Laptop, Tablet & Mobile
+   ============================================================================ */
+
+/* Full-bleed player rail on widescreen and ultrawide monitors */
+.game-shell .player-rail {
+  max-width: none !important;
+}
+
+/* Start / Pause Screen adaptive grid */
+#start-screen .robin-kicker-badges {
+  margin-bottom: 0;
+}
+
+.start-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "hero"
+    "command"
+    "carousel";
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.start-brand-hero {
+  grid-area: hero;
+  min-width: 0;
+}
+
+.start-command-col {
+  grid-area: command;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.start-command-col .entry-mode-grid,
+.start-command-col .metamask-connect-bar {
+  margin: 0;
+}
+
+#start-screen .start-carousel-wrap {
+  grid-area: carousel;
+  margin: 0;
+  min-width: 0;
+}
+
+.start-actions {
+  gap: 7px;
+}
+
+.start-actions .save-caption {
+  display: inline-block;
+  justify-self: center;
+  margin: 0;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(12, 34, 25, 0.78);
+  border: 1px solid rgba(203, 180, 132, 0.4);
+  color: #e9f3cc;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.start-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.start-secondary-grid.fresh-save .wif-menu-btn {
+  grid-column: 1 / -1;
+}
+
+.start-secondary-grid .menu-option {
+  min-height: 42px;
+  font-size: 13.5px;
+  padding: 6px 10px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.start-footer-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(203, 180, 132, 0.24);
+}
+
+.start-footer-bar .load-status {
+  margin: 0;
+  min-height: 0;
+  font-size: 11px;
+}
+
+.start-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+.start-footer-bar .start-foot {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.start-foot-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.start-foot-actions .artbook-link {
+  min-height: 24px;
+  padding: 2px 4px;
+}
+
+/* Widescreen Desktop, Laptop, & Tablet Landscape Start Screen (Zero Vertical Overflow) */
+@media (min-width: 920px) and (min-height: 540px) {
+  #start-screen {
+    padding: clamp(8px, 1.5dvh, 20px) clamp(14px, 2.4vw, 32px);
+  }
+
+  #start-screen .start-panel {
+    width: min(1240px, 95vw) !important;
+    max-width: min(1240px, 95vw) !important;
+    padding: clamp(12px, 1.8dvh, 22px) clamp(18px, 2.4vw, 30px) clamp(10px, 1.4dvh, 16px);
+    gap: clamp(8px, 1.2dvh, 13px);
+  }
+
+  .start-layout-grid {
+    grid-template-columns: minmax(340px, 0.9fr) minmax(460px, 1.1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "hero command"
+      "carousel command";
+    gap: clamp(8px, 1.2dvh, 14px) clamp(16px, 2.2vw, 28px);
+    align-items: stretch;
+  }
+
+  .start-brand-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(10px, 1.5dvh, 16px) 16px;
+    border-radius: 12px;
+    background: rgba(13, 38, 28, 0.62);
+    border: 1px solid rgba(203, 180, 132, 0.25);
+  }
+
+  #start-screen .start-logo {
+    font-size: clamp(38px, 4.8dvh, 54px);
+    line-height: 1.01;
+  }
+
+  #start-screen .start-logo span {
+    font-size: clamp(28px, 3.5dvh, 40px);
+  }
+
+  #start-screen .menu-shops {
+    height: clamp(64px, 9dvh, 96px);
+    margin-top: clamp(4px, 0.7dvh, 8px);
+  }
+
+  #start-screen .menu-shops img {
+    width: clamp(64px, 8.6dvh, 90px);
+    height: clamp(64px, 8.6dvh, 90px);
+  }
+
+  #start-screen .menu-shops img:nth-child(2) {
+    width: clamp(74px, 9.8dvh, 102px);
+    height: clamp(74px, 9.8dvh, 102px);
+  }
+
+  #start-screen .start-description {
+    margin: clamp(5px, 0.8dvh, 9px) 0 0;
+    font-size: clamp(12px, 1.45dvh, 13.5px);
+    line-height: 1.45;
+    max-width: 44ch;
+  }
+
+  .start-command-col {
+    justify-content: space-between;
+    gap: clamp(6px, 1.05dvh, 10px);
+  }
+
+  .start-command-col .entry-mode-card {
+    padding: clamp(7px, 1dvh, 10px) 11px;
+  }
+
+  .start-command-col .start-play {
+    min-height: clamp(42px, 5.4dvh, 48px);
+  }
+
+  .start-command-col .fast-menu-cta {
+    min-height: clamp(38px, 4.8dvh, 45px);
+    font-size: clamp(13.5px, 1.6dvh, 15px);
+  }
+
+  .start-secondary-grid .menu-option {
+    min-height: clamp(37px, 4.6dvh, 43px);
+    font-size: clamp(12.5px, 1.5dvh, 14px);
+  }
+
+  #start-screen .apple-carousel-slide {
+    height: clamp(66px, 8.4dvh, 76px);
+  }
+
+  .start-footer-bar {
+    flex-direction: row;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    padding-top: clamp(5px, 0.8dvh, 9px);
+  }
+}
+
+/* Mobile Portrait Start Screen (360px to 640px, including 375x667 iPhone SE) */
+@media (max-width: 640px) {
+  #start-screen {
+    padding: max(8px, env(safe-area-inset-top)) 8px max(12px, env(safe-area-inset-bottom));
+  }
+
+  #start-screen .start-panel {
+    width: min(100%, 96vw) !important;
+    max-width: min(100%, 96vw) !important;
+    margin: 0 auto;
+    padding: 12px 12px 14px !important;
+    gap: 8px;
+  }
+
+  #start-screen .start-logo {
+    font-size: 38px;
+  }
+
+  #start-screen .start-logo span {
+    font-size: 27px;
+    letter-spacing: 8px;
+    padding-left: 8px;
+  }
+
+  #start-screen .menu-shops {
+    height: 62px;
+    margin-top: 3px;
+  }
+
+  #start-screen .menu-shops img {
+    width: 60px;
+    height: 60px;
+  }
+
+  #start-screen .menu-shops img:nth-child(2) {
+    width: 70px;
+    height: 70px;
+  }
+
+  #start-screen .start-description {
+    font-size: 12px;
+    line-height: 1.38;
+    margin: 4px 0 0;
+  }
+
+  /* Progressive disclosure on narrow mobile so Primary Play CTA stays above the fold */
+  #start-screen .entry-mode-grid.entry-mode-grid-3 {
+    gap: 5px;
+  }
+
+  #start-screen .entry-mode-card {
+    padding: 7px 10px;
+  }
+
+  #start-screen .entry-mode-card:not(.active) small {
+    display: none;
+  }
+
+  #start-screen .start-play {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  #start-screen .fast-menu-cta {
+    min-height: 40px;
+    font-size: 12.5px;
+    padding: 6px 8px;
+  }
+
+  .start-secondary-grid {
+    gap: 6px;
+  }
+
+  .start-secondary-grid .menu-option {
+    min-height: 40px;
+    font-size: 12px;
+    padding: 5px 7px;
+  }
+
+  .coachmark-banner {
+    padding: 6px 9px;
+    gap: 5px;
+  }
+
+  .coachmark-copy {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .coachmark-btn {
+    padding: 4px 8px;
+    font-size: 10.5px;
+  }
+
+  .coachmark-skip {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+}
+
+/* Short Landscape Viewports (Phones in Landscape e.g. 844x390, 932x430, 667x375) */
+@media (max-height: 539px) and (orientation: landscape) {
+  #start-screen {
+    padding: 6px max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left));
+  }
+
+  #start-screen .start-panel {
+    width: min(980px, 96vw) !important;
+    max-width: min(980px, 96vw) !important;
+    margin: 0 auto;
+    padding: 10px 14px !important;
+    gap: 7px;
+  }
+
+  .start-layout-grid {
+    grid-template-columns: minmax(240px, 0.82fr) minmax(300px, 1.18fr);
+    grid-template-areas:
+      "hero command"
+      "carousel command";
+    gap: 8px 14px;
+  }
+
+  #start-screen .start-logo {
+    font-size: 30px;
+  }
+
+  #start-screen .start-logo span {
+    font-size: 21px;
+    letter-spacing: 6px;
+    padding-left: 6px;
+  }
+
+  #start-screen .menu-shops {
+    height: 50px;
+    margin-top: 2px;
+  }
+
+  #start-screen .menu-shops img {
+    width: 48px;
+    height: 48px;
+  }
+
+  #start-screen .menu-shops img:nth-child(2) {
+    width: 56px;
+    height: 56px;
+  }
+
+  #start-screen .start-description {
+    font-size: 11px;
+    line-height: 1.3;
+    margin: 3px 0 0;
+  }
+
+  #start-screen .entry-mode-card {
+    padding: 6px 8px;
+  }
+
+  #start-screen .entry-mode-card small {
+    display: none;
+  }
+
+  #start-screen .start-carousel-header span:last-child {
+    display: none;
+  }
+
+  /* Compact single-row in-game HUD on landscape phones so 3D Harbor gets > 68% height */
+  .game-hud-top {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto !important;
+    gap: 6px !important;
+    padding: 3px 8px !important;
+  }
+
+  .game-hud-top .game-brand,
+  .game-shell .pocket-inventory,
+  .game-shell .wallet small,
+  .game-shell .wallet .hand-total,
+  .robin-hud-utilities .view-mode-segmented,
+  .robin-hud-utilities .ipod-hud-btn,
+  .robin-hud-utilities .wif-hud-burn,
+  .robin-hud-utilities .wif-hud-acct,
+  .robin-hud-utilities .traders-hud-label,
+  .robin-hud-utilities .mobile-phase-pill {
+    display: none !important;
+  }
+
+  .game-shell .player-rail {
+    grid-row: 1 !important;
+    grid-column: 1 !important;
+    gap: 4px !important;
+    height: auto !important;
+  }
+
+  .game-shell .player-pocket {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .game-shell .pocket-main {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    flex-direction: row !important;
+    padding: 2px 6px !important;
+    gap: 4px !important;
+  }
+
+  .game-shell .pocket-token img {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  .game-shell .pocket-token b {
+    font-size: 10.5px !important;
+  }
+
+  .game-shell .wallet strong {
+    font-size: 12px !important;
+  }
+
+  .robin-hud-utilities {
+    grid-row: 1 !important;
+    grid-column: 2 !important;
+    gap: 4px !important;
+  }
+
+  .robin-hud-utilities .view-toggle-btn {
+    display: inline-flex !important;
+    min-height: 30px;
+    padding: 3px 8px;
+  }
+
+  .game-hud-top .hud-menu {
+    min-height: 30px !important;
+    height: 30px !important;
+    min-width: 34px !important;
+    width: 34px !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+  }
+
+  .game-hud-top .hud-menu small {
+    display: none !important;
+  }
+
+  .action-belt,
+  .game-shell .action-belt {
+    min-height: 44px !important;
+    height: auto !important;
+    padding: 3px 8px !important;
+  }
+
+  .belt-button {
+    min-height: 38px !important;
+    height: 38px !important;
+  }
+
+  .game-shell .calendar.paper-calendar {
+    top: 5px !important;
+    right: 6px !important;
+    width: 56px !important;
+    height: 74px !important;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-heading {
+    top: 20%;
+    left: 8%;
+    right: 8%;
+    font-size: 5px !important;
+    letter-spacing: 0.02em !important;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-caption {
+    top: 34%;
+    left: 12%;
+    right: 12%;
+    font-size: 5.5px;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-digit {
+    top: 43%;
+    left: 12%;
+    right: 12%;
+    font-size: 17px;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-animal {
+    top: 68%;
+    left: 6%;
+    right: 6%;
+    gap: 2px;
+    font-size: 7.5px;
+    line-height: 1;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-animal img {
+    width: 10px;
+    height: 10px;
+  }
+
+  .game-shell .calendar.paper-calendar .calendar-footnote {
+    display: none !important;
+  }
+
+  .stage-top-stack {
+    top: 5px;
+    left: 6px;
+    right: 64px;
+    gap: 4px;
+  }
+
+  .coachmark-banner {
+    padding: 4px 9px;
+    gap: 6px;
+  }
+
+  .three-city-toolbar {
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    max-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 3px 6px;
+  }
+
+  .three-city-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Compact Laptop Height Optimization (720p and 768p Desktops) */
+@media (max-height: 800px) and (min-width: 681px) and (min-height: 540px) {
+  .game-hud-top {
+    padding: 5px 12px !important;
+  }
+
+  .game-shell .pocket-main {
+    min-height: 34px !important;
+    padding: 2px 7px !important;
+  }
+
+  .game-shell .pocket-inventory {
+    height: 22px;
+    padding: 0 5px 2px;
+  }
+
+  .action-belt {
+    min-height: 58px;
+    padding: 4px 12px;
+  }
+
+  .belt-button {
+    min-height: 44px;
+  }
+}
+
+/* Global Dialog & $wif Hub Widescreen Adaptation (Overrides base.css 780px cap) */
+dialog#modal {
+  width: min(940px, calc(100vw - 24px));
+  max-width: min(940px, calc(100vw - 24px));
+  max-height: calc(var(--available-height, 100dvh) - 20px);
+  box-sizing: border-box;
+}
+
+dialog#modal[data-wif-hub="true"],
+dialog#modal[data-traders-board="true"],
+dialog#modal.trade-dialog,
+dialog#modal.ledger-dialog {
+  width: min(1080px, calc(100vw - 24px));
+  max-width: min(1080px, calc(100vw - 24px));
+}
+
+.wif-hub-sections-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.wif-hub-sections-grid .wif-hub-section {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+@media (min-width: 681px) and (max-width: 959px) {
+  .wif-hub-sections-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wif-hub-sections-grid .wif-hub-span-full,
+  .wif-hub-sections-grid .wif-hub-section:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 960px) {
+  .wif-hub-sections-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .wif-hub-sections-grid .wif-hub-span-full {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  dialog#modal,
+  dialog#modal[data-wif-hub="true"],
+  dialog#modal[data-traders-board="true"],
+  dialog#modal.trade-dialog,
+  dialog#modal.results-dialog,
+  dialog#modal.ledger-dialog {
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
+    max-height: calc(var(--available-height, 100dvh) - 12px);
+  }
+}
+
+@media (max-height: 760px) {
+  dialog#modal .modal-header {
+    padding: 9px 14px 8px;
+  }
+
+  dialog#modal .modal-header h2 {
+    font-size: clamp(18px, 2.2vw, 22px);
+  }
+
+  dialog#modal .modal-body {
+    padding: 10px 14px 14px;
+  }
 }
