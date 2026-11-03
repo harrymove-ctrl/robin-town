@@ -351,9 +351,6 @@ export function mountRobinTown(): void {
       dismissPhase();
       if (get('#modal').open) closeModal();
       liveBotFeed = `Fast Play ${next}x active: You, Cole, Maya & Clara playing Year ${state.year}/6`;
-      if (!silent) {
-        toast(`⚡ Fast Play ${next}x running! Watch You, Cole, Maya & Clara build Year ${state.year} to Year 6.`);
-      }
       render();
       scheduleNextAutoStep(Math.min(180, stepDelayMs(next)));
     } else {
@@ -1168,7 +1165,7 @@ export function mountRobinTown(): void {
   }
 
   function playerCard() {
-    return `<div class="player-rail">${state.players.map((p, i) => `<div class="player-pocket ${i === 0 ? 'your-pocket' : ''}" style="--player-color:${TOKEN_COLORS[i]}"><button class="pocket-main" data-action="${i !== 0 && state.phase === 'trade' ? 'trade-player' : 'player-info'}" data-player="${i}" aria-label="${i === 0 ? 'Your inventory' : p.name}, ${p.cash} $wif"><span class="pocket-token">${token(i)}<b>${i === 0 ? 'YOU' : p.name.toUpperCase()}</b></span><span class="wallet"><strong data-wallet="${i}">${money(p.cash)}</strong><span class="hand-total" aria-label="${p.tiles.reduce((n, x) => n + x, 0)} shop pieces">▧ ${p.tiles.reduce((n, x) => n + x, 0)}</span><small>+${income(state, i, isStaked())} $wif / yr</small></span></button><div class="pocket-inventory" aria-label="Unused shop pieces">${p.tiles.map((n, s) => (n ? `<button data-action="glance-shop" data-player="${i}" data-shop-index="${s}" title="${SHOPS[s].name} ×${n}" aria-label="${p.name}, ${SHOPS[s].name}, ${n}">${sprite('shops', SPRITES[s])}<b>${n}</b></button>` : '')).join('') || `<span>Empty rack</span>`}<button class="inventory-more" data-action="player-info" data-player="${i}" aria-label="View inventory">⋯</button></div></div>`).join('')}</div>`;
+    return `<div class="player-rail">${state.players.map((p, i) => `<div class="player-pocket ${i === 0 ? 'your-pocket' : ''}" style="--player-color:${TOKEN_COLORS[i]}"><button class="pocket-main" data-action="${i !== 0 && state.phase === 'trade' ? 'trade-player' : 'player-info'}" data-player="${i}" aria-label="${i === 0 ? 'Your inventory' : p.name}, ${p.cash} $wif"><span class="pocket-token">${token(i)}<b>${i === 0 ? 'YOU' : p.name.toUpperCase()}</b></span><span class="wallet"><strong data-wallet="${i}">${money(p.cash)}</strong><span class="hand-total" aria-label="${p.tiles.reduce((n, x) => n + x, 0)} shop pieces">▧ ${p.tiles.reduce((n, x) => n + x, 0)}</span><small>+${income(state, i, isStaked())}/yr</small></span></button><div class="pocket-inventory" aria-label="Unused shop pieces">${p.tiles.map((n, s) => (n ? `<button data-action="glance-shop" data-player="${i}" data-shop-index="${s}" title="${SHOPS[s].name} ×${n}" aria-label="${p.name}, ${SHOPS[s].name}, ${n}">${sprite('shops', SPRITES[s])}<b>${n}</b></button>` : '')).join('') || `<span>Empty rack</span>`}<button class="inventory-more" data-action="player-info" data-player="${i}" aria-label="View inventory">⋯</button></div></div>`).join('')}</div>`;
   }
 
   function hudUtilities() {
@@ -1319,7 +1316,7 @@ export function mountRobinTown(): void {
   function hand() {
     return `<section class="tile-rack" aria-label="Your shop pieces"><div class="rack-label"><span>YOUR SHOP PIECES</span><button class="ledger-shortcut" data-action="businesses"><span aria-hidden="true">▤</span> Open ledger ↗</button></div><div class="shop-tray">${SHOPS.map((s, i) => {
       const bestDelta = state.phase === 'build' ? bestRackShopYield(i) : 0;
-      return `<button class="shop-piece ${selectedShop === i ? 'active' : ''} ${state.players[0].tiles[i] === 0 ? 'depleted' : ''}" data-shop="${i}" data-drag-shop="${i}" aria-pressed="${selectedShop === i}" aria-label="${s.name}: ${state.players[0].tiles[i]} in your rack. Connect ${s.size} matching shops of your color for ${COMPLETE[s.size]} $wif each year"><span class="piece-count"><small>Have</small> ${state.players[0].tiles[i]}</span>${bestDelta > 0 ? `<span class="piece-delta-badge">+${bestDelta} $wif/yr</span>` : ''}${sprite('shops', SPRITES[i])}<strong>${s.name}</strong><small class="shop-requirement"><span>Connect</span> <b>${s.size}</b> <span class="requirement-tail">tiles</span></small><span class="shop-payout">${COMPLETE[s.size]} $wif <em>/ year</em></span></button>`;
+      return `<button class="shop-piece ${selectedShop === i ? 'active' : ''} ${state.players[0].tiles[i] === 0 ? 'depleted' : ''}" data-shop="${i}" data-drag-shop="${i}" aria-pressed="${selectedShop === i}" aria-label="${s.name}: ${state.players[0].tiles[i]} in your rack. Connect ${s.size} matching shops of your color for ${COMPLETE[s.size]} $wif each year"><span class="piece-count"><small>Have</small> ${state.players[0].tiles[i]}</span>${bestDelta > 0 ? `<span class="piece-delta-badge">+${bestDelta}/yr</span>` : ''}${sprite('shops', SPRITES[i])}<strong>${s.name}</strong><small class="shop-requirement"><span>Connect</span> <b>${s.size}</b> <span class="requirement-tail">tiles</span></small><span class="shop-payout">${COMPLETE[s.size]} $wif <em>/ year</em></span></button>`;
     }).join('')}</div><div class="rack-hint">Same shop + your stool color + shared edge = connected business. Stake 500 $wif in the Hub for a 1.20x annual payday boost!</div></section>`;
   }
 

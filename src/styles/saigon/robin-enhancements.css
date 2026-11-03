@@ -310,9 +310,14 @@
 }
 
 .calendar-heading {
-  font-size: 8.5px !important;
-  letter-spacing: 0.05em !important;
+  left: 8% !important;
+  right: 8% !important;
+  text-align: center !important;
+  font-size: 6.5px !important;
+  letter-spacing: 0.02em !important;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .robin-hud-utilities {
@@ -621,29 +626,40 @@
   border-radius: 4px;
 }
 
+.rack-drawer.open {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 @media (min-width: 681px) {
+  .game-shell .player-pocket {
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
   .game-shell .pocket-main {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 6px !important;
-    padding: 4px 8px !important;
+    gap: 4px !important;
+    padding: 3px 7px !important;
   }
 
   .game-shell .pocket-token {
     flex-shrink: 0 !important;
     min-width: max-content !important;
-    gap: 5px !important;
+    gap: 4px !important;
   }
 
   .game-shell .pocket-token img {
-    width: 22px !important;
-    height: 22px !important;
+    width: 19px !important;
+    height: 19px !important;
     flex-shrink: 0;
   }
 
   .game-shell .pocket-token b {
-    font-size: 13px !important;
+    font-size: 12px !important;
     overflow: visible !important;
     text-overflow: clip !important;
     white-space: nowrap !important;
@@ -656,15 +672,64 @@
   }
 
   .game-shell .wallet strong {
-    font-size: 15.5px !important;
+    font-size: 13.5px !important;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 
   .game-shell .wallet small {
-    font-size: 11px !important;
+    font-size: 10px !important;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    opacity: 0.92;
+  }
+
+  .game-shell .tile-rack {
+    padding: 5px 12px 6px;
+  }
+
+  .game-shell .shop-piece {
+    height: 74px;
+    min-height: 74px;
+    padding: 5px 8px 4px;
+    grid-template-columns: 46px 1fr;
+  }
+
+  .game-shell .shop-piece > img {
+    width: 44px;
+    height: 48px;
+  }
+
+  .game-shell .shop-piece > strong {
+    font-size: 13.5px;
+    padding-right: 22px;
+  }
+
+  .game-shell .shop-requirement {
+    font-size: 11px;
+  }
+
+  .game-shell .shop-payout {
+    font-size: 12.5px;
+  }
+
+  .action-belt {
+    min-height: 62px;
+    padding: 4px 12px;
+  }
+
+  .rack-drawer.open {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .three-city-toolbar .three-city-label,
+  .three-city-toolbar .three-city-sep:last-of-type,
+  .three-city-toolbar button[data-preset="neighborhood"],
+  .three-city-toolbar button.fast-toolbar-pill,
+  .three-city-toolbar button[data-action="view-toggle"] {
+    display: none !important;
   }
 }
 
@@ -680,9 +745,11 @@
   }
 }
 
-@media (max-width: 1500px) and (min-width: 681px) {
-  .robin-hud-utilities .wif-hud-burn {
-    display: none;
+@media (max-width: 1680px) and (min-width: 681px) {
+  .robin-hud-utilities .wif-hud-burn,
+  .robin-hud-utilities .wif-hud-acct,
+  .robin-hud-utilities .traders-hud-label {
+    display: none !important;
   }
 }
 
@@ -2374,12 +2441,24 @@ button.robin-chain-pill.traders-live-pill:hover {
    v1.2 Gameplay Ergonomics, Smart OTC Bargaining & Above-the-Fold Score Card
    ============================================================================ */
 
-/* Non-colliding top toast so CTAs, 3D toolbar, and Action Belt stay clickable */
+/* Non-colliding bottom-right toast so Top HUD, Live Feed, 3D toolbar, and Action Belt stay unobstructed */
 #toast {
-  top: 74px !important;
-  bottom: auto !important;
+  top: auto !important;
+  bottom: 76px !important;
+  right: 14px !important;
+  left: auto !important;
+  transform: none !important;
+  max-width: min(360px, calc(100vw - 28px)) !important;
+  padding: 7px 13px !important;
+  font-size: 12.5px !important;
+  line-height: 1.35 !important;
+  border-radius: 10px !important;
   pointer-events: none !important;
   z-index: 95;
+}
+
+body[data-phase="build"] #toast {
+  bottom: 162px !important;
 }
 
 /* Phase Belt Smart Assistants & Connected Draft Slips */
@@ -2422,16 +2501,17 @@ button.robin-chain-pill.traders-live-pill:hover {
   pointer-events: none;
 }
 
-/* Marginal Yield Badge on Shop Rack Pieces */
+/* Marginal Yield Badge on Shop Rack Pieces (Top-Left of Card Above Sprite, Zero Text Overlap) */
 .shop-piece {
   position: relative;
 }
 
 .shop-piece .piece-delta-badge {
   position: absolute;
-  top: 5px;
-  right: 30px;
-  padding: 1px 5px;
+  top: -6px;
+  left: 6px;
+  right: auto;
+  padding: 1px 6px;
   border-radius: 999px;
   background: #14532d;
   border: 1px solid #4ade80;
