@@ -230,7 +230,7 @@ export function createTrading({
       done
         ? `<div class="deal-receipt"><strong>Deal sealed. Your plots, shop pieces, and $wif changed hands.</strong><p>${lastTax > 0 ? `1% OTC protocol fee (${lastTax} $wif) routed into the Robinhood Chain Staking Vault.` : 'Direct asset swap settled with zero cash fee.'}</p><button class="primary" data-bargain="again">Another deal</button><button class="secondary" data-action="close">Back to town</button></div>`
         : `${liveDealMeter(s, p.name, busy)}${rivalRiskBanner(s, busy)}<fieldset class="barter-table" ${busy ? 'disabled' : ''}><legend class="sr-only">Your two-sided trade offer</legend>${inventory(0, 'give')}<div class="barter-divider" aria-hidden="true">⇄</div>${inventory(p.id, 'take')}</fieldset>
-    <div class="barter-bottom"><span>Tap an item to add it. ★ marks tiles and plots that connect to your shops! (1% $wif cash fee feeds Staking Vault)</span>${status === 'rejected' && proposeBotCounterOffer(s, draft) ? `<button class="secondary" data-bargain="accept-counter">🤝 ${proposeBotCounterOffer(s, draft)!.actionLabel}</button>` : status === 'rejected' && shortfall > 0 && draft.give.cash + shortfall <= playerAt(s, 0).cash ? `<button class="secondary" data-bargain="counter">Add ${shortfall} $wif</button>` : ''}<button class="primary bargain-submit" data-bargain="propose" ${busy || (!hasItems(draft.give) && !hasItems(draft.take)) ? 'disabled' : ''}>${busy ? 'Counting the offer…' : 'How about this?'}</button></div>`
+    <div class="barter-bottom"><span>Tap items to add · ★ connects to your shop · 1% fee feeds Vault</span>${status === 'rejected' && proposeBotCounterOffer(s, draft) ? `<button class="secondary" data-bargain="accept-counter">🤝 ${proposeBotCounterOffer(s, draft)!.actionLabel}</button>` : status === 'rejected' && shortfall > 0 && draft.give.cash + shortfall <= playerAt(s, 0).cash ? `<button class="secondary" data-bargain="counter">Add ${shortfall} $wif</button>` : ''}<button class="primary bargain-submit" data-bargain="propose" ${busy || (!hasItems(draft.give) && !hasItems(draft.take)) ? 'disabled' : ''}>${busy ? 'Counting the offer…' : 'How about this?'}</button></div>`
     }`;
   }
   function render(): void {
@@ -247,7 +247,7 @@ export function createTrading({
     prefillShop: number | null = null,
   ): void {
     cancel();
-    modal('Let us make a deal.', '', 'ROBIN-TOWN BARGAINING TABLE');
+    modal('Let us make a deal.', '', 'ROBIN TOWN BARGAINING TABLE');
     draft = makeDraft(getState(), partner, prefillLot, prefillShop);
     active = true;
     status = 'idle';
@@ -264,7 +264,7 @@ export function createTrading({
       return;
     }
     cancel();
-    modal('Let us make a deal.', '', 'ROBIN-TOWN BARGAINING TABLE');
+    modal('Let us make a deal.', '', 'ROBIN TOWN BARGAINING TABLE');
     draft = JSON.parse(JSON.stringify(smart)) as TradeOffer;
     active = true;
     status = 'idle';

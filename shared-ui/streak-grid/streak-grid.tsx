@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   PROJECT_STREAK_DATA,
+  type GitHubContributionProfile,
   type ProjectBuildStage,
   type ProjectDailyEntry,
   type SingleProjectStreakData,
@@ -27,6 +28,7 @@ export interface StreakGridProps {
   days: StreakDayCell[];
   totalActivities: number;
   summaryLabel?: string;
+  githubProfile?: GitHubContributionProfile | null;
   highlightCategory?: BuildCategory | "all";
   onSelectDay?: (day: StreakDayCell) => void;
   selectedDate?: string | null;
@@ -86,9 +88,9 @@ function mulberry32(seed: number) {
 
 function toLevel(count: number): StreakLevel {
   if (count <= 0) return 0;
-  if (count <= 2) return 1;
-  if (count <= 5) return 2;
-  if (count <= 9) return 3;
+  if (count <= 3) return 1;
+  if (count <= 12) return 2;
+  if (count <= 28) return 3;
   return 4;
 }
 
@@ -97,14 +99,6 @@ export function buildSingleProjectStreakYear(
   extraLocalIdeas: ProjectDailyEntry[],
   anchorIsoDate?: string,
 ): { days: StreakDayCell[]; totalActivities: number } {
-  const weeks = 53;
-  const totalCells = weeks * 7;
-  const latestLogDate =
-    project.dailyEntries[0]?.date || project.lastSyncedAt.slice(0, 10) || "2026-10-31";
-  const resolvedAnchor = anchorIsoDate || latestLogDate;
-  const anchor = new Date(`${resolvedAnchor}T12:00:00Z`);
-  const rand = mulberry32(project.baseSeed);
-
   const stageNotes = project.buildStages.reduce(
     (acc, stage) => {
       acc[stage.category] = {
@@ -159,6 +153,65 @@ export function buildSingleProjectStreakYear(
     }
   }
 
+  // 1. REAL GITHUB CONTRIBUTION CALENDAR (@harrymove-ctrl)
+  const ghProfile = project.githubContributions;
+  if (ghProfile && Array.isArray(ghProfile.days) && ghProfile.days.length > 0) {
+    const extraCountSum = extraLocalIdeas.reduce(
+      (acc, item) => acc + item.count,
+      0,
+    );
+    const days: StreakDayCell[] = ghProfile.days.map((ghDay, idx) => {
+      const dt = new Date(`${ghDay.date}T12:00:00Z`);
+      const logged = entryByDate.get(ghDay.date);
+      const localExtra = extraLocalIdeas
+        .filter((e) => e.date === ghDay.date)
+        .reduce((s, e) => s + e.count, 0);
+      const count = ghDay.count + localExtra;
+      const ghLevel = (ghDay.level ?? toLevel(count)) as StreakLevel;
+      const level: StreakLevel =
+        localExtra > 0
+          ? (Math.max(ghLevel, toLevel(count)) as StreakLevel)
+          : ghLevel;
+
+      const fallbackCat = ALL_CATEGORIES[idx % ALL_CATEGORIES.length]!;
+      const cat = logged ? logged.category : fallbackCat;
+      const fallbackMeta = stageNotes[cat];
+
+      const defaultNote =
+        count > 0
+          ? `Real GitHub activity on @${ghProfile.login}: ${count} contribution${count === 1 ? "" : "s"} (${fallbackMeta.note})`
+          : `No GitHub commits or PRs recorded on ${ghDay.date} (@${ghProfile.login})`;
+
+      return {
+        date: ghDay.date,
+        monthShort: MONTH_NAMES[dt.getUTCMonth()]!,
+        dayOfMonth: dt.getUTCDate(),
+        count,
+        level,
+        category: cat,
+        title: logged ? logged.title : fallbackMeta.title,
+        note: logged ? logged.note : defaultNote,
+        ideas: logged ? logged.ideas : [],
+      };
+    });
+
+    return {
+      days,
+      totalActivities: ghProfile.totalContributions + extraCountSum,
+    };
+  }
+
+  // 2. Fallback deterministic calendar if offline without cache
+  const weeks = 53;
+  const totalCells = weeks * 7;
+  const latestLogDate =
+    project.dailyEntries[0]?.date ||
+    project.lastSyncedAt.slice(0, 10) ||
+    "2026-11-02";
+  const resolvedAnchor = anchorIsoDate || latestLogDate;
+  const anchor = new Date(`${resolvedAnchor}T12:00:00Z`);
+  const rand = mulberry32(project.baseSeed);
+
   const rawCounts: number[] = [];
   const dates: Date[] = [];
 
@@ -168,38 +221,22 @@ export function buildSingleProjectStreakYear(
     const iso = dt.toISOString().slice(0, 10);
     const logged = entryByDate.get(iso);
     const gitCount = project.gitDates?.[iso] || 0;
-
-    const recencyBoost = i < 45 ? 1.45 : i < 120 ? 1.15 : 0.92;
     const roll = rand();
-    let synthetic = 0;
-    if (i === 0) {
-      synthetic = 12;
-    } else if (roll > 0.24) {
-      synthetic = Math.max(1, Math.round(roll * roll * 9 * recencyBoost));
-    }
-    if (roll > 0.955) {
-      synthetic = Math.round(11 + rand() * 5);
-    }
-
-    const baseVal = logged ? Math.max(logged.count, synthetic) : synthetic + gitCount;
+    const synthetic =
+      i === 0 ? 3 : roll > 0.65 ? Math.max(1, Math.round(roll * 6)) : 0;
+    const baseVal = logged
+      ? Math.max(logged.count, synthetic)
+      : synthetic + gitCount;
     rawCounts.push(baseVal);
   }
-
-  const extraCountSum = extraLocalIdeas.reduce((acc, item) => acc + item.count, 0);
-  const desiredTotal = project.targetActivities + extraCountSum;
-  const rawSum = rawCounts.reduce((acc, n) => acc + n, 0) || 1;
-  const scale = desiredTotal / rawSum;
 
   let runningTotal = 0;
   const days: StreakDayCell[] = dates.map((dt, idx) => {
     const iso = dt.toISOString().slice(0, 10);
     const logged = entryByDate.get(iso);
-    const scaled =
-      rawCounts[idx] === 0 ? 0 : Math.max(1, Math.round(rawCounts[idx]! * scale));
-    runningTotal += scaled;
-
-    const fallbackCat =
-      ALL_CATEGORIES[(idx + Math.floor(rand() * 3)) % ALL_CATEGORIES.length]!;
+    const count = rawCounts[idx] ?? 0;
+    runningTotal += count;
+    const fallbackCat = ALL_CATEGORIES[idx % ALL_CATEGORIES.length]!;
     const cat = logged ? logged.category : fallbackCat;
     const fallbackMeta = stageNotes[cat];
 
@@ -207,8 +244,8 @@ export function buildSingleProjectStreakYear(
       date: iso,
       monthShort: MONTH_NAMES[dt.getUTCMonth()]!,
       dayOfMonth: dt.getUTCDate(),
-      count: scaled,
-      level: toLevel(scaled),
+      count,
+      level: toLevel(count),
       category: cat,
       title: logged ? logged.title : fallbackMeta.title,
       note: logged ? logged.note : fallbackMeta.note,
@@ -216,40 +253,18 @@ export function buildSingleProjectStreakYear(
     };
   });
 
-  // Distribute rounding remainder cleanly without mutating today's cell below active level
-  let diff = desiredTotal - runningTotal;
-  if (days.length > 1 && diff !== 0) {
-    let cursor = days.length - 2;
-    while (diff !== 0 && cursor >= 0) {
-      const cell = days[cursor]!;
-      if (diff > 0) {
-        const add = Math.min(diff, 6);
-        cell.count += add;
-        cell.level = toLevel(cell.count);
-        runningTotal += add;
-        diff -= add;
-      } else if (cell.count > 1) {
-        const sub = Math.min(-diff, cell.count - 1);
-        cell.count -= sub;
-        cell.level = toLevel(cell.count);
-        runningTotal -= sub;
-        diff += sub;
-      }
-      cursor -= 1;
-    }
-  }
-
   return { days, totalActivities: runningTotal };
 }
 
 /**
  * Pixel-faithful BunUI Streak Grid (`https://www.bunui.xyz/components/streak-grid`)
- * dedicated strictly to a single project.
+ * powered by real GitHub contribution data (@harrymove-ctrl).
  */
 export function StreakGrid({
   days,
   totalActivities,
-  summaryLabel = "activities last year",
+  summaryLabel = "GitHub contributions in the last year",
+  githubProfile,
   highlightCategory = "all",
   onSelectDay,
   selectedDate,
@@ -285,7 +300,7 @@ export function StreakGrid({
   return (
     <div
       data-testid="bunui-streak-grid"
-      className={`w-full rounded-3xl border border-zinc-800/90 bg-black p-5 text-zinc-100 shadow-2xl sm:p-7 ${className}`}
+      className={`w-full rounded-2xl border border-zinc-800/90 bg-black p-5 text-zinc-100 shadow-2xl sm:p-6 ${className}`}
     >
       <div className="w-full overflow-x-auto pb-2">
         <div className="inline-block min-w-max">
@@ -311,7 +326,7 @@ export function StreakGrid({
           {/* 7 x 53 Rounded Emerald Streak Matrix */}
           <div
             role="grid"
-            aria-label={`${PROJECT_STREAK_DATA.projectName} yearly build and idea streak grid`}
+            aria-label={`${PROJECT_STREAK_DATA.projectName} yearly GitHub contribution and build streak grid`}
             className="grid grid-flow-col auto-cols-[13px] gap-[4px]"
           >
             {weeks.map((week, colIdx) => (
@@ -322,9 +337,12 @@ export function StreakGrid({
               >
                 {week.map((day) => {
                   const matchesFilter =
-                    highlightCategory === "all" || day.category === highlightCategory;
+                    highlightCategory === "all" ||
+                    day.category === highlightCategory;
                   const effectiveLevel: StreakLevel =
-                    highlightCategory !== "all" && matchesFilter && day.count > 0
+                    highlightCategory !== "all" &&
+                    matchesFilter &&
+                    day.count > 0
                       ? 4
                       : day.level;
                   const isSelected = selectedDate === day.date;
@@ -335,7 +353,7 @@ export function StreakGrid({
                       type="button"
                       role="gridcell"
                       data-testid={`streak-cell-${day.date}`}
-                      aria-label={`${day.date}: ${day.count} activities, ${CATEGORY_LABELS[day.category]}`}
+                      aria-label={`${day.date}: ${day.count} contributions, ${CATEGORY_LABELS[day.category]}`}
                       onMouseEnter={() => onSelectDay?.(day)}
                       onFocus={() => onSelectDay?.(day)}
                       onClick={() => onSelectDay?.(day)}
@@ -361,17 +379,45 @@ export function StreakGrid({
         </div>
       </div>
 
-      {/* Bottom Summary & Less / More Legend */}
+      {/* Bottom Summary, Real GitHub Breakdown & Less / More Legend */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[13px]">
-        <p className="text-[#8e8e93] tabular-nums">
-          <strong
-            data-testid="streak-total-count"
-            className="font-semibold text-white"
-          >
-            {totalActivities.toLocaleString("en-US")}
-          </strong>{" "}
-          {summaryLabel}
-        </p>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <p className="text-[#8e8e93] tabular-nums">
+            <strong
+              data-testid="streak-total-count"
+              className="font-semibold text-white"
+            >
+              {totalActivities.toLocaleString("en-US")}
+            </strong>{" "}
+            {summaryLabel}
+          </p>
+
+          {githubProfile ? (
+            <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] text-zinc-400">
+              <a
+                href={githubProfile.url}
+                target="_blank"
+                rel="noreferrer"
+                data-testid="github-profile-link"
+                className="rounded-md border border-[#95f965]/30 bg-[#95f965]/10 px-2 py-0.5 font-semibold text-[#95f965] hover:bg-[#95f965]/20"
+              >
+                @{githubProfile.login}
+              </a>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900/90 px-2 py-0.5">
+                {githubProfile.commits} Commits
+              </span>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900/90 px-2 py-0.5">
+                {githubProfile.pullRequests} PRs
+              </span>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900/90 px-2 py-0.5">
+                {githubProfile.reviews} Reviews
+              </span>
+              <span className="rounded-md border border-zinc-800 bg-zinc-900/90 px-2 py-0.5">
+                {githubProfile.issues} Issues
+              </span>
+            </div>
+          ) : null}
+        </div>
 
         <div
           aria-label="Activity intensity legend from less to more"
@@ -402,7 +448,7 @@ type StreakViewVariant = "impact_split" | "pure_bunui" | "daily_ideas";
 
 /**
  * Isolated single-project BunUI Streak Grid + "What I Impact & How I Build" + Daily Idea Log.
- * Never displays or mixes any other hackathon.
+ * Powered by real GitHub contribution data (@harrymove-ctrl).
  */
 export function ProjectImpactStreakSection({
   heading = "Project Impact & How I Build",
@@ -439,7 +485,11 @@ export function ProjectImpactStreakSection({
     [project, localIdeas],
   );
 
-  const currentDay = inspectedDay ?? days[days.length - 1] ?? null;
+  const currentDay =
+    inspectedDay ??
+    [...days].reverse().find((d) => d.count > 0) ??
+    days[days.length - 1] ??
+    null;
 
   const mergedDailyFeed = useMemo(() => {
     const byDate = new Map<string, ProjectDailyEntry>();
@@ -502,10 +552,10 @@ export function ProjectImpactStreakSection({
       id="impact-streak"
       data-testid="hackathon-impact-streak-section"
       aria-labelledby="impact-streak-heading"
-      className="mt-12 scroll-mt-24 rounded-3xl border border-zinc-800/90 bg-[#050608] p-6 text-zinc-100 shadow-xl sm:p-8"
+      className="mt-10 scroll-mt-24 rounded-2xl border border-zinc-800/90 bg-[#050608] p-5 text-zinc-100 shadow-xl sm:p-7"
     >
       {/* Single-Project Header + 3-Mode Switcher */}
-      <div className="flex flex-col justify-between gap-4 border-b border-zinc-800/90 pb-6 lg:flex-row lg:items-end">
+      <div className="flex flex-col justify-between gap-4 border-b border-zinc-800/90 pb-5 lg:flex-row lg:items-end">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[#95f965]/30 bg-[#95f965]/10 px-3 py-1 font-mono text-xs font-semibold text-[#95f965]">
@@ -514,6 +564,16 @@ export function ProjectImpactStreakSection({
             <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 font-mono text-[11px] text-zinc-400 tabular-nums">
               {project.competitionBadge}
             </span>
+            {project.githubContributions ? (
+              <a
+                href={project.githubContributions.url}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20"
+              >
+                GitHub @{project.githubContributions.login} · LIVE
+              </a>
+            ) : null}
           </div>
           <h2
             id="impact-streak-heading"
@@ -557,12 +617,13 @@ export function ProjectImpactStreakSection({
         </div>
       </div>
 
-      {/* Core BunUI Streak Grid Canvas (Dedicated to This Project Only) */}
+      {/* Core BunUI Streak Grid Canvas (Real GitHub Contributions) */}
       <div className="mt-6">
         <StreakGrid
           days={days}
           totalActivities={totalActivities}
-          summaryLabel="activities last year"
+          summaryLabel="GitHub contributions in the last year"
+          githubProfile={project.githubContributions}
           highlightCategory={activeCategory}
           selectedDate={currentDay?.date ?? null}
           onSelectDay={setInspectedDay}
@@ -572,14 +633,15 @@ export function ProjectImpactStreakSection({
         {currentDay && viewVariant !== "pure_bunui" ? (
           <div
             data-testid="streak-day-inspector"
-            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-zinc-800/90 bg-zinc-950 px-4 py-3 text-xs"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800/90 bg-zinc-950 px-4 py-3 text-xs"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2.5">
               <span className="font-mono font-semibold text-[#95f965] tabular-nums">
                 {currentDay.date}
               </span>
               <span className="rounded-md bg-zinc-900 px-2 py-0.5 font-mono text-zinc-200 tabular-nums">
-                {currentDay.count} activities
+                {currentDay.count}{" "}
+                {currentDay.count === 1 ? "contribution" : "contributions"}
               </span>
               <span className="rounded-md border border-[#95f965]/25 bg-[#95f965]/10 px-2 py-0.5 font-medium text-[#95f965]">
                 {CATEGORY_LABELS[currentDay.category]}
@@ -604,32 +666,36 @@ export function ProjectImpactStreakSection({
         ) : null}
       </div>
 
-      {/* Mode 1: Impact Metrics + How I Build Pipeline */}
+      {/* Mode 1: Impact Metrics (4 Equal Cards) + How I Build Pipeline (3x2 Equal Grid) */}
       {viewVariant === "impact_split" ? (
-        <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <div className="space-y-4 lg:col-span-5">
-            <div className="flex items-center justify-between">
+        <div className="mt-7 space-y-6">
+          {/* Top Row: 4 Equal-Height Impact Cards */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-mono text-xs font-bold tracking-wider text-[#95f965] uppercase">
                 What I Impact for {project.projectName}
               </h3>
               <span className="font-mono text-[11px] text-zinc-400 tabular-nums">
-                {project.stats.codeFiles} Source Files
+                {project.stats.codeFiles} Source Files · {project.stats.rustFiles}{" "}
+                Rust · {project.stats.testFiles} Tests
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 items-stretch gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
               {project.impactMetrics.map((metric) => (
                 <article
                   key={metric.label}
-                  className="rounded-2xl border border-zinc-800/90 bg-zinc-950/90 p-4"
+                  className="flex h-full min-h-[128px] flex-col justify-between rounded-xl border border-zinc-800/90 bg-zinc-950/90 p-4"
                 >
-                  <p className="font-mono text-[11px] font-medium text-zinc-400 uppercase">
-                    {metric.label}
-                  </p>
-                  <p className="mt-1 text-lg font-extrabold text-white tabular-nums">
-                    {metric.value}
-                  </p>
-                  <p className="mt-1.5 text-xs leading-snug text-zinc-400">
+                  <div>
+                    <p className="font-mono text-[11px] font-medium tracking-wide text-zinc-400 uppercase">
+                      {metric.label}
+                    </p>
+                    <p className="mt-1.5 text-xl font-extrabold text-white tabular-nums">
+                      {metric.value}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-zinc-400">
                     {metric.detail}
                   </p>
                 </article>
@@ -637,7 +703,8 @@ export function ProjectImpactStreakSection({
             </div>
           </div>
 
-          <div className="space-y-4 lg:col-span-7">
+          {/* Bottom Grid: 6 Equal-Height Build Stages in a Balanced 3x2 Grid */}
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-mono text-xs font-bold tracking-wider text-[#95f965] uppercase">
                 How I Build (Click Stage to Filter Streak Grid)
@@ -649,7 +716,7 @@ export function ProjectImpactStreakSection({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 items-stretch gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
               {project.buildStages.map((stage) => {
                 const selected = activeCategory === stage.category;
                 return (
@@ -663,19 +730,21 @@ export function ProjectImpactStreakSection({
                       )
                     }
                     aria-pressed={selected}
-                    className={`flex min-h-28 flex-col justify-between rounded-2xl border p-4 text-left transition focus-visible:outline-2 focus-visible:outline-[#95f965] ${
+                    className={`flex h-full min-h-[128px] flex-col justify-between rounded-xl border p-4 text-left transition focus-visible:outline-2 focus-visible:outline-[#95f965] ${
                       selected
                         ? "border-[#95f965] bg-[#95f965]/10 shadow-xs"
                         : "border-zinc-800/90 bg-zinc-950/90 hover:border-zinc-700"
                     }`}
                   >
-                    <span className="font-mono text-xs font-bold text-[#95f965] tabular-nums">
-                      STEP {stage.step} · {stage.phase}
-                    </span>
-                    <p className="mt-1.5 font-mono text-[11px] text-zinc-300">
-                      {stage.tool}
-                    </p>
-                    <p className="mt-1.5 text-xs leading-snug text-zinc-400">
+                    <div>
+                      <span className="font-mono text-xs font-bold text-[#95f965] tabular-nums">
+                        STEP {stage.step} · {stage.phase}
+                      </span>
+                      <p className="mt-1.5 font-mono text-[11px] text-zinc-300">
+                        {stage.tool}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-zinc-400">
                       {stage.outcome}
                     </p>
                   </button>
@@ -701,8 +770,10 @@ export function ProjectImpactStreakSection({
                 Add Daily Idea or Build Update
               </h3>
               <p className="mt-1 text-xs text-zinc-400">
-                Capture new ideas for {project.projectName}. Daily 14:00 automation also syncs{" "}
-                <code className="text-zinc-200">streak-log.json</code> automatically.
+                Capture new ideas for {project.projectName}. Daily 14:00
+                automation also syncs{" "}
+                <code className="text-zinc-200">streak-log.json</code>{" "}
+                automatically.
               </p>
             </div>
 
@@ -755,7 +826,8 @@ export function ProjectImpactStreakSection({
 
           <div className="space-y-3 lg:col-span-7">
             <h3 className="font-mono text-xs font-bold tracking-wider text-[#95f965] uppercase">
-              Daily Automation &amp; Idea Timeline ({mergedDailyFeed.length} Days Logged)
+              Daily Automation &amp; Idea Timeline ({mergedDailyFeed.length}{" "}
+              Days Logged)
             </h3>
             {mergedDailyFeed.map((entry) => (
               <article
@@ -776,7 +848,10 @@ export function ProjectImpactStreakSection({
                 {entry.ideas && entry.ideas.length > 0 ? (
                   <ul className="mt-2.5 space-y-1 border-t border-zinc-800/80 pt-2 text-xs text-zinc-200">
                     {entry.ideas.map((idea, idx) => (
-                      <li key={`${entry.date}-idea-${idx}`} className="flex items-start gap-2">
+                      <li
+                        key={`${entry.date}-idea-${idx}`}
+                        className="flex items-start gap-2"
+                      >
                         <span className="font-mono text-[#95f965]">*</span>
                         <span>{idea}</span>
                       </li>

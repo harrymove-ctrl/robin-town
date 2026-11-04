@@ -15,3 +15,5 @@ docs/video/exports/*.mp4
 skills/
 contracts/out/
 contracts/cache/
+loadout-jam/
+demo-v15/
