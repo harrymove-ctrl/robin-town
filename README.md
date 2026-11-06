@@ -5,9 +5,9 @@
 **Live Changelog & Syndicated Feeds**: [Changelog (`/changelog`)](https://robin-town-production.up.railway.app/changelog) · [RSS 2.0 (`/changelog.xml`)](https://robin-town-production.up.railway.app/changelog.xml) · [Atom 1.0 (`/atom.xml`)](https://robin-town-production.up.railway.app/atom.xml) · [JSON Feed (`/feed.json`)](https://robin-town-production.up.railway.app/feed.json)
 **Web Game & Smart Contract Docs**: [https://robin-town-production.up.railway.app/docs](https://robin-town-production.up.railway.app/docs) · [Contract Studio (`/deploy`)](https://robin-town-production.up.railway.app/deploy)
 **Hackathon Demo Video (`3:20`, 1080p)**: [robin-town-hackathon-master.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-hackathon-master.mp4)
-**X Launch Video (`0:44`, 1080p)**: [robin-town-x-launch.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-x-launch.mp4)
-**Raylight 3D Mobile & `$wif` Intro (`0:34`, 1080p)**: [robin-town-intro.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.0.0/robin-town-intro.mp4)
-**Official World is Flat (`$wif`) Token (Robinhood Chain Mainnet `4663`)**: [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) · [worldisflat.fun](https://worldisflat.fun)
+**X Launch Video (`0:44`, 1080p, `v1.6.0`)**: [robin-town-x-launch.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.6.0/robin-town-x-launch.mp4)
+**Raylight 3D Mobile & `$wif` Intro (`0:34`, 1080p, `v1.6.0`)**: [robin-town-intro.mp4](https://github.com/harrymove-ctrl/robin-town/releases/download/v1.6.0/robin-town-intro.mp4)
+**Official World is Flat (`$wif`) Token (Robinhood Chain Mainnet `4663`)**: [`0x5173b8eA6923c2d40267890D45C46a3480954773`](https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773) · [worldisflat.fun](https://worldisflat.fun) · [Project Page (`/build/projects/robin-town`)](https://worldisflat.fun/build/projects/robin-town)
 
 Robin Town is a Web3 street negotiation and neighborhood business board game built for the **World is Flat Hackathon: Build with `$wif` on Robinhood Chain** (`10,000 USDG` Winner Takes All), adapted from [`phucledien/saigon-town`](https://github.com/phucledien/saigon-town) and inspired by Karsten Hartwig's tabletop classic [Chinatown](https://boardgamegeek.com/boardgame/47/chinatown). It pairs a tactile **3D Harbor Diorama** (with `Day`, `Sunset`, and `Night` lighting, connected multi-lot shophouse clusters, harbor boats, and sidewalk life) with an illustrated `1100x730` Aseprite `2D` and `3D Tilt` street board, cross-device WebSocket multiplayer rooms, and a deflationary `$wif` retention flywheel.
 
@@ -38,11 +38,11 @@ Robin Town ships a zero-dependency RFC 6455 WebSocket room relay (`/ws` and `/ap
 
 ## Visual & Interactive Architecture
 
-* [`src/town/city-3d/`](./src/town/city-3d): Interactive Three.js WebGL **3D Harbor Diorama** (`RobinCity3D` in [`robin-city-3d.ts`](./src/town/city-3d/robin-city-3d.ts) and [`procedural-kit.ts`](./src/town/city-3d/procedural-kit.ts)) featuring a chamfered walnut tabletop plinth, animated harbor waves, timber pier, cargo barges, `Day / Sunset / Night` atmosphere transitions, unified multi-tile cluster terraces, golden monopoly rooftop monuments, and live traffic synced with [`bridge-3d.ts`](./src/town/bridge-3d.ts).
-* [`src/town/`](./src/town): Complete 100% English gameplay engine ([`engine.ts`](./src/town/engine.ts), [`trading.ts`](./src/town/trading.ts), [`robin-town-ui.ts`](./src/town/robin-town-ui.ts)), illustrated `1100x730` Aseprite street board, colored ownership stools, tear-off zodiac calendar, woven mat action belt, two-way OTC Bargaining Table, two-page shopkeeper ledger, and Web Audio soundscape.
-* [`src/ui/`](./src/ui): SolaceUI `exposure-grid` phase-reactive WebGL2 shader ([`exposure-grid.ts`](./src/ui/exposure-grid.ts)), infinite autoplay district showcase carousel ([`carousel.ts`](./src/ui/carousel.ts)), and collapsible floating `iPod Classic` rotary click-wheel music and phase controller ([`ipod-controller.ts`](./src/ui/ipod-controller.ts)).
-* [`src/tokenomics/`](./src/tokenomics) & [`src/network/`](./src/network): Deterministic `$wif` flywheel math ([`flywheel.ts`](./src/tokenomics/flywheel.ts)), dual-mode EIP-1193 + ERC-20 `$wif` wallet adapter ([`wallet.ts`](./src/tokenomics/wallet.ts)), and hybrid `WebSocket` + `BroadcastChannel` multiplayer rooms ([`room.ts`](./src/network/room.ts)).
-* [`scripts/serve-prod.mjs`](./scripts/serve-prod.mjs) & [`scripts/ws-relay.mjs`](./scripts/ws-relay.mjs): Production HTTP + gzip static server, `/healthz` readiness probe, `/ws` RFC 6455 room relay, and `/api/onchain-wif` live Robinhood Chain RPC reader.
+1. [`src/town/city-3d/`](./src/town/city-3d): Interactive Three.js WebGL **3D Harbor Diorama** (`RobinCity3D` in [`robin-city-3d.ts`](./src/town/city-3d/robin-city-3d.ts) and [`procedural-kit.ts`](./src/town/city-3d/procedural-kit.ts)) featuring a chamfered walnut tabletop plinth, animated harbor waves, timber pier, cargo barges, `Day / Sunset / Night` atmosphere transitions, unified multi-tile cluster terraces, golden monopoly rooftop monuments, and live traffic synced with [`bridge-3d.ts`](./src/town/bridge-3d.ts).
+2. [`src/town/`](./src/town): Complete 100% English gameplay engine ([`engine.ts`](./src/town/engine.ts), [`trading.ts`](./src/town/trading.ts), [`robin-town-ui.ts`](./src/town/robin-town-ui.ts)), illustrated `1100x730` Aseprite street board, colored ownership stools, tear-off zodiac calendar, woven mat action belt, two-way OTC Bargaining Table, two-page shopkeeper ledger, and Web Audio soundscape.
+3. [`src/ui/`](./src/ui): SolaceUI `exposure-grid` phase-reactive WebGL2 shader ([`exposure-grid.ts`](./src/ui/exposure-grid.ts)), infinite autoplay district showcase carousel ([`carousel.ts`](./src/ui/carousel.ts)), and collapsible floating `iPod Classic` rotary click-wheel music and phase controller ([`ipod-controller.ts`](./src/ui/ipod-controller.ts)).
+4. [`src/tokenomics/`](./src/tokenomics) & [`src/network/`](./src/network): Deterministic `$wif` flywheel math ([`flywheel.ts`](./src/tokenomics/flywheel.ts)), dual-mode EIP-1193 + ERC-20 `$wif` wallet adapter ([`wallet.ts`](./src/tokenomics/wallet.ts)), and hybrid `WebSocket` + `BroadcastChannel` multiplayer rooms ([`room.ts`](./src/network/room.ts)).
+5. [`scripts/serve-prod.mjs`](./scripts/serve-prod.mjs), [`scripts/ws-relay.mjs`](./scripts/ws-relay.mjs) & [`scripts/ship-updates.mjs`](./scripts/ship-updates.mjs): Production HTTP + gzip static server, `/healthz` readiness probe, `/ws` RFC 6455 room relay, `/changelog` + RSS/Atom/JSON Feeds, `/docs` + `/deploy` portals, and `/api/onchain-wif` live Robinhood Chain RPC reader.
 
 ## Quick Start
 
@@ -65,7 +65,7 @@ npm start
 ```bash
 npm run verify:assets   # Verify all 69 declared PNG and SVG assets (zero 404s)
 npm run typecheck       # Strict TypeScript type checking (tsc --noEmit)
-npm test                # Run all 934 unit, integration, WebSocket, and E2E tests
-npm run build           # Code-split production Vite bundle into dist/ (~87 kB initial gzip JS)
+npm test                # Run all 946 unit, integration, WebSocket, and E2E tests
+npm run build           # Code-split production Vite bundle into dist/
 npm run verify:browser  # Multi-viewport headless Playwright browser verification
 ```

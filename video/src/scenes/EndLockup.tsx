@@ -60,7 +60,7 @@ export function EndLockup() {
               }}
             >
               Build with <span style={{ color: PALETTE.accentGold }}>$wif</span> on Robinhood Chain ·{" "}
-              <span style={{ color: PALETTE.accentMintPill }}>Chain ID 46631</span>
+              <span style={{ color: PALETTE.accentMintPill }}>Chain ID 4663</span>
             </div>
 
             <div
@@ -85,7 +85,7 @@ export function EndLockup() {
                   color: PALETTE.parchmentLight,
                 }}
               >
-                github.com/harrymove-ctrl/robin-town
+                robin-town-production.up.railway.app
               </div>
               <div
                 style={{
@@ -99,7 +99,7 @@ export function EndLockup() {
                   color: PALETTE.accentMintPill,
                 }}
               >
-                $ npm install &amp;&amp; npm run dev
+                github.com/harrymove-ctrl/robin-town
               </div>
             </div>
           </div>

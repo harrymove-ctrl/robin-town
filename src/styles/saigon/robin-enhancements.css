@@ -3985,3 +3985,77 @@ dialog#modal[data-whats-new="true"] {
   }
 }
 
+/* v1.6 Mobile & 9-Viewport Polish: Zero-Truncation HUD, Above-the-Fold Start Screen & Unclipped 3D Camera Bar */
+.wif-hud-amount-compact {
+  display: none;
+}
+
+@media (max-width: 680px), (max-height: 500px) {
+  .wif-hud-amount-full {
+    display: none;
+  }
+
+  .wif-hud-amount-compact {
+    display: inline;
+  }
+}
+
+@media (max-width: 680px) {
+
+  .robin-kicker-badges .brand-kicker-pill {
+    display: none !important;
+  }
+
+  .robin-kicker-badges {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .robin-kicker-badges .robin-chain-pill {
+    width: auto !important;
+    flex: 0 1 auto !important;
+    min-height: 30px !important;
+    padding: 4px 9px !important;
+    font-size: 11px !important;
+  }
+
+  .three-city-toolbar {
+    justify-content: center;
+    gap: 4px !important;
+    padding: 4px 6px !important;
+  }
+
+  .three-city-toolbar button[data-preset="neighborhood"],
+  .three-city-toolbar button[data-action="reset-3d-camera"],
+  .three-city-toolbar button.fast-toolbar-pill,
+  .three-city-toolbar button[data-action="view-toggle"],
+  .three-city-toolbar button.mobile-zen-pill {
+    display: none !important;
+  }
+
+  .three-city-toolbar button {
+    padding: 4px 7px !important;
+    font-size: 11px !important;
+    min-height: 28px !important;
+  }
+
+  .game-shell .rack-drawer.open .ledger-shortcut {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+  }
+
+  dialog#modal.trade-dialog .barter-bottom {
+    padding: 7px 10px !important;
+    gap: 6px !important;
+  }
+
+  dialog#modal.trade-dialog .barter-bottom > span {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+}
+

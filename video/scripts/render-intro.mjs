@@ -45,7 +45,7 @@ await renderMedia({
   audioCodec: "aac",
   outputLocation: outPath,
   inputProps: { calloutMode: "normal" },
-  concurrency: 8,
+  concurrency: 3,
   ...browserOpts,
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 10) * 10;

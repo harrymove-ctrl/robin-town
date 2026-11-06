@@ -35,7 +35,7 @@ export function MultiSeatStack() {
         background={PALETTE.bgDeep}
         glowColor={PALETTE.accentEmerald}
         statusColor={PALETTE.parchmentLight}
-        time="46631"
+        time="4663"
       />
       {/* Left/Right Context Rail so the centered 390x844 stack reads with crystal clarity */}
       <AbsoluteFill

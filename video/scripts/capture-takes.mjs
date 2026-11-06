@@ -33,9 +33,9 @@ function findChrome() {
 }
 
 const BASE_INIT_SCRIPT = () => {
-  // 1. Inject EIP-1193 Robinhood Chain Testnet (Chain ID 46631 = 0xb627) wallet provider FIRST
+  // 1. Inject EIP-1193 Robinhood Chain Mainnet (Chain ID 4663 = 0x1237) wallet provider FIRST
   // (before documentElement exists, so WalletAdapter constructor sees window.ethereum immediately)
-  const CHAIN_HEX = "0xb627";
+  const CHAIN_HEX = "0x1237";
   const ACCOUNT = "0x7F4C892B194D33E1A04F289012B59A7C4E1892A4";
   const BALANCE_HEX = "0x2a47b76e1cf294000000"; // 12,480 * 10^18 wei
   const listeners = new Map();
@@ -53,7 +53,7 @@ const BASE_INIT_SCRIPT = () => {
         case "eth_chainId":
           return CHAIN_HEX;
         case "net_version":
-          return "46631";
+          return "4663";
         case "eth_getBalance":
           return BALANCE_HEX;
         case "wallet_switchEthereumChain":
@@ -642,13 +642,13 @@ await recordClip(
 );
 }
 
-// ── CLIP 04: $wif Economic Flywheel, Chain 46631 Wallet, 1.20x Stake & 0x...dEaD Burn (18.5s) ──
+// ── CLIP 04: $wif Economic Flywheel, Chain 4663 Wallet, 1.20x Stake & 0x...dEaD Burn (18.5s) ──
 let realFlywheelStats = existingData.realFlywheelStats || {
   burnedText: "1,534 $wif",
   vaultText: "682 $wif",
   podiumText: "7,200 $wif",
   walletAddress: "0x7F4C892B194D33E1A04F289012B59A7C4E1892A4",
-  chainId: 46631,
+  chainId: 4663,
 };
 await recordClip(
   browser,
@@ -670,9 +670,9 @@ await recordClip(
     const tReady = elapsed();
     events.clip04Start = tReady;
 
-    // Connect live EIP-1193 Robinhood Chain Testnet (Chain ID 46631) wallet at +1.4s -> Connected: 0x7F4C89…
+    // Connect live EIP-1193 Robinhood Chain Mainnet (Chain ID 4663) wallet at +1.4s -> Connected: 0x7F4C89…
     await waitUntil(tReady + 1.4);
-    await clickVisible(page, 'button[data-action="connect-web3"]');
+    await clickVisible(page, 'button[data-action="connect-mainnet-wif"]');
     await page.waitForTimeout(350);
 
     boxes.C6 = await boxOf(page, '#modal .wif-hub-section:nth-of-type(1)', { x: 520, y: 255, w: 880, h: 155 });
@@ -688,12 +688,12 @@ await recordClip(
     await clickVisible(page, 'button[data-action="toggle-stake"]');
     await page.waitForTimeout(900);
 
-    // Trigger 3% Point Swap Burn + 100 $wif Community Governance Burn to 0x0000...dEaD, then re-lock Chain 46631 Connected pill!
+    // Trigger 3% Point Swap Burn + 100 $wif Community Governance Burn to 0x0000...dEaD, then re-lock Chain 4663 Connected pill!
     await clickVisible(page, 'button[data-action="swap-points"]');
     await page.waitForTimeout(800);
     await clickVisible(page, 'button[data-action="vote-burn"]');
     await page.waitForTimeout(180);
-    await clickVisible(page, 'button[data-action="connect-web3"]');
+    await clickVisible(page, 'button[data-action="connect-mainnet-wif"]');
     await page.waitForTimeout(300);
 
     boxes.C7 = await boxOf(page, '#modal .wif-hub-section:nth-of-type(3)', boxes.C7);
@@ -708,7 +708,7 @@ await recordClip(
         podiumText: boxesEls[2] || "7,200 $wif",
         onChainPillText: chainPill,
         walletAddress: "0x7F4C892B194D33E1A04F289012B59A7C4E1892A4",
-        chainId: 46631,
+        chainId: 4663,
       };
     });
 
@@ -716,7 +716,7 @@ await recordClip(
   },
 );
 
-// ── CLIP 05: Apple Carousel + SolaceUI Shader + ROBIN-POD Click Wheel + Live WebSocket Room (18.5s) ──
+// ── CLIP 05: What's New v1.6 + SolaceUI Shader + ROBIN-POD Click Wheel + Live WebSocket Room (18.5s) ──
 await recordClip(
   browser,
   "clip-05-gadgets-and-rooms",
@@ -727,22 +727,19 @@ await recordClip(
     "robintown-atmo-3d-v1": "day",
   },
   async (page, { elapsed, waitUntil }) => {
-    await page.waitForSelector(".apple-carousel", { timeout: 8000 });
-    await page.evaluate(() => {
-      document.querySelector(".start-carousel-wrap")?.scrollIntoView({ behavior: "instant", block: "center" });
-    });
+    await page.waitForSelector(".start-whats-new-box", { timeout: 8000 });
     await page.waitForTimeout(250);
 
     const tReady = elapsed();
     events.clip05Start = tReady;
 
-    // Showcase Apple Carousel play/pause morph & progress tabs (Bars 78..79 = 4.0s)
-    await waitUntil(tReady + 1.2);
-    await clickVisible(page, ".apple-carousel-tab:nth-child(2)");
-    await waitUntil(tReady + 2.4);
-    await clickVisible(page, ".apple-carousel-play-button");
-    await waitUntil(tReady + 3.2);
-    await clickVisible(page, ".apple-carousel-play-button");
+    // Showcase What's New v1.6.0 & Today's 6-Year Zodiac Forecast (Bars 78..79 = 4.0s)
+    await waitUntil(tReady + 1.0);
+    await clickVisible(page, '#start-screen [data-action="whats-new"]');
+    await waitUntil(tReady + 2.2);
+    await clickVisible(page, '#modal [data-action="set-whats-new-tab"][data-tab="forecast"]');
+    await waitUntil(tReady + 3.4);
+    await clickVisible(page, '#modal [data-action="close"]');
 
     // Enter 3D City & pop open collapsible ROBIN-POD at +4.0s (Bar 80)
     await waitUntil(tReady + 3.9);
@@ -769,11 +766,11 @@ await recordClip(
     }
     await page.mouse.up();
 
-    // At +14.0s (Bar 85), open $wif Hub Room Lobby, connect Chain 46631 & create live WebSocket Room + connect cross-device peer!
+    // At +14.0s (Bar 85), open $wif Hub Room Lobby, connect Chain 4663 & create live WebSocket Room + connect cross-device peer!
     await waitUntil(tReady + 14.0);
     await clickVisible(page, 'button[data-action="wif-hub"]');
     await page.waitForTimeout(200);
-    await clickVisible(page, 'button[data-action="connect-web3"]');
+    await clickVisible(page, 'button[data-action="connect-mainnet-wif"]');
     await page.waitForTimeout(150);
     await page.evaluate(() => {
       document.querySelector("#modal .wif-hub-section:nth-of-type(4)")?.scrollIntoView({ behavior: "instant", block: "center" });
@@ -878,7 +875,7 @@ async function captureMobileSeats() {
   // Seat 04: $wif Hub & Live WebSocket Room Mobile View
   await clickVisible(p, 'button[data-action="wif-hub"]');
   await p.waitForTimeout(350);
-  await clickVisible(p, 'button[data-action="connect-web3"]');
+  await clickVisible(p, 'button[data-action="connect-mainnet-wif"]');
   await p.waitForTimeout(250);
   await clickVisible(p, 'button[data-action="create-room"]');
   await p.waitForTimeout(400);
@@ -886,6 +883,57 @@ async function captureMobileSeats() {
 
   await ctx.close();
   console.log("Captured 4 crisp 390x844 mobile WebSocket seat PNGs for @snapcn/phone-stack");
+
+  // Also record 390x844 clip-mobile-wif-hub.mp4 for RaylightIntro Scene I06b
+  const mDir = path.join(RAW_DIR, "clip-mobile-wif-hub");
+  rmSync(mDir, { recursive: true, force: true });
+  mkdirSync(mDir, { recursive: true });
+  const mCtx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+    recordVideo: { dir: mDir, size: { width: 390, height: 844 } },
+  });
+  await mCtx.addInitScript(BASE_INIT_SCRIPT);
+  await mCtx.addInitScript((seed) => {
+    for (const [k, v] of Object.entries(seed)) {
+      localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
+    }
+  }, {
+    "robintown-save-v2": makeSaveState({ mode: "payday", year: 3, phase: "trade", cash0: 680 }),
+    "robintown-flywheel-v1": makeEconomy({ staked: 0, points: 400, burned: 1422, vault: 682, votes: 4 }),
+    "robintown-view-mode-v1": "city-3d",
+    "robintown-atmo-3d-v1": "day",
+  });
+  const mp = await mCtx.newPage();
+  await mp.goto(APP_URL, { waitUntil: "networkidle" });
+  await mp.waitForSelector('#start-screen button[data-action="resume"]:not([disabled])', { timeout: 8000 });
+  await clickVisible(mp, '#start-screen button[data-action="resume"]');
+  await mp.waitForTimeout(350);
+  await clickVisible(mp, '[data-action="dismiss-phase"]');
+  await clickVisible(mp, 'button[data-action="wif-hub"]');
+  await mp.waitForTimeout(500);
+  await clickVisible(mp, 'button[data-action="connect-mainnet-wif"]');
+  await mp.waitForTimeout(800);
+  await clickVisible(mp, 'button[data-action="select-sim-wallet"]');
+  await mp.waitForTimeout(300);
+  await clickVisible(mp, 'button[data-action="toggle-stake"]');
+  await mp.waitForTimeout(900);
+  await clickVisible(mp, 'button[data-action="swap-points"]');
+  await mp.waitForTimeout(800);
+  await clickVisible(mp, 'button[data-action="create-room"]');
+  await mp.waitForTimeout(1800);
+  const mVid = mp.video();
+  await mCtx.close();
+  const mWebm = await mVid.path();
+  execFileSync("ffmpeg", [
+    "-v", "error", "-y", "-i", mWebm,
+    "-r", "30", "-vf", "scale=390:844:flags=lanczos",
+    "-c:v", "libx264", "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", "-an", "-movflags", "+faststart",
+    path.join(CLIPS_DIR, "clip-mobile-wif-hub.mp4"),
+  ]);
+  console.log("Captured clip-mobile-wif-hub.mp4 (390x844)");
 }
 
 await captureMobileSeats();

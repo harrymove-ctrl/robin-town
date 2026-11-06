@@ -6,6 +6,14 @@ Atom 1.0 Release Feed: [https://robin-town-production.up.railway.app/atom.xml](h
 JSON Feed 1.1: [https://robin-town-production.up.railway.app/feed.json](https://robin-town-production.up.railway.app/feed.json)
 Web Game & `$wif` Docs: [https://robin-town-production.up.railway.app/docs](https://robin-town-production.up.railway.app/docs)
 
+## v1.6.0 (2026-11-06)
+
+### 9-Viewport Mobile HUD, Concise 2x2 `$wif` Hub & Chain 4663 Demo Suite
+
+1. Polished mobile 3D camera toolbar (`Pan`, `Iso`, `Street`, `Top`, `Day`, `Sunset`, `Night`), compact `10k $wif` HUD pills, and above-the-fold Start Screen layout across `375x667` and `390x844` viewports with zero clipping or text truncation.
+2. Streamlined the `$wif` Hub into a concise 2x2 layout covering EIP-6963 Wallet, `1.20x` Harbor Vault Staking, Town Points Swap (`3%` burn), and 6-character WebSocket Multiplayer Rooms.
+3. Fixed Shopkeeper Ledger ribbon geometry and unified Robinhood Chain Mainnet (`4663`) and official `$wif` (`0x5173b8eA6923c2d40267890D45C46a3480954773`) telemetry across the Design Notebook and 1080p60 Remotion video suite.
+
 ## v1.5.0 (2026-11-02)
 
 ### Unified Changelog Portal, Syndicated Release Feeds & Web Game Documentation

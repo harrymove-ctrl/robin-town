@@ -1222,10 +1222,10 @@ export function mountRobinTown(): void {
       <button class="wif-hud-pill" data-action="wif-hub" aria-label="Open $wif Flywheel, Wallet, and Rooms">
         <span class="wif-hud-burn">🔥 ${flywheel.totalBurned.toLocaleString('en-US')}</span>
         <span class="wif-hud-mobile-icon" aria-hidden="true">💰</span>
-        <span class="wif-hud-balance">${realWeb3Addr ? `<span class="wif-hud-acct">🦊 ${escape(shortLabel)} · </span>` : `<span class="wif-hud-acct">${escape(shortLabel)} · </span>`}${balance.toLocaleString('en-US')} $wif</span>
+        <span class="wif-hud-balance">${realWeb3Addr ? `<span class="wif-hud-acct">🦊 ${escape(shortLabel)} · </span>` : `<span class="wif-hud-acct">${escape(shortLabel)} · </span>`}<span class="wif-hud-amount-full">${balance.toLocaleString('en-US')} $wif</span><span class="wif-hud-amount-compact">${balance >= 1000 ? `${(balance / 1000).toFixed(balance % 1000 === 0 ? 0 : 1)}k` : balance} $wif</span></span>
         ${isStaked() ? '<span class="wif-hud-boost">1.20x</span>' : ''}
       </button>
-      <button class="ipod-hud-btn whats-new-hud-pill" data-action="whats-new" title="What's New in v1.5.0, Today's 6-Year Zodiac Forecast & Release Feeds" aria-label="Open What's New in v1.5.0">✨ v1.5</button>
+      <button class="ipod-hud-btn whats-new-hud-pill" data-action="whats-new" title="What's New in v1.6.0, Today's 6-Year Zodiac Forecast & Release Feeds" aria-label="Open What's New in v1.6.0">✨ v1.6</button>
       <button class="ipod-hud-btn ${ipodOpen ? 'active' : ''}" data-action="toggle-ipod" aria-pressed="${ipodOpen}" aria-label="Toggle iPod Classic controller">♫ iPod</button>
       <button class="hud-menu" data-action="menu" aria-label="Game menu">☰<small>Menu</small></button>
     </div>`;
@@ -1618,7 +1618,7 @@ export function mountRobinTown(): void {
       },
       {
         id: 'ipod-whats-new',
-        label: "What's New v1.5 & Zodiac News",
+        label: "What's New v1.6 & Zodiac News",
         handler: () => openWhatsNewModal(),
       },
     );
@@ -1980,8 +1980,8 @@ export function mountRobinTown(): void {
                 </div>
               </div>`
             : `<div class="metamask-connect-bar">
-                <button type="button" class="metamask-cta-btn" data-action="connect-mainnet-wif">
-                  <span>🦊 Connect MetaMask / Rabby</span>
+                <button type="button" class="metamask-cta-btn" data-action="connect-mainnet-wif" title="Connect MetaMask, Rabby, Coinbase, or any EIP-6963 wallet on Robinhood Chain (4663)">
+                  <span>🦊 Connect Wallet</span>
                   <span class="metamask-cta-tag">Chain 4663 · +50 pts</span>
                 </button>
                 <button type="button" class="metamask-board-btn" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🏆 ${uniqueWalletsCount}</button>
@@ -1999,10 +1999,10 @@ export function mountRobinTown(): void {
       <canvas id="robin-start-shader" class="robin-shader-canvas" aria-hidden="true"></canvas>
       <div class="start-panel">
         <div class="robin-kicker-badges">
-          <span class="robin-chain-pill">● ROBINHOOD CHAIN · BUILD WITH $WIF</span>
+          <span class="robin-chain-pill brand-kicker-pill">● ROBINHOOD CHAIN · BUILD WITH $WIF</span>
           <span class="robin-chain-pill burn">🔥 ${totalCombinedBurnedWif().toLocaleString('en-US')} $wif Burned</span>
           <button type="button" class="robin-chain-pill traders-live-pill" data-action="open-traders-board" aria-label="View connected wallets and Harbor Leaderboard">🦊 ${uniqueWalletsCount.toLocaleString('en-US')} ${uniqueWalletsCount === 1 ? 'Wallet' : 'Wallets'} · ${matchesPlayedCount.toLocaleString('en-US')} ${matchesPlayedCount === 1 ? 'Match' : 'Matches'} · Leaderboard ↗</button>
-          <button type="button" class="robin-chain-pill whats-new-pill" data-action="whats-new" aria-label="Open What's New in v1.5.0, Today's 6-Year Zodiac Forecast, and Release Feeds">✨ What's New v1.5 ↗</button>
+          <button type="button" class="robin-chain-pill whats-new-pill" data-action="whats-new" aria-label="Open What's New in v1.6.0, Today's 6-Year Zodiac Forecast, and Release Feeds">✨ What's New v1.6 ↗</button>
         </div>
 
         <div class="start-layout-grid">
@@ -2039,7 +2039,7 @@ export function mountRobinTown(): void {
                     : ''
               }
               <button class="primary start-play" data-action="resume" ${assetsReady ? '' : 'disabled'}>${progressActive ? 'Continue game' : selectedEntryMode === 'ranked' ? 'Enter 1,000 $wif Arena' : selectedEntryMode === 'daily' ? `Play Daily Seed (${challengeSeedOverride ?? walletStats?.todaySeed ?? getTodayHarborSeedKey()})` : 'Start free game'} <span>▶</span></button>
-              <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Fast Play A to Z (Watch You + Cole, Maya & Clara)</button>
+              <button class="menu-option fast-menu-cta" data-action="launch-fast-play" ${assetsReady ? '' : 'disabled'}>⚡ Watch Fast Play A to Z (6-Year Demo)</button>
               <div class="start-secondary-grid ${progressActive ? 'has-save' : 'fresh-save'}">
                 ${progressActive ? `<button class="menu-option" data-action="new">↻ New game</button>` : ''}
                 <button class="menu-option wif-menu-btn" data-action="wif-hub">${progressActive ? `💰 $wif Hub (${walletBalance.toLocaleString('en-US')} $wif)` : `💰 $wif Wallet, Staking & Rooms (${walletBalance.toLocaleString('en-US')} $wif)`}</button>
@@ -2049,40 +2049,40 @@ export function mountRobinTown(): void {
             </div>
           </div>
 
-          <div class="start-carousel-wrap start-whats-new-box" role="region" aria-label="What's New in Robin Town v1.5.0">
+          <div class="start-carousel-wrap start-whats-new-box" role="region" aria-label="What's New in Robin Town v1.6.0">
             <div class="start-carousel-header">
-              <span>✨ WHAT'S NEW IN v1.5.0</span>
+              <span>✨ WHAT'S NEW IN v1.6.0</span>
               <button type="button" class="start-news-all-btn" data-action="whats-new">See All Updates ↗</button>
             </div>
             <div class="start-news-grid">
+              <button type="button" class="start-news-card" data-action="whats-new" data-tab="highlights">
+                <div class="start-news-top">
+                  <strong>✨ 3D &amp; HUD</strong>
+                  <span class="start-news-tag new">v1.6</span>
+                </div>
+                <small>Mobile &amp; Chain 4663 ↗</small>
+              </button>
               <a class="start-news-card" href="/changelog" target="_blank" rel="noopener">
                 <div class="start-news-top">
-                  <strong>📜 Changelog &amp; RSS</strong>
-                  <span class="start-news-tag new">NEW</span>
+                  <strong>📜 Changelog</strong>
+                  <span class="start-news-tag new">FEED</span>
                 </div>
-                <small>Release notes &amp; XML feeds ↗</small>
+                <small>Release notes &amp; RSS ↗</small>
               </a>
               <a class="start-news-card" href="/docs" target="_blank" rel="noopener">
                 <div class="start-news-top">
-                  <strong>📖 Game &amp; $wif Docs</strong>
-                  <span class="start-news-tag new">NEW</span>
+                  <strong>📖 Game Docs</strong>
+                  <span class="start-news-tag">DOCS</span>
                 </div>
-                <small>6-year rules &amp; contract ABI ↗</small>
+                <small>6-year rules &amp; ABI ↗</small>
               </a>
               <a class="start-news-card" href="/deploy" target="_blank" rel="noopener">
                 <div class="start-news-top">
-                  <strong>🚀 Chain 4663 Vault</strong>
-                  <span class="start-news-tag">v1.4</span>
+                  <strong>🚀 Harbor Vault</strong>
+                  <span class="start-news-tag">4663</span>
                 </div>
-                <small>1.20x stake &amp; RTOWN score ↗</small>
+                <small>1.20x stake &amp; RTOWN ↗</small>
               </a>
-              <button type="button" class="start-news-card" data-action="whats-new" data-tab="forecast">
-                <div class="start-news-top">
-                  <strong>🔮 6 Zodiac Events</strong>
-                  <span class="start-news-tag">v1.3</span>
-                </div>
-                <small>Daily seed &amp; Guild Seals ↗</small>
-              </button>
             </div>
           </div>
         </div>
@@ -2197,7 +2197,7 @@ export function mountRobinTown(): void {
       'Audio & Tabletop View',
       `<div class="settings-switches">
         <button class="setting-switch" data-action="music" id="music-toggle" aria-pressed="${a.music}">
-          <span><strong>♫ Robin-Town Lo-Fi Radio</strong><small>Synthesized score shifts with each phase</small></span>
+          <span><strong>♫ Robin Town Lo-Fi Radio</strong><small>Synthesized score shifts with each phase</small></span>
           <b data-audio-state></b>
         </button>
         <button class="setting-switch" data-action="sound" id="sound-toggle" aria-pressed="${a.sfx}">
@@ -2355,7 +2355,7 @@ export function mountRobinTown(): void {
         </span>
       </div>
 
-      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
+      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin Town ✓</button></div>`,
       'ROBINHOOD CHAIN (4663) · $WIF HUB',
     );
     get('#modal').dataset.wifHub = 'true';
@@ -2551,7 +2551,7 @@ export function mountRobinTown(): void {
         <button type="button" role="tab" aria-selected="${tradersTab === 'verify'}" class="traders-tab-btn ${tradersTab === 'verify' ? 'active' : ''}" data-action="set-traders-tab" data-tab="verify">🛡️ Verify & Tx</button>
       </div>
       ${tabBody}
-      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
+      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin Town ✓</button></div>`,
       'ROBINHOOD CHAIN (4663) · LIVE PLAYER TELEMETRY',
     );
     get('#modal').dataset.tradersBoard = 'true';
@@ -2597,23 +2597,23 @@ export function mountRobinTown(): void {
         <section class="wif-hub-section whats-new-row featured">
           <div class="whats-new-row-copy">
             <div class="whats-new-row-title">
-              <span class="whats-new-badge new">NEW · v1.5</span>
-              <h3>📜 Live Changelog &amp; Release Feeds</h3>
+              <span class="whats-new-badge new">NEW · v1.6</span>
+              <h3>✨ Mobile HUD &amp; 2x2 $wif Hub</h3>
             </div>
-            <p class="whats-new-summary">Read dated release notes and subscribe via RSS, Atom, or JSON.</p>
+            <p class="whats-new-summary">Zero-clipping mobile 3D camera bar, compact $wif HUD pills, and Chain 4663 telemetry.</p>
           </div>
-          <a class="primary whats-new-cta" href="/changelog" target="_blank" rel="noopener">Open /changelog ↗</a>
+          <button type="button" class="primary whats-new-cta" data-action="wif-hub">Open $wif Hub</button>
         </section>
 
         <section class="wif-hub-section whats-new-row">
           <div class="whats-new-row-copy">
             <div class="whats-new-row-title">
-              <span class="whats-new-badge new">NEW · v1.5</span>
-              <h3>📖 Game &amp; Smart Contract Docs</h3>
+              <span class="whats-new-badge new">v1.5</span>
+              <h3>📜 Live Changelog &amp; Release Feeds</h3>
             </div>
-            <p class="whats-new-summary">Full 6-year rules, storefront payout table, and HarborVault ABI.</p>
+            <p class="whats-new-summary">Read dated release notes and 6-year docs or subscribe via RSS, Atom, and JSON.</p>
           </div>
-          <a class="secondary whats-new-cta" href="/docs" target="_blank" rel="noopener">Read /docs ↗</a>
+          <a class="secondary whats-new-cta" href="/changelog" target="_blank" rel="noopener">Open /changelog ↗</a>
         </section>
 
         <section class="wif-hub-section whats-new-row">
@@ -2652,24 +2652,24 @@ export function mountRobinTown(): void {
     modal(
       "What's New in Robin Town",
       `<div class="traders-tabs whats-new-tabs-simple" role="tablist" aria-label="What's New views">
-        <button type="button" role="tab" aria-selected="${whatsNewTab !== 'forecast'}" class="traders-tab-btn ${whatsNewTab !== 'forecast' ? 'active' : ''}" data-action="set-whats-new-tab" data-tab="highlights">✨ Latest Updates (v1.5.0)</button>
+        <button type="button" role="tab" aria-selected="${whatsNewTab !== 'forecast'}" class="traders-tab-btn ${whatsNewTab !== 'forecast' ? 'active' : ''}" data-action="set-whats-new-tab" data-tab="highlights">✨ Latest Updates (v1.6.0)</button>
         <button type="button" role="tab" aria-selected="${whatsNewTab === 'forecast'}" class="traders-tab-btn ${whatsNewTab === 'forecast' ? 'active' : ''}" data-action="set-whats-new-tab" data-tab="forecast">🔮 Today's 6-Year Forecast</button>
       </div>
       ${tabBody}
-      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin-Town ✓</button></div>`,
-      'ROBIN TOWN · v1.5.0 UPDATE',
+      <div class="modal-actions"><button class="primary" data-action="close">Back to Robin Town ✓</button></div>`,
+      'ROBIN TOWN · v1.6.0 UPDATE',
     );
     get('#modal').dataset.whatsNew = 'true';
   }
 
   function yearBook() {
     modal(
-      'Six Zodiac Years in Robin-Town',
+      'Six Zodiac Years in Robin Town',
       `<div class="year-list">${ZODIAC.map((z, i) => {
         const evt = getYearMarketEvent(state, i + 1);
         return `<button class="${i + 1 === state.year ? 'current' : ''}" data-action="year-info" data-year="${i + 1}">${zodiacSprite(i)}<span>Year ${i + 1} · ${z[0]}<small style="display:block;font-size:11px;opacity:0.85">${evt.icon} ${escape(evt.title)}: ${escape(evt.shortTag)}</small></span><span>${i + 1 === state.year ? 'Now' : i + 1 < state.year ? '✓' : ''}</span></button>`;
       }).join('')}</div>`,
-      'THE ROBIN-TOWN CALENDAR',
+      'THE ROBIN TOWN CALENDAR',
     );
   }
 
@@ -2975,7 +2975,7 @@ export function mountRobinTown(): void {
       <table><thead><tr><th>Connected Tiles</th><th>Growing Group</th><th>Complete Set</th></tr></thead><tbody>${[1, 2, 3, 4, 5, 6].map((n) => `<tr><td>${n}</td><td>${n === 6 ? 'n/a' : INCOMPLETE[n] + ' $wif'}</td><td>${n >= 3 ? COMPLETE[n] + ' $wif' : 'n/a'}</td></tr>`).join('')}</tbody></table>
       <p class="rules-note">Casual Mode requires zero $wif to enter and awards Town Points swappable for $wif (3% burn). Ranked Mode pools 4,000 $wif (90% podium, 5% burned to 0x…dEaD, 5% to Staking Vault).</p>
       <p class="rules-note" style="margin-top:6px"><a href="/docs" target="_blank" rel="noopener">Full Web Game &amp; $wif Docs (/docs) ↗</a> · <a href="/changelog" target="_blank" rel="noopener">Changelog &amp; Release Feed (/changelog) ↗</a></p>
-      <button class="primary wide" data-action="close">Back to Robin-Town</button>`,
+      <button class="primary wide" data-action="close">Back to Robin Town</button>`,
       'HOW TO PLAY · ROBIN TOWN',
     );
   }
@@ -3058,7 +3058,7 @@ export function mountRobinTown(): void {
       winners.length > 1
         ? 'A shared neighborhood victory!'
         : ranked[0].id === 0
-          ? 'Robin-Town is yours!'
+          ? 'Robin Town is yours!'
           : `${escape(ranked[0].name)} wins the six-year crown!`,
       `<div class="results-split-grid">
         <div class="results-left-col">
@@ -4123,7 +4123,7 @@ export function mountRobinTown(): void {
         break;
       case 'history':
         modal(
-          'The Robin-Town Journal',
+          'The Robin Town Journal',
           `<ul class="history">${state.logs.map((l) => `<li>${escape(l)}</li>`).join('')}</ul>`,
         );
         break;

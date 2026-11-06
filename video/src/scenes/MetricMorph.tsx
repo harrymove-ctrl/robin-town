@@ -19,7 +19,7 @@ const BARS = [
   {
     pct: "90%",
     amount: "3,600 $wif",
-    label: "Podium Purse (1st 60% · 2nd 25% · 3rd 15%)",
+    label: "Podium Purse (1st 50% · 2nd 25% · 3rd 15%)",
     fill: 0.9,
     color: PALETTE.accentEmerald,
   },
@@ -126,7 +126,7 @@ export function MetricMorph({ fast = false }: { fast?: boolean }) {
                     letterSpacing: "0.12em",
                   }}
                 >
-                  RANKED ARENA CONSERVATION · VERIFIED $WIF 0xE49A1C…0F9B
+                  RANKED ARENA CONSERVATION · VERIFIED $WIF 0x5173b8…4773 · CHAIN 4663
                 </div>
                 <div
                   style={{

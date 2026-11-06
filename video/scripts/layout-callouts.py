@@ -45,7 +45,7 @@ CALLOUTS = [
      "what": "Compounding annual $wif payday",
      "why": "Connected storefronts pay higher $wif yields every single year."},
     {"comp": "RobinTownMaster", "scope": "S12", "id": "C6", "from": 0, "mid": 3600, "side": "right",
-     "what": "Verified $wif on Chain 46631",
+     "what": "Verified $wif on Chain 4663",
      "why": "Start free immediately, then connect your Robinhood Chain wallet."},
     {"comp": "RobinTownMaster", "scope": "S12", "id": "C7", "from": 300, "mid": 3870, "side": "right",
      "what": "1.20x staking and permanent burns",
@@ -58,13 +58,13 @@ CALLOUTS = [
      "why": "Switch views anytime with zero state loss."},
     {"comp": "RobinTownXClip", "scope": "X06Flywheel", "id": "X2", "from": 0, "mid": 980, "side": "right",
      "what": "1.20x staking and $wif burns",
-     "why": "Play free or compete live on Chain 46631."},
+     "why": "Play free or compete live on Chain 4663."},
     {"comp": "RobinTownIntro", "scope": "I03", "id": "I1", "from": 50, "mid": 240, "side": "right",
      "what": "2D tabletop to 3D harbor",
      "why": "72 plots across 6 districts, Day to Night."},
     {"comp": "RobinTownIntro", "scope": "I07", "id": "I2", "from": 112, "mid": 826, "side": "right",
      "what": "Ranked #1 podium settlement",
-     "why": "Win +2,160 $wif while 4.6M+ $wif burns live."},
+     "why": "Win +2,160 $wif while 117,762+ $wif burns live."},
 ]
 
 force_render = "--force" in __import__("sys").argv

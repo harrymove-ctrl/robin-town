@@ -104,7 +104,7 @@ export function DispatchBannerStill() {
                   letterSpacing: "0.03em",
                 }}
               >
-                v1.0
+                v1.6
               </span>
               <span
                 style={{

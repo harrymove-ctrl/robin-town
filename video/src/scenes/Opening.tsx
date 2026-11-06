@@ -13,7 +13,7 @@ export function OpeningSwarm({ fast = false }: { fast?: boolean }) {
   // OrbSwarm expects 6 pipe-separated cards; we map the 4-beat story arc cleanly across the 6 slots
   // so every beat is <= 5 words and settles crisply on Be Vietnam Pro.
   const script = fast
-    ? "Pull up a stool. | Bargain for corners. | Open neighborhood shops. | Chain 46631 live. | Compound $wif yield. | Put $wif to work."
+    ? "Pull up a stool. | Bargain for corners. | Open neighborhood shops. | Chain 4663 live. | Compound $wif yield. | Put $wif to work."
     : "Pull up a stool. | Bargain street corners. | Open neighborhood shops. | Connect matching blocks. | Earn annual $wif. | Put $wif to work.";
   return (
     <SolaceGround>
@@ -96,7 +96,7 @@ export function BrandBlockReveal({ fast = false }: { fast?: boolean }) {
             letterSpacing: "0.04em",
           }}
         >
-          <span>● ROBINHOOD CHAIN · 46631</span>
+          <span>● ROBINHOOD CHAIN · 4663</span>
           <span style={{ color: PALETTE.accentGold }}>·</span>
           <span style={{ color: PALETTE.parchmentWarm }}>BUILD WITH $WIF</span>
         </div>
@@ -115,7 +115,7 @@ export function LaptopBezelDive({ fast = false }: { fast?: boolean }) {
         entrance="open"
         finale="zoom-to-screen"
         showNotch={true}
-        notchLabel="Robinhood Chain 46631 · Year 1 Ready"
+        notchLabel="Robinhood Chain 4663 · Year 1 Ready"
         indicatorColor={PALETTE.accentEmerald}
         bezelColor={PALETTE.bgHudDark}
         screenColor={PALETTE.bgCityStage}

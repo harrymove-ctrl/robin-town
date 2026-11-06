@@ -221,7 +221,7 @@ function IntroBrandWordmark() {
             letterSpacing: "0.04em",
           }}
         >
-          <span>● CHAIN ID 46631</span>
+          <span>● CHAIN ID 4663</span>
           <span style={{ color: PALETTE.accentGold }}>·</span>
           <span style={{ color: PALETTE.parchmentWarm }}>10,000 $WIF READY</span>
         </div>
@@ -238,7 +238,7 @@ function IntroLaptopDive() {
         entrance="open"
         finale="zoom-to-screen"
         showNotch={true}
-        notchLabel="Chain ID 46631 · 10,000 $wif Ready"
+        notchLabel="Chain ID 4663 · 10,000 $wif Ready"
         indicatorColor={PALETTE.accentEmerald}
         bezelColor={PALETTE.bgHudDark}
         screenColor={PALETTE.bgCityStage}
@@ -452,8 +452,8 @@ function IntroOtcAndMobileStage() {
 const KICK_CARDS = [
   { at: 0, tag: "YEAR 1 · SNAKE", stat: "+240 $wif", sub: "Connected corner harvest", accent: PALETTE.accentEmerald },
   { at: 23, tag: "YEAR 3 · GOAT", stat: "4-Lot Chain", sub: "District multiplier active", accent: PALETTE.accentGold },
-  { at: 36, tag: "YEAR 5 · ROOSTER", stat: "1.20x Yield", sub: "500 $wif staked on 46631", accent: PALETTE.accentJade },
-  { at: 59, tag: "YEAR 6 · DOG", stat: "926 Tests", sub: "120 tiles conserved", accent: PALETTE.accentMintPill },
+  { at: 36, tag: "YEAR 5 · ROOSTER", stat: "1.20x Yield", sub: "500 $wif staked on 4663", accent: PALETTE.accentJade },
+  { at: 59, tag: "YEAR 6 · DOG", stat: "946 Tests", sub: "120 tiles conserved", accent: PALETTE.accentMintPill },
 ] as const;
 
 /** I05b (f483..559 = 76f): Live Payday Harvest locked to exact bass kicks f483, f506, f519, f542 -> f557 whip. */
@@ -593,7 +593,7 @@ const CONSERVATION_BARS = [
   {
     pct: "90%",
     amount: "3,600 $wif",
-    label: "Podium Purse (1st 60% · 2nd 25% · 3rd 15%)",
+    label: "Podium Purse (1st 50% · 2nd 25% · 3rd 15%)",
     fill: 0.9,
     color: PALETTE.accentEmerald,
   },
@@ -695,7 +695,7 @@ function IntroMetricMorph() {
                     letterSpacing: "0.08em",
                   }}
                 >
-                  RANKED ARENA CONSERVATION · VERIFIED $WIF 0xE49A1C…0F9B
+                  RANKED ARENA CONSERVATION · VERIFIED $WIF 0x5173b8…4773 · CHAIN 4663
                 </div>
                 <div
                   style={{
@@ -853,7 +853,7 @@ function IntroWifFlywheelAndTap() {
             letterSpacing: "0.08em",
           }}
         >
-          ● CHAIN ID 46631 · STAKING VAULT
+          ● CHAIN ID 4663 · STAKING VAULT
         </div>
         <div
           style={{
@@ -880,7 +880,7 @@ function IntroWifFlywheelAndTap() {
             lineHeight: 1.32,
           }}
         >
-          4,600,001 $wif burned on 0x…dEaD · Play free or connect live.
+          117,762+ $wif burned on 0x…dEaD · Play free or connect live.
         </div>
       </div>
 
@@ -909,7 +909,7 @@ function IntroWifFlywheelAndTap() {
             color: staked ? PALETTE.accentMintPill : PALETTE.accentGold,
           }}
         >
-          {staked ? "✓ 1.20x SHOPKEEPER BOOST VERIFIED" : "0xE49A1C…0F9B · READY TO STAKE"}
+          {staked ? "✓ 1.20x SHOPKEEPER BOOST VERIFIED" : "0x5173b8…4773 · READY TO STAKE"}
         </div>
       </div>
 
@@ -989,7 +989,7 @@ function IntroWifFlywheelAndTap() {
       <Sequence from={53} durationInFrames={35}>
         <ButtonPress
           label="Stake 500 $wif"
-          pending="Chain 46631"
+          pending="Chain 4663"
           done="1.20x Active"
           width={320}
           speed={3.0}
@@ -1032,7 +1032,7 @@ function IntroOutroAndEndLockup() {
             background={PALETTE.bgDeep}
             glowColor={PALETTE.accentEmerald}
             statusColor={PALETTE.parchmentLight}
-            time="46631"
+            time="4663"
           />
           <div
             style={{
@@ -1154,7 +1154,7 @@ function IntroOutroAndEndLockup() {
                   color: PALETTE.accentMintPill,
                 }}
               >
-                10,000 $wif Ready · Chain ID 46631
+                10,000 $wif Ready · Chain ID 4663
               </div>
             </div>
           </div>

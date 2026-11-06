@@ -24,10 +24,12 @@ const serveUrl = await bundle({
   webpackOverride,
 });
 
-const targets = [
-  { id: "RobinTownXClip", out: path.join(OUT, "x-raw.mp4") },
-  { id: "RobinTownMaster", out: path.join(OUT, "master-raw.mp4") },
-];
+const targets = process.env.ONLY_X
+  ? [{ id: "RobinTownXClip", out: path.join(OUT, "x-raw.mp4") }]
+  : [
+      { id: "RobinTownXClip", out: path.join(OUT, "x-raw.mp4") },
+      { id: "RobinTownMaster", out: path.join(OUT, "master-raw.mp4") },
+    ];
 
 for (const tgt of targets) {
   const t0 = Date.now();
@@ -50,7 +52,7 @@ for (const tgt of targets) {
     audioCodec: "aac",
     outputLocation: tgt.out,
     inputProps: { calloutMode: "normal" },
-    concurrency: 8,
+    concurrency: 3,
     ...browserOpts,
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 10) * 10;

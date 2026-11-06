@@ -662,14 +662,17 @@ dialog.ledger-dialog {
 .book-ribbon {
   position: absolute;
   top: -4px;
-  right: 46px;
-  width: 23px;
-  height: 57px;
+  right: 12px;
+  width: 21px;
+  height: 52px;
   background: linear-gradient(90deg, #92452f, #b65c3c 60%, #8f402c);
   border: 1px solid #8e442c;
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
   z-index: 8;
   box-shadow: 0 2px 3px #543b2555;
+}
+.right-page .page-heading {
+  padding-right: 28px;
 }
 .book-navigation {
   display: flex;

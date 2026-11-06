@@ -159,7 +159,7 @@ export function ChapterCraftCheckCycle() {
     <SolaceGround>
       <CheckCycle
         headline="Built with"
-        words="ROBIN-POD Wheel, Apple Carousel, SolaceUI Shader, WebSocket Rooms, Chain ID 46631"
+        words="ROBIN-POD Wheel, What's New Hub, SolaceUI Shader, WebSocket Rooms, Chain ID 4663"
         fontFamily={BE_VIETNAM}
         theme={{
           ...ROBIN_THEME,

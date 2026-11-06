@@ -22,6 +22,19 @@ export const WIF_TOKEN_CONTRACT_MAINNET = '0x5173b8eA6923c2d40267890D45C46a34809
 
 export const SHIP_RELEASES = [
   {
+    version: 'v1.6.0',
+    date: '2026-11-06',
+    publishedAt: '2026-11-06T07:00:00Z',
+    categories: ['Gameplay', 'Web3 & $wif', 'Multiplayer & Infra'],
+    title: '9-Viewport Mobile HUD, Concise 2x2 $wif Hub & Chain 4663 Video Suite',
+    tagUrl: `${GITHUB_REPO_URL}/releases/tag/v1.6.0`,
+    highlights: [
+      'Polished mobile 3D camera toolbar, compact $wif HUD balance pills, and above-the-fold Start Screen cards.',
+      'Streamlined the $wif Hub into a concise 2x2 layout covering Wallet, 1.20x Vault Staking, Point Swap, and 4-Player Rooms.',
+      'Fixed Shopkeeper Ledger ribbon geometry and unified Robinhood Chain Mainnet (4663) telemetry across all views and videos.',
+    ],
+  },
+  {
     version: 'v1.5.0',
     date: '2026-11-02',
     publishedAt: '2026-11-02T05:00:00Z',
