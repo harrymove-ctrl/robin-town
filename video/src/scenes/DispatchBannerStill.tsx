@@ -204,7 +204,7 @@ export function DispatchBannerStill() {
               robin-town-production.up.railway.app
             </span>
             <span style={{ color: PALETTE.accentGold }}>·</span>
-            <span>926 Tests Passed</span>
+            <span>946 Tests Passed</span>
           </div>
         </div>
 
