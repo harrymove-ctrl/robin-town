@@ -3,7 +3,7 @@
  *
  * Dual-Mode Wallet & $wif Economic Flywheel Modal for Robin-Town.
  * Manages:
- * 1. Dual-mode wallet connection: Robinhood Chain Testnet (Chain ID 46631) and 4 local simulated accounts.
+ * 1. Dual-mode wallet connection: Robinhood Chain Testnet (Chain ID 46630) and 4 local simulated accounts.
  * 2. Real-time flywheel metrics display: total $wif burned, staking vault TVL, active multiplier.
  * 3. Community governance proposal voting interface with explicit deflationary voting burns to 0x...dEaD.
  * 4. Headless controller architecture for pure Node.js automated testability.
@@ -573,7 +573,7 @@ export class WalletFlywheelModal {
             <div class="status-indicator-row">
               <span class="status-dot ${vm.walletStatus === 'connected' ? 'dot-connected' : 'dot-disconnected'}"></span>
               <span class="status-title">Status: ${vm.walletStatus.toUpperCase()}</span>
-              ${vm.isCorrectChain ? '<span class="chain-badge badge-green">Chain ID 46631 Match</span>' : ''}
+              ${vm.isCorrectChain ? `<span class="chain-badge badge-green">Chain ID ${ROBINHOOD_CHAIN_ID} Match</span>` : ''}
             </div>
             <div class="web3-details-grid">
               <div class="detail-box">

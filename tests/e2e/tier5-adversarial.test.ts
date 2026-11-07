@@ -676,7 +676,7 @@ describe('Tier 5: Adversarial Coverage Hardening', () => {
         async request(args) {
           if (!connected) throw new Error('Network disconnected');
           if (args.method === 'eth_requestAccounts') return [web3Address];
-          if (args.method === 'eth_chainId') return '0xb627';
+          if (args.method === 'eth_chainId') return '0xb626';
           if (args.method === 'eth_getBalance') return '0xde0b6b3a7640000';
           return null;
         },

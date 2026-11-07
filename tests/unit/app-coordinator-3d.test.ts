@@ -17,7 +17,7 @@ import * as flywheelAlias from '../../src/engine/flywheel';
 describe('Milestone M8: App Shell Coordinator and 3D Binding', () => {
   it('re-exports tokenomics wallet and flywheel modules via engine aliases', () => {
     assert.ok(tokensAlias.WalletAdapter, 'tokens alias must export WalletAdapter');
-    assert.equal(tokensAlias.ROBINHOOD_CHAIN_ID, 46631, 'tokens alias must export ROBINHOOD_CHAIN_ID');
+    assert.equal(tokensAlias.ROBINHOOD_CHAIN_ID, 46630, 'tokens alias must export ROBINHOOD_CHAIN_ID');
     assert.ok(tokensAlias.DEFAULT_SIMULATED_ACCOUNTS.length >= 4, 'tokens alias must export simulated accounts');
 
     assert.ok(flywheelAlias.createInitialFlywheelState, 'flywheel alias must export createInitialFlywheelState');

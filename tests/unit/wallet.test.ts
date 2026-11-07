@@ -14,6 +14,7 @@ import {
   ROBINHOOD_CHAIN_ID_HEX,
   BURN_ADDRESS,
   DEFAULT_SIMULATED_ACCOUNTS,
+  DEFAULT_CHAIN_CONFIG,
   hexWeiToTokens,
   tokensToHexWei,
   parseChainId,
@@ -341,6 +342,12 @@ describe('Mode 1: Simulation Operations (Transfer, Burn, Sign, Approve)', () => 
 });
 
 describe('Mode 2: Web3 EIP-1193 Provider Integration', () => {
+  it('uses the official Robinhood testnet identity and native gas currency', () => {
+    assert.strictEqual(DEFAULT_CHAIN_CONFIG.chainId, 46630);
+    assert.strictEqual(DEFAULT_CHAIN_CONFIG.chainIdHex, '0xb626');
+    assert.strictEqual(DEFAULT_CHAIN_CONFIG.currencySymbol, 'ETH');
+  });
+
   it('connects to Web3 provider and retrieves active account and balance', async () => {
     const mock = createMockProvider({
       accounts: ['0x1111111111111111111111111111111111111111'],
@@ -398,6 +405,13 @@ describe('Mode 2: Web3 EIP-1193 Provider Integration', () => {
 
     const addCalls = mock.calls.filter((c) => c.method === 'wallet_addEthereumChain');
     assert.strictEqual(addCalls.length, 1);
+    assert.deepStrictEqual(addCalls[0].params, [{
+      chainId: '0xb626',
+      chainName: 'Robinhood Chain Testnet',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://rpc.testnet.chain.robinhood.com'],
+      blockExplorerUrls: ['https://explorer.testnet.chain.robinhood.com'],
+    }]);
   });
 
   it('sends Web3 transaction via eth_sendTransaction with converted wei value', async () => {
