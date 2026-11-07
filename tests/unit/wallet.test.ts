@@ -12,6 +12,9 @@ import {
   WalletAdapter,
   ROBINHOOD_CHAIN_ID,
   ROBINHOOD_CHAIN_ID_HEX,
+  DEFAULT_CHAIN_CONFIG,
+  ROBINHOOD_TESTNET_L2_CHAIN_ID,
+  ROBINHOOD_TESTNET_L2_CHAIN_ID_HEX,
   BURN_ADDRESS,
   DEFAULT_SIMULATED_ACCOUNTS,
   hexWeiToTokens,
@@ -540,5 +543,47 @@ describe('WalletAdapter State Subscriptions', () => {
 
     assert.ok(stateLog.length >= 3);
     assert.strictEqual(stateLog[stateLog.length - 1].account?.name, 'Bob');
+  });
+});
+
+
+describe('official Robinhood testnet metadata', () => {
+  it('pins the default and compatibility exports to the published testnet', () => {
+    assert.strictEqual(ROBINHOOD_CHAIN_ID, 46630);
+    assert.strictEqual(ROBINHOOD_CHAIN_ID_HEX, '0xb626');
+    assert.strictEqual(ROBINHOOD_TESTNET_L2_CHAIN_ID, 46630);
+    assert.strictEqual(ROBINHOOD_TESTNET_L2_CHAIN_ID_HEX, '0xb626');
+    assert.deepStrictEqual(DEFAULT_CHAIN_CONFIG, {
+      chainId: 46630,
+      chainIdHex: '0xb626',
+      chainName: 'Robinhood Chain Testnet',
+      rpcUrl: 'https://rpc.testnet.chain.robinhood.com',
+      explorerUrl: 'https://explorer.testnet.chain.robinhood.com',
+      currencySymbol: 'ETH',
+      decimals: 18,
+    });
+  });
+
+  it('switches to literal 0xb626 rather than a shared possibly incorrect constant', async () => {
+    const mock = createMockProvider({ chainId: '0x1' });
+    const adapter = new WalletAdapter({ mode: 'web3', provider: mock.provider });
+    await adapter.connect();
+    const call = mock.calls.find((item) => item.method === 'wallet_switchEthereumChain');
+    assert.deepStrictEqual(call?.params, [{ chainId: '0xb626' }]);
+    assert.strictEqual(adapter.getState().chainId, 46630);
+  });
+
+  it('adds the published testnet with Ether metadata, separately from the WIF token', async () => {
+    const mock = createMockProvider({ chainId: '0x1', switchChainError: { code: 4902, message: 'Unknown chain' } });
+    const adapter = new WalletAdapter({ mode: 'web3', provider: mock.provider });
+    await adapter.connect();
+    const call = mock.calls.find((item) => item.method === 'wallet_addEthereumChain');
+    assert.deepStrictEqual(call?.params, [{
+      chainId: '0xb626',
+      chainName: 'Robinhood Chain Testnet',
+      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+      rpcUrls: ['https://rpc.testnet.chain.robinhood.com'],
+      blockExplorerUrls: ['https://explorer.testnet.chain.robinhood.com'],
+    }]);
   });
 });

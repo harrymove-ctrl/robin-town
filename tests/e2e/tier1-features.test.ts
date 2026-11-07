@@ -642,7 +642,7 @@ describe('Tier 1: Feature Coverage (F1 to F12)', () => {
       const mockProvider: EIP1193Provider = {
         async request(args) {
           if (args.method === 'eth_requestAccounts') return ['0x9999999999999999999999999999999999999999'];
-          if (args.method === 'eth_chainId') return '0xb627'; // 46631 in hex
+          if (args.method === 'eth_chainId') return '0xb626'; // 46630 in hex
           if (args.method === 'eth_getBalance') return '0x56bc75e2d63100000';
           return null;
         },

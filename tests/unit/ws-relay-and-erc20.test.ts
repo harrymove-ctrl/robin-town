@@ -51,7 +51,7 @@ describe('Cross-Device RFC 6455 WebSocket Relay & $wif ERC-20 Contract Integrati
           return ['0x7F4C890000000000000000000000000000001234'];
         }
         if (args.method === 'eth_chainId') {
-          return '0xb627';
+          return '0xb626';
         }
         if (args.method === 'eth_getBalance') {
           return '0x56bc75e2d63100000'; // 100

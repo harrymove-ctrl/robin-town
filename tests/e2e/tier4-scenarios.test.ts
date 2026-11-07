@@ -253,7 +253,7 @@ describe('Tier 4: Real-World Application Scenarios', () => {
             return ['0x71C63397CDF7A19F38083951F6F50b2636605273'];
           }
           if (args.method === 'eth_chainId') {
-            return '0xb627';
+            return '0xb626';
           }
           if (args.method === 'eth_getBalance') {
             return '0x21e19e0c9bab2400000';

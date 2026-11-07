@@ -297,6 +297,34 @@ describe('Suite 2: WalletFlywheelController Headless Logic', () => {
 });
 
 describe('Suite 3: WalletFlywheelModal Presentation Component', () => {
+  it('renders the official testnet chain ID in the connected-wallet badge', async () => {
+    const container = createMockContainer();
+    const walletAdapter = new WalletAdapter({
+      mode: 'web3',
+      provider: {
+        async request({ method }) {
+          if (method === 'eth_requestAccounts') {
+            return ['0x1111111111111111111111111111111111111111'];
+          }
+          if (method === 'eth_chainId') return '0xb626';
+          if (method === 'eth_getBalance') return '0x0';
+          throw new Error(`Unexpected mock request: ${method}`);
+        },
+      },
+    });
+    await walletAdapter.connect();
+    const controller = new WalletFlywheelController({ walletAdapter });
+    const modal = new WalletFlywheelModal(container, controller);
+    modal.mount();
+    try {
+      modal.open('wallet');
+      assert.ok(container.innerHTML.includes('Chain ID 46630 Match'));
+      assert.ok(!container.innerHTML.includes('${ROBINHOOD_CHAIN_ID}'));
+    } finally {
+      modal.unmount();
+    }
+  });
+
   it('mounts, opens, and closes cleanly in mock DOM environment', () => {
     const container = createMockContainer();
     const walletAdapter = new WalletAdapter({ mode: 'simulation' });
